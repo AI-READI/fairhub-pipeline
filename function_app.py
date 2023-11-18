@@ -11,15 +11,13 @@
 # pylint: disable=import-error
 import azure.functions as func
 import datetime
-import json
 import logging
 from pathlib import Path
 from os import environ
 import azure.storage.blob as azureblob
 from dotenv import dotenv_values
-
-logging.Logger.root.level = 10
-logging.debug("Debug message here")
+import uuid
+import io
 
 
 # Check if `.env` file exists
@@ -38,19 +36,20 @@ def get_env(key):
     return config.get(key) if env_path.exists() else environ.get(key)
 
 
-@app.route(route="test", auth_level=func.AuthLevel.FUNCTION)
-def test2(req: func.HttpRequest) -> func.HttpResponse:
-    # Move a folder from the `raw-storage` container to the `stage-1-container` container
-    # input folder: https://b2aistaging.blob.core.windows.net/raw-storage/AI-READI/pooled_data/UW/CGM
+@app.route(route="preprocess-stage-one", auth_level=func.AuthLevel.FUNCTION)
+def preprocess_stage_one(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the data in the stage-1-container. Each file name is added to a log file in the logs folder for the study.
+    Will also create an output file with a modified name to simulate a processing step.
+    POC so this is just a test to see if we can read the files in the stage-1-container.
+    """
 
-    input_folder = "AI-READI/pooled_data/UW/CGM/"
+    # https://3.basecamp.com/3686773/buckets/29105173/todos/6722990109#__recording_6742515899
+    # conversation of the folder structure
+    input_folder = "AI-READI/pooled_data/"
+    output_folder = "AI-READI/processed_data/"
 
-    # output folder: https://b2aistaging.blob.core.windows.net/stage-1-container/AI-READI/pooled_data/UW/CGM
-
-    output_folder = "AI-READI/pooled_data/UW/CGM/"
-
-    logging.debug("Getting the SAS token")
-    logging.debug(get_env("AZURE_STORAGE_CONNECTION_STRING"))
+    logs_folder = "AI-READI/logs/"
+    temp_folder = "AI-READI/temp/"
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -60,68 +59,57 @@ def test2(req: func.HttpRequest) -> func.HttpResponse:
         expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=1),
     )
 
-    logging.debug(sas_token)
-
-    logging.debug("Starting the blob copy operation")
-    logging.debug("Input folder: %s", input_folder)
-    logging.debug("Output folder: %s", output_folder)
-
-    logging.debug("Creating the blob service client")
-
     # Get the blob service client
     blob_service_client = azureblob.BlobServiceClient(
         account_url="https://b2aistaging.blob.core.windows.net/",
         credential=sas_token,
     )
 
-    logging.debug("Blob service client created")
-    logging.debug("Getting the container clients")
-
-    logging.debug("Getting the input container client")
-
-    # Get the container client for the input folder
-    input_container_client = blob_service_client.get_container_client("raw-storage")
-
-    logging.debug("Input container client created")
-    logging.debug("Getting the output container client")
-
-    # Get the container client for the output folder
-    output_container_client = blob_service_client.get_container_client(
+    # Get the container client for the sources and destinations
+    input_container_client = blob_service_client.get_container_client(
         "stage-1-container"
     )
 
-    logging.debug("Output container client created")
+    # Create a temporary folder for this workflow
+    workflow_id = uuid.uuid4()
 
-    logging.debug("Getting the list of blobs in the input folder")
+    # Create a temp file in the temp folder on the blob storage
+    temp_blob_client = blob_service_client.get_blob_client(
+        container="stage-1-container", blob=f"{temp_folder}{workflow_id}.temp"
+    )
+    temp_file = io.BytesIO()
+    temp_blob_client.upload_blob(temp_file)
 
     # get the list of blobs in the input folder
-    blob_list = input_container_client.list_blobs(name_starts_with=input_folder)
+    data_type_list = input_container_client.list_blobs(name_starts_with=input_folder)
 
-    logging.debug("List of blobs in the input folder created")
+    for data_type in data_type_list:
+        logging.debug("data_type: %s", data_type)
 
-    logging.debug("blob_list: %s", blob_list)
+        # get the list of blobs in the input folder
+        blob_list = input_container_client.list_blobs(name_starts_with=data_type)
 
-    logging.debug("Starting the blob copy operation")
+        for blob in blob_list:
+            # get the blob client for the blob
+            input_blob_client = blob_service_client.get_blob_client(
+                container="stage-1-container", blob=blob.name
+            )
 
-    # move each blob to the output folder
-    for blob in blob_list:
-        input_blob_client = blob_service_client.get_blob_client(
-            container="raw-storage", blob=blob.name
-        )
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container", blob=blob.name
-        )
+            print(f"Processing blob: {blob.name}")
 
-        # download the blob from the input folder
-        download_stream = input_blob_client.download_blob()
+            # if the blob is a folder, skip it
+            # will need to recurse for this probably
+            # if blob.name.endswith("/"):
+            #     continue
 
-        # upload the blob to the output folder
-        output_blob_client.upload_blob(download_stream.readall())
+            download_stream = input_blob_client.download_blob().readall()
 
-        # input_blob_client.delete_blob() # uncomment this line to delete the blob from the input folder
-
-        print(f"Moved {blob.name} from raw-storage to stage-1-container")
+            # Upload the blob to the output folder
+            output_blob_client = blob_service_client.get_blob_client(
+                container="stage-1-container", blob=f"{output_folder}{blob.name}"
+            )
+            output_blob_client.upload_blob(download_stream.readall())
 
     return func.HttpResponse(
-        f"Moved {input_folder} from raw-storage to stage-1-container"
+        f"Processed blobs.\n", status_code=200, mimetype="text/plain"
     )
