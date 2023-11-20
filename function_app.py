@@ -35,15 +35,17 @@ def get_env(key):
     """Return environment variable from .env or native environment."""
     return config.get(key) if env_path.exists() else environ.get(key)
 
-@app.route(route='hello', auth_level=func.AuthLevel.ANONYMOUS)
+
+@app.route(route="hello", auth_level=func.AuthLevel.ANONYMOUS)
 def hello(req: func.HttpRequest) -> func.HttpResponse:
     """Return a simple hello world."""
     return func.HttpResponse("Hello world!")
 
-@app.route(route='echo', auth_level=func.AuthLevel.ANONYMOUS)'
+
+@app.route(route="echo", auth_level=func.AuthLevel.ANONYMOUS)
 def echo(req: func.HttpRequest) -> func.HttpResponse:
     """Echo the request body back as a response."""
-    return func.HttpResponse(req.get_body(), status_code=200, mimetype='text/plain')
+    return func.HttpResponse(req.get_body(), status_code=200, mimetype="text/plain")
 
 
 @app.route(route="preprocess-stage-one", auth_level=func.AuthLevel.FUNCTION)
