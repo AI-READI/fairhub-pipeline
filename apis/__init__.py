@@ -5,6 +5,7 @@ from apis.stage_one_namespace import api as stage_one_namespace
 from apis.root import api as root_namespace
 
 from .stage_one.stage_one_test import api as stage_one_test
+from .stage_one.stage_one_env_sensor_test import api as stage_one_env_sensor_test
 
 api = Api(
     title="fairhub pipeline api",
