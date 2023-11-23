@@ -28,3 +28,4 @@ pydocstyle
 
 # Development
 faker
+poethepoet

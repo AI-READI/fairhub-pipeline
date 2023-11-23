@@ -1,0 +1,92 @@
+[tool.poetry]
+
+name = "fairhub-pipeline"
+version = "0.1.0"
+description = "Data transformations pipelines for fairhub"
+
+license = "MIT"
+authors = ["FAIR Data Innovations Hub <contact@fairdataihub.org>"]
+
+readme = "README.md"
+homepage = "https://fairhub.io"
+documentation = "https://fairhub.io"
+repository = "https://github.com/AI-READI/pipeline"
+
+
+keywords = []
+classifiers = [
+    # TODO: update this list to match your application: https://pypi.org/pypi?%3Aaction=list_classifiers
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+]
+
+
+[tool.poe.tasks]
+
+dev = "func start"
+dev_docker = "docker run -p 5000:5000 fairhub-flask-api:local"
+
+freeze_dependencies = "pip list --format=freeze > requirements.txt"
+
+docs = "mkdocs serve"
+
+flake8 = "flake8 function_app.py config.py stage_one"
+
+format_with_isort = "isort function_app.py config.py stage_one"
+format_with_black = "black function_app.py config.py stage_one"
+
+format = ["format_with_isort", "format_with_black"]
+
+typecheck = "mypy function_app.py config.py stage_one"
+
+pylint = "pylint function_app.py config.py stage_one --rcfile=.pylint.ini"
+
+lint = ["flake8", "typecheck", "pylint"]
+
+precommit = ["format", "flake8", "typecheck", "pylint"]
+
+[tool.black]
+
+quiet = true
+
+[tool.isort]
+
+profile = "black"
+
+[tool.mypy]
+
+ignore_missing_imports = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+cache_dir = ".cache/mypy/"
+
+[tool.pytest.ini_options]
+
+addopts = """
+--strict-markers
+
+-r sxX
+--show-capture=log
+
+--cov-report=html
+--cov-report=term-missing:skip-covered
+--no-cov-on-fail
+"""
+
+filterwarnings = ["ignore", "default:::flask_restx.*"]
+
+cache_dir = ".cache/pytest/"
+
+markers = []
+
+[build-system]
+requires = ["poetry-core>=1.3.2"]
+build-backend = "poetry.core.masonry.api"
