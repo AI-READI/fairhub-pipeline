@@ -1,21 +1,67 @@
 # Azure Function Pipelines
 
-Create python virtual environment: `python -m venv .venv`
+## Getting started
 
-Activate virtual environment: `source .venv/bin/activate` (linux) or `.\.venv\Scripts\activate` (windows)
+### Prerequisites/Dependencies
 
-Download core tools: https://learn.microsoft.com/en-us/azure/azure-functions/create-first-function-cli-python?tabs=windows%2Cbash%2Cazure-cli&pivots=python-mode-decorators
+You will need the following installed on your system:
 
-Install the azure functions extension: https://docs.microsoft.com/en-us/azure/azure-functions/functions-run-local?tabs=windows%2Ccsharp%2Cbash#v2
+- Python 3.8+
+- [Pip](https://pip.pypa.io/en/stable/)
 
-Develop locally: https://learn.microsoft.com/en-us/azure/azure-functions/functions-run-local?tabs=windows%2Cisolated-process%2Cnode-v4%2Cpython-v2%2Chttp-trigger%2Ccontainer-apps&pivots=programming-language-python#install-the-azure-functions-core-tools
+### Setup
 
-Azure functions container docs: https://learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-custom-container?tabs=vs-code%2Cacr%2Cazure-cli&pivots=azure-functions
+If you would like to update the api, please follow the instructions below.
 
-https://github.com/Azure/functions-action
+1. Create a local virtual environment and activate it:
 
-https://github.com/Azure/functions-container-action
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate # linux
+   .venv\Scripts\activate # windows
+   ```
 
-https://github.com/Azure/actions-workflow-samples/blob/master/FunctionApp/linux-container-functionapp-on-azure.yml
+   If you are using Anaconda, you can create a virtual environment with:
 
-https://github.com/Azure/actions-workflow-samples/blob/master/FunctionApp/linux-python-functionapp-on-azure.yml
+   ```bash
+   conda create -n fairhub-pipeline-dev-env python=3.11
+   conda activate fairhub-pipeline-dev-env
+   ```
+
+2. Install the dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Add your environment variables. An example is provided at `.env.example`
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Make sure to update the values in `.env` to match your local setup.
+
+4. Format the code:
+
+   ```bash
+   isort function_app.py
+   black function_app.py
+   ```
+
+5. Check the code quality:
+
+   ```bash
+   mypy function_app.py
+   pylint function_app.py
+   flake8 function_app.py
+   ```
+
+## License
+
+This work is licensed under
+[MIT](https://opensource.org/licenses/mit). See [LICENSE](https://github.com/AI-READI/pipeline/blob/main/LICENSE) for more information.
+
+<a href="https://aireadi.org" >
+  <img src="https://www.channelfutures.com/files/2017/04/3_0.png" height="30" />
+</a>

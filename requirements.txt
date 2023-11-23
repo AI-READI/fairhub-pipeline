@@ -2,7 +2,29 @@
 # The Python Worker is managed by the Azure Functions platform
 # Manually managing azure-functions-worker may cause unexpected issues
 
+# Core
+pyfairdatatools
+jsonschema
+
+
+# Azure
 azure-functions
 azure-storage-blob
 azure-identity
+azure-storage-file-datalake
+
+# Environment
 python-dotenv
+
+# Formatters
+black
+isort
+
+# Linters
+flake8
+mypy
+pylint
+pydocstyle
+
+# Development
+faker
