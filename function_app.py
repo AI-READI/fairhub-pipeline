@@ -3,7 +3,7 @@ import logging
 
 import azure.functions as func
 
-from stage_one.env_sensor_pipeline import pipeline
+from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
 
 app = func.FunctionApp()
 
@@ -32,7 +32,7 @@ def preprocess_stage_one_env(req: func.HttpRequest) -> func.HttpResponse:
     """
 
     try:
-        pipeline()
+        stage_one_env_sensor_pipeline()
     except Exception as e:
         print(f"Exception: {e}")
 
