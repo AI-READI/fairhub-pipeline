@@ -120,6 +120,9 @@ def pipeline():
         # remove the file from the temp folder
         os.remove(download_path)
 
+    # remove the temp folder
+    os.rmdir(temp_folder_path)
+
     # write the paths to the log file
     with open(temp_log_file_path, mode="w", encoding="utf-8") as f:
         formatted_text = json.dumps(extracted_metadata, indent=4)
