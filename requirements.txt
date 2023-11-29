@@ -29,3 +29,6 @@ pydocstyle
 # Development
 faker
 poethepoet
+
+# Temporary
+pydicom
