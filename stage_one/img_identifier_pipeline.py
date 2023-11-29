@@ -81,20 +81,44 @@ def pipeline():
     # generate temp file for logs
     temp_log_file, temp_log_file_path = tempfile.mkstemp(suffix=".n.test.log")
 
+    # Create a temporary folder on the local machine
+    temp_folder_path = tempfile.mkdtemp()
+
     extracted_metadata = []
 
     for path in str_paths:
+        print(path)
+
         # get the file name from the path
         file_name = path.split("/")[-1]
 
-        file_info = data_identifier(file_name)
+        # skip if the path is a folder (check if extension is empty)
+        if not file_name.split(".")[-1]:
+            continue
 
-        extracted_metadata.append(
-            {
-                "file_name": file_name,
-                "file_info": file_info,
-            }
+        # download the file to the temp folder
+        blob_client = blob_service_client.get_blob_client(
+            container="stage-1-container", blob=path
         )
+
+        download_path = os.path.join(temp_folder_path, file_name)
+
+        with open(download_path, "wb") as download_file:
+            download_file.write(blob_client.download_blob().readall())
+
+            # process the file
+
+            file_info = data_identifier(download_path)
+
+            extracted_metadata.append(
+                {
+                    "file_name": file_name,
+                    "file_info": file_info,
+                }
+            )
+
+        # remove the file from the temp folder
+        os.remove(download_path)
 
     # write the paths to the log file
     with open(temp_log_file_path, mode="w", encoding="utf-8") as f:
