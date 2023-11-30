@@ -4,6 +4,9 @@ import logging
 import azure.functions as func
 
 from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
+from stage_one.img_identifier_pipeline import (
+    pipeline as stage_one_img_identifier_pipeline,
+)
 
 from rawdata_etl_stage_0.raw_data_etl import envsensor_raw_processing
 
@@ -62,3 +65,19 @@ def scheduled_envsensor_raw_etl(env_timer):
         envsensor_raw_processing()
     except Exception as e:
         logging.info(f"exception: {e}")
+
+@app.route(
+    route="preprocess-stage-one-files-n-test", auth_level=func.AuthLevel.FUNCTION
+)
+def preprocess_stage_one_n_test(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the data in the stage-1-container. Each file name is added to a log file in the logs folder for the study.
+    Will also create an output file with a modified name to simulate a processing step.
+    POC so this is just a test to see if we can read the files in the stage-1-container.
+    """
+
+    try:
+        stage_one_img_identifier_pipeline()
+    except Exception as e:
+        print(f"Exception: {e}")
+
+    return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
