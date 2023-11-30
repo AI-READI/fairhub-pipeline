@@ -14,14 +14,14 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install mermaid.cli
+      - name: Install mermaid
         run: npm install @mermaid-js/mermaid-cli mermaid
 
       - name: Generate mermaid diagrams
         run: node ./scripts/generate-diagrams.mjs
 
       - name: Delete package-lock.json
-        run: rm package-lock.json
+        run: rm package-lock.json && rm package.json
 
       - name: Commit and push if changed
         uses: stefanzweifel/git-auto-commit-action@v5
