@@ -15,7 +15,7 @@ jobs:
           node-version: "20"
 
       - name: Install mermaid.cli
-        run: npm install -g @mermaid-js/mermaid-cli
+        run: npm install @mermaid-js/mermaid-cli mermaid
 
       - name: Generate mermaid diagrams
         run: node ./scripts/generate-diagrams.mjs
