@@ -20,7 +20,7 @@ def hello(
     req: func.HttpRequest,
 ) -> func.HttpResponse:
     """Return a simple hello world."""
-    return func.HttpResponse("Hello world!")
+    return func.HttpResponse("Hello world!!")
 
 
 @app.route(route="echo", auth_level=func.AuthLevel.ANONYMOUS)
