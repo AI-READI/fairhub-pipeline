@@ -32,3 +32,6 @@ poethepoet
 
 # Temporary
 pydicom
+
+# Database
+psycopg2-binary
