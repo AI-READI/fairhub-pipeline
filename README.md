@@ -64,6 +64,7 @@ If you would like to update the api, please follow the instructions below.
 6. To start the local server, run:
 
    ```bash
+   poe init # pick python
    poe dev
    ```
 

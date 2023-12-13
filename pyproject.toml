@@ -30,6 +30,8 @@ classifiers = [
 
 [tool.poe.tasks]
 
+init = "func init"
+
 dev = "func start --python"
 dev_docker = "docker run -p 5000:5000 fairhub-flask-api:local"
 
