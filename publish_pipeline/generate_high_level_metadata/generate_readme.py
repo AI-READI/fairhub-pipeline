@@ -141,8 +141,6 @@ def pipeline():
     if acknowledgement:
         readme_metadata["Acknowledgement"] = acknowledgement
 
-    print(readme_metadata)
-
     conn.commit()
     conn.close()
 
