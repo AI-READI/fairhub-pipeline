@@ -135,6 +135,120 @@ def pipeline():
 
     study_metadata["SponsorCollaboratorsModule"] = sponsor_collaborators_module
 
+    oversight_module = {}
+
+    cur.execute(
+        "SELECT oversight_has_dmc FROM study_other WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_oversight = cur.fetchone()
+
+    oversight_module["OversightHasDMC"] = study_oversight[0]
+
+    study_metadata["OversightModule"] = oversight_module
+
+    description_module = {}
+
+    cur.execute(
+        "SELECT brief_summary, detailed_description FROM study_description WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_description = cur.fetchone()
+
+    description_module["BriefSummary"] = study_description[0]
+    description_module["DetailedDescription"] = study_description[1]
+
+    study_metadata["DescriptionModule"] = description_module
+
+    conditions_module = {}
+
+    cur.execute(
+        "SELECT conditions, keywords FROM study_other WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_conditions = cur.fetchone()
+
+    conditions_module["ConditionList"] = []
+    conditions = study_conditions[0]
+
+    for row in conditions:
+        conditions_module["ConditionList"].append(row)
+
+    conditions_module["KeywordList"] = []
+    keywords = study_conditions[1]
+
+    for row in keywords:
+        conditions_module["KeywordList"].append(row)
+
+    study_metadata["ConditionsModule"] = conditions_module
+
+    design_module = {}
+
+    cur.execute(
+        "SELECT study_type, design_allocation, design_intervention_model, design_intervention_model_description, design_primary_purpose, design_masking, design_masking_description, design_who_masked_list, phase_list, enrollment_count, enrollment_type, number_arms,design_observational_model_list, design_time_perspective_list, bio_spec_retention, bio_spec_description, target_duration, number_groups_cohorts FROM study_design WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_design = cur.fetchone()
+
+    design_module["StudyType"] = study_design[0]
+
+    design_module["DesignInfo"] = {}
+    design_module["DesignInfo"]["DesignAllocation"] = study_design[1]
+    design_module["DesignInfo"]["DesignInterventionModel"] = study_design[2]
+    design_module["DesignInfo"]["DesignInterventionModelDescription"] = study_design[3]
+    design_module["DesignInfo"]["DesignPrimaryPurpose"] = study_design[4]
+
+    design_module["DesignInfo"]["DesignMaskingInfo"] = {}
+    design_module["DesignInfo"]["DesignMaskingInfo"]["DesignMasking"] = study_design[5]
+    design_module["DesignInfo"]["DesignMaskingInfo"][
+        "DesignMaskingDescription"
+    ] = study_design[6]
+
+    design_module["DesignInfo"]["DesignMaskingInfo"]["DesignWhoMaskedList"] = []
+
+    if study_design[7] is not None:
+        for row in study_design[7]:
+            design_module["DesignInfo"]["DesignMaskingInfo"][
+                "DesignWhoMaskedList"
+            ].append(row)
+
+    design_module["PhaseList"] = []
+
+    if study_design[8] is not None:
+        for row in study_design[8]:
+            design_module["PhaseList"].append(row)
+
+    design_module["EnrollmentInfo"] = {}
+    design_module["EnrollmentInfo"]["EnrollmentCount"] = study_design[9]
+    design_module["EnrollmentInfo"]["EnrollmentType"] = study_design[10]
+
+    design_module["NumberArms"] = study_design[11]
+
+    design_module["DesignInfo"]["DesignObservationalModelList"] = []
+
+    if study_design[12] is not None:
+        for row in study_design[12]:
+            design_module["DesignInfo"]["DesignObservationalModelList"].append(row)
+
+    design_module["DesignInfo"]["DesignTimePerspectiveList"] = []
+
+    if study_design[13] is not None:
+        for row in study_design[13]:
+            design_module["DesignInfo"]["DesignTimePerspectiveList"].append(row)
+
+    design_module["BioSpec"] = {}
+    design_module["BioSpec"]["BioSpecRetention"] = study_design[14]
+    design_module["BioSpec"]["BioSpecDescription"] = study_design[15]
+
+    design_module["TargetDuration"] = study_design[16]
+    design_module["NumberGroupsCohorts"] = study_design[17]
+
+    study_metadata["DesignModule"] = design_module
+
     conn.commit()
     conn.close()
 
