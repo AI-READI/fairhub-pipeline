@@ -45,17 +45,29 @@ If you would like to update the api, please follow the instructions below.
 4. Format the code:
 
    ```bash
-   isort function_app.py
-   black function_app.py
+   poe format_with_isort
+   poe format_with_black
    ```
+
+   You can also run `poe format` to run both commands at once.
 
 5. Check the code quality:
 
    ```bash
-   mypy function_app.py
-   pylint function_app.py
-   flake8 function_app.py
+   poe typecheck
+   poe pylint
+   poe flake8
    ```
+
+   You can also run `poe lint` to run all three commands at once.
+
+6. To start the local server, run:
+
+   ```bash
+   poe dev
+   ```
+
+   This runs `func start` with the `--python` flag.
 
 ## License
 

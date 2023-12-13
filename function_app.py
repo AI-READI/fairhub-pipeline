@@ -3,6 +3,9 @@ import logging
 
 import azure.functions as func
 
+from publish_pipeline.generate_high_level_metadata.generate_study_description import (
+    pipeline as generate_study_description_pipeline,
+)
 from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
@@ -53,6 +56,18 @@ def preprocess_stage_one_n_test(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         stage_one_img_identifier_pipeline()
+    except Exception as e:
+        print(f"Exception: {e}")
+
+    return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+
+
+@app.route(route="generate-study-description", auth_level=func.AuthLevel.FUNCTION)
+def generate_study_description(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the database for the study and generates a study_description.json file in the metadata folder."""
+
+    try:
+        generate_study_description_pipeline()
     except Exception as e:
         print(f"Exception: {e}")
 

@@ -9,11 +9,7 @@ import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 
 import config
-
-from utils.image_classifying_rules import (
-    process_dicom_zip,
-    extract_env_info,
-)
+from utils.image_classifying_rules import extract_env_info, process_dicom_zip
 
 
 def pipeline():
