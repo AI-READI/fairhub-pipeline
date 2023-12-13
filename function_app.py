@@ -66,6 +66,9 @@ def preprocess_stage_one_n_test(req: func.HttpRequest) -> func.HttpResponse:
 def generate_study_description(req: func.HttpRequest) -> func.HttpResponse:
     """Reads the database for the study and generates a study_description.json file in the metadata folder."""
 
-    response = generate_study_description_pipeline()
+    try:
+        generate_study_description_pipeline()
+    except Exception as e:
+        print(f"Exception: {e}")
 
-    return func.HttpResponse(response, status_code=200, mimetype="text/plain")
+    return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
