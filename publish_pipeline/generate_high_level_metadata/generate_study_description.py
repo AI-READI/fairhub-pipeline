@@ -3,15 +3,13 @@
 
 import datetime
 import json
-import os
 import tempfile
-import uuid
 
 import psycopg2
 
 import config
 
-# import azure.storage.blob as azureblob
+import azure.storage.blob as azureblob
 
 
 def pipeline():
@@ -406,25 +404,131 @@ def pipeline():
 
             contacts_locations_module["LocationList"].append(item)
 
+    study_metadata["ContactsLocationsModule"] = contacts_locations_module
+
+    ipd_sharing_statement_module = {}
+
+    cur.execute(
+        "SELECT ipd_sharing, ipd_sharing_description, ipd_sharing_info_type_list, ipd_sharing_time_frame, ipd_sharing_access_criteria, ipd_sharing_url FROM study_ipdsharing WHERE study_id = %s",
+        (study_id,),
+    )
+
+    ipd_sharing = cur.fetchone()
+
+    ipd_sharing_statement_module["IPDSharing"] = ipd_sharing[0]
+    ipd_sharing_statement_module["IPDSharingDescription"] = ipd_sharing[1]
+
+    ipd_sharing_statement_module["IPDSharingInfoTypeList"] = []
+    if ipd_sharing[2] is not None:
+        for row in ipd_sharing[2]:
+            ipd_sharing_statement_module["IPDSharingInfoTypeList"].append(row)
+
+    ipd_sharing_statement_module["IPDSharingTimeFrame"] = ipd_sharing[3]
+    ipd_sharing_statement_module["IPDSharingAccessCriteria"] = ipd_sharing[4]
+    ipd_sharing_statement_module["IPDSharingURL"] = ipd_sharing[5]
+
+    study_metadata["IPDSharingStatementModule"] = ipd_sharing_statement_module
+
+    references_module = {}
+
+    cur.execute(
+        "SELECT identifier, type, citation FROM study_reference WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_references = cur.fetchall()
+
+    references_module["ReferenceList"] = []
+
+    if study_references is not None:
+        for row in study_references:
+            item = {}
+
+            item["ReferenceID"] = row[0]
+            item["ReferenceType"] = row[1]
+            item["ReferenceCitation"] = row[2]
+
+            references_module["ReferenceList"].append(item)
+
+    cur.execute(
+        "SELECT url, title FROM study_link WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_links = cur.fetchall()
+
+    references_module["SeeAlsoLinkList"] = []
+
+    if study_links is not None:
+        for row in study_links:
+            item = {}
+
+            item["SeeAlsoLinkURL"] = row[0]
+            item["SeeAlsoLinkLabel"] = row[1]
+
+            references_module["SeeAlsoLinkList"].append(item)
+
+    cur.execute(
+        "SELECT identifier, type, url, comment FROM study_available_ipd WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_available_ipd = cur.fetchall()
+
+    references_module["AvailIPDList"] = []
+
+    if study_available_ipd is not None:
+        for row in study_available_ipd:
+            item = {}
+
+            item["AvailIPDId"] = row[0]
+            item["AvailIPDType"] = row[1]
+            item["AvailIPDURL"] = row[2]
+            item["AvailIPDComment"] = row[3]
+
+            references_module["AvailIPDList"].append(item)
+
+    study_metadata["ReferencesModule"] = references_module
+
     conn.commit()
     conn.close()
 
-    return json.dumps(study_metadata, indent=4, sort_keys=True, default=str)
+    # return json.dumps(study_metadata, indent=4, sort_keys=True, default=str)
 
-    # # generate temp metadata file called study_description.json
-    # temp_metadata_file, temp_metadata_file_path = tempfile.mkstemp(
-    #     prefix="study_description", suffix=".json", text=True
-    # )
+    # generate temp file
+    temp_file, temp_file_path = tempfile.mkstemp(suffix=".json")
 
-    # metadata_folder = "AI-READI/metadata"
+    with open(temp_file_path, mode="w", encoding="utf-8") as f:
+        formatted_text = json.dumps(
+            study_metadata, indent=4, sort_keys=True, default=str
+        )
+        f.write(formatted_text)
 
-    # sas_token = azureblob.generate_account_sas(
-    #     account_name="b2aistaging",
-    #     account_key=config.AZURE_STORAGE_ACCESS_KEY,
-    #     resource_types=azureblob.ResourceTypes(container=True, object=True),
-    #     permission=azureblob.AccountSasPermissions(read=True, write=True, list=True),
-    #     expiry=datetime.datetime.now(datetime.timezone.utc)
-    #     + datetime.timedelta(hours=1),
-    # )
+    # upload the file to the metadata folder
 
-    # return
+    metadata_folder = "AI-READI/metadata"
+
+    sas_token = azureblob.generate_account_sas(
+        account_name="b2aistaging",
+        account_key=config.AZURE_STORAGE_ACCESS_KEY,
+        resource_types=azureblob.ResourceTypes(container=True, object=True),
+        permission=azureblob.AccountSasPermissions(read=True, write=True, list=True),
+        expiry=datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(hours=1),
+    )
+
+    # Get the blob service client
+    blob_service_client = azureblob.BlobServiceClient(
+        account_url="https://b2aistaging.blob.core.windows.net/",
+        credential=sas_token,
+    )
+
+    # upload the file to the metadata folder
+    blob_client = blob_service_client.get_blob_client(
+        container="stage-1-container", blob=f"{metadata_folder}/study_description.json"
+    )
+
+    with open(temp_file_path, "rb") as data:
+        blob_client.upload_blob(data)
+
+    return
