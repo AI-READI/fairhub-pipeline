@@ -249,6 +249,163 @@ def pipeline():
 
     study_metadata["DesignModule"] = design_module
 
+    arms_interventions_module = {}
+
+    cur.execute(
+        "SELECT label, type, description, intervention_list FROM study_arm WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_arms = cur.fetchall()
+
+    arms_interventions_module["ArmGroupList"] = []
+
+    for row in study_arms:
+        item = {}
+
+        item["ArmGroupLabel"] = row[0]
+        item["ArmGroupType"] = row[1]
+        item["ArmGroupDescription"] = row[2]
+
+        item["ArmGroupInterventionList"] = []
+
+        if row[3] is not None:
+            for intervention in row[3]:
+                item["ArmGroupInterventionList"].append(intervention)
+
+        arms_interventions_module["ArmGroupList"].append(item)
+
+    cur.execute(
+        "SELECT type, name, description, arm_group_label_list, other_name_list FROM study_intervention WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_interventions = cur.fetchall()
+
+    arms_interventions_module["InterventionList"] = []
+
+    for row in study_interventions:
+        item = {}
+
+        item["InterventionType"] = row[0]
+        item["InterventionName"] = row[1]
+        item["InterventionDescription"] = row[2]
+
+        item["InterventionArmGroupLabelList"] = []
+
+        if row[3] is not None:
+            for arm_group_label in row[3]:
+                item["InterventionArmGroupLabelList"].append(arm_group_label)
+
+        item["InterventionOtherNameList"] = []
+
+        if row[4] is not None:
+            for other_name in row[4]:
+                item["InterventionOtherNameList"].append(other_name)
+
+        arms_interventions_module["InterventionList"].append(item)
+
+    study_metadata["ArmsInterventionsModule"] = arms_interventions_module
+
+    eligibility_module = {}
+
+    cur.execute(
+        "SELECT gender, gender_based, gender_description, minimum_age_value, minimum_age_unit, maximum_age_value, maximum_age_unit, healthy_volunteers, inclusion_criteria, exclusion_criteria, study_population, sampling_method FROM study_eligibility WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_eligibility = cur.fetchone()
+
+    eligibility_module["Gender"] = study_eligibility[0]
+    eligibility_module["GenderBased"] = study_eligibility[1]
+    eligibility_module["GenderDescription"] = study_eligibility[2]
+    eligibility_module["MinimumAge"] = f"{study_eligibility[3]} {study_eligibility[4]}"
+    eligibility_module["MaximumAge"] = f"{study_eligibility[5]} {study_eligibility[6]}"
+    eligibility_module["HealthyVolunteers"] = study_eligibility[7]
+
+    eligibility_criteria = ""
+
+    if study_eligibility[8] is not None:
+        eligibility_criteria = "Inclusion Criteria\n"
+
+        for criteria in study_eligibility[8]:
+            eligibility_criteria += f"* {criteria}\n"
+
+    if study_eligibility[9] is not None:
+        eligibility_criteria += "\nExclusion Criteria\n"
+
+        for criteria in study_eligibility[9]:
+            eligibility_criteria += f"* {criteria}\n"
+
+    eligibility_module["EligibilityCriteria"] = eligibility_criteria
+
+    study_metadata["EligibilityModule"] = eligibility_module
+
+    contacts_locations_module = {}
+
+    cur.execute(
+        "SELECT name, affiliation, phone, phone_ext, email_address FROM study_contact WHERE study_id = %s AND central_contact = true",
+        (study_id,),
+    )
+
+    study_central_contacts = cur.fetchall()
+
+    contacts_locations_module["CentralContactList"] = []
+
+    if study_central_contacts is not None:
+        for row in study_central_contacts:
+            item = {}
+
+            item["CentralContactName"] = row[0]
+            item["CentralContactAffiliation"] = row[1]
+            item["CentralContactPhone"] = row[2]
+            item["CentralContactPhoneExt"] = row[3]
+            item["CentralContactEMail"] = row[4]
+
+            contacts_locations_module["CentralContactList"].append(item)
+
+    cur.execute(
+        "SELECT name, affiliation, role FROM study_overall_official WHERE study_id = %s",
+        (study_id,),
+    )
+
+    contacts_locations_module["OverallOfficialList"] = []
+
+    study_overall_officials = cur.fetchall()
+
+    if study_overall_officials is not None:
+        for row in study_overall_officials:
+            item = {}
+
+            item["OverallOfficialName"] = row[0]
+            item["OverallOfficialAffiliation"] = row[1]
+            item["OverallOfficialRole"] = row[2]
+
+            contacts_locations_module["OverallOfficialList"].append(item)
+
+    cur.execute(
+        "SELECT facility, status, city, state, zip, country FROM study_location WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_locations = cur.fetchall()
+
+    contacts_locations_module["LocationList"] = []
+
+    if study_locations is not None:
+        for row in study_locations:
+            item = {}
+
+            item["LocationFacility"] = row[0]
+            item["LocationStatus"] = row[1]
+            item["LocationCity"] = row[2]
+            item["LocationState"] = row[3]
+            item["LocationZip"] = row[4]
+            item["LocationCountry"] = row[5]
+            item["LocationContactList"] = []
+
+            contacts_locations_module["LocationList"].append(item)
+
     conn.commit()
     conn.close()
 
