@@ -2,14 +2,14 @@
 """Process environmental sensor data files"""
 
 import datetime
-import json
+import pathlib
 import tempfile
 
+import azure.storage.blob as azureblob
 import psycopg2
+import pyfairdatatools
 
 import config
-
-import azure.storage.blob as azureblob
 
 
 def pipeline():
@@ -45,12 +45,24 @@ def pipeline():
 
     primary_study_identification = cur.fetchone()
 
-    identification_module["OrgStudyIdInfo"] = {
-        "OrgStudyId": primary_study_identification[0],
-        "OrgStudyIdType": primary_study_identification[1],
-        "OrgStudyIdDomain": primary_study_identification[2],
-        "OrgStudyIdLink": primary_study_identification[3],
-    }
+    identification_module["OrgStudyIdInfo"] = {}
+
+    identification_module["OrgStudyIdInfo"][
+        "OrgStudyId"
+    ] = primary_study_identification[0]
+    identification_module["OrgStudyIdInfo"][
+        "OrgStudyIdType"
+    ] = primary_study_identification[1]
+
+    if primary_study_identification[2]:
+        identification_module["OrgStudyIdInfo"][
+            "OrgStudyIdDomain"
+        ] = primary_study_identification[2]
+
+    if primary_study_identification[3]:
+        identification_module["OrgStudyIdInfo"][
+            "OrgStudyIdLink"
+        ] = primary_study_identification[3]
 
     cur.execute(
         "SELECT identifier, identifier_type, identifier_domain, identifier_link FROM study_identification WHERE study_id = %s AND secondary = true",
@@ -59,17 +71,21 @@ def pipeline():
 
     secondary_study_identification = cur.fetchall()
 
-    identification_module["SecondaryIdInfo"] = []
+    identification_module["SecondaryIdInfoList"] = []
 
     for row in secondary_study_identification:
-        item = {
-            "SecondaryId": row[0],
-            "SecondaryIdType": row[1],
-            "SecondaryIdDomain": row[2],
-            "SecondaryIdLink": row[3],
-        }
+        item = {}
 
-        identification_module["SecondaryIdInfo"].append(item)
+        item["SecondaryId"] = row[0]
+        item["SecondaryIdType"] = row[1]
+
+        if row[2]:
+            item["SecondaryIdDomain"] = row[2]
+
+        if row[3]:
+            item["SecondaryIdLink"] = row[3]
+
+        identification_module["SecondaryIdInfoList"].append(item)
 
     study_metadata["IdentificationModule"] = identification_module
 
@@ -142,7 +158,10 @@ def pipeline():
 
     study_oversight = cur.fetchone()
 
-    oversight_module["OversightHasDMC"] = study_oversight[0]
+    if study_oversight[0]:
+        oversight_module["OversightHasDMC"] = "Yes"
+    else:
+        oversight_module["OversightHasDMC"] = "No"
 
     study_metadata["OversightModule"] = oversight_module
 
@@ -175,7 +194,8 @@ def pipeline():
     for row in conditions:
         conditions_module["ConditionList"].append(row)
 
-    conditions_module["KeywordList"] = []
+    # todo: add keywords from the UI and API
+    conditions_module["KeywordList"] = ["Dataset"]
     keywords = study_conditions[1]
 
     for row in keywords:
@@ -192,58 +212,66 @@ def pipeline():
 
     study_design = cur.fetchone()
 
-    design_module["StudyType"] = study_design[0]
+    study_type = study_design[0]
+    design_module["StudyType"] = study_type
 
-    design_module["DesignInfo"] = {}
-    design_module["DesignInfo"]["DesignAllocation"] = study_design[1]
-    design_module["DesignInfo"]["DesignInterventionModel"] = study_design[2]
-    design_module["DesignInfo"]["DesignInterventionModelDescription"] = study_design[3]
-    design_module["DesignInfo"]["DesignPrimaryPurpose"] = study_design[4]
+    if study_type == "Interventional":
+        design_module["DesignInfo"] = {}
+        design_module["DesignInfo"]["DesignAllocation"] = study_design[1]
+        design_module["DesignInfo"]["DesignInterventionModel"] = study_design[2]
+        design_module["DesignInfo"][
+            "DesignInterventionModelDescription"
+        ] = study_design[3]
+        design_module["DesignInfo"]["DesignPrimaryPurpose"] = study_design[4]
 
-    design_module["DesignInfo"]["DesignMaskingInfo"] = {}
-    design_module["DesignInfo"]["DesignMaskingInfo"]["DesignMasking"] = study_design[5]
-    design_module["DesignInfo"]["DesignMaskingInfo"][
-        "DesignMaskingDescription"
-    ] = study_design[6]
+        design_module["DesignInfo"]["DesignMaskingInfo"] = {}
+        design_module["DesignInfo"]["DesignMaskingInfo"][
+            "DesignMasking"
+        ] = study_design[5]
+        design_module["DesignInfo"]["DesignMaskingInfo"][
+            "DesignMaskingDescription"
+        ] = study_design[6]
 
-    design_module["DesignInfo"]["DesignMaskingInfo"]["DesignWhoMaskedList"] = []
+        design_module["DesignInfo"]["DesignMaskingInfo"]["DesignWhoMaskedList"] = []
 
-    if study_design[7] is not None:
-        for row in study_design[7]:
-            design_module["DesignInfo"]["DesignMaskingInfo"][
-                "DesignWhoMaskedList"
-            ].append(row)
+        if study_design[7] is not None:
+            for row in study_design[7]:
+                design_module["DesignInfo"]["DesignMaskingInfo"][
+                    "DesignWhoMaskedList"
+                ].append(row)
 
-    design_module["PhaseList"] = []
+        design_module["PhaseList"] = []
 
-    if study_design[8] is not None:
-        for row in study_design[8]:
-            design_module["PhaseList"].append(row)
+        if study_design[8] is not None:
+            for row in study_design[8]:
+                design_module["PhaseList"].append(row)
 
     design_module["EnrollmentInfo"] = {}
-    design_module["EnrollmentInfo"]["EnrollmentCount"] = study_design[9]
+    design_module["EnrollmentInfo"]["EnrollmentCount"] = str(study_design[9])
     design_module["EnrollmentInfo"]["EnrollmentType"] = study_design[10]
 
-    design_module["NumberArms"] = study_design[11]
+    if study_type == "Interventional":
+        design_module["NumberArms"] = str(study_design[11])
 
-    design_module["DesignInfo"]["DesignObservationalModelList"] = []
+    if study_type == "Observational":
+        design_module["DesignInfo"]["DesignObservationalModelList"] = []
 
-    if study_design[12] is not None:
-        for row in study_design[12]:
-            design_module["DesignInfo"]["DesignObservationalModelList"].append(row)
+        if study_design[12] is not None:
+            for row in study_design[12]:
+                design_module["DesignInfo"]["DesignObservationalModelList"].append(row)
 
-    design_module["DesignInfo"]["DesignTimePerspectiveList"] = []
+        design_module["DesignInfo"]["DesignTimePerspectiveList"] = []
 
-    if study_design[13] is not None:
-        for row in study_design[13]:
-            design_module["DesignInfo"]["DesignTimePerspectiveList"].append(row)
+        if study_design[13] is not None:
+            for row in study_design[13]:
+                design_module["DesignInfo"]["DesignTimePerspectiveList"].append(row)
 
-    design_module["BioSpec"] = {}
-    design_module["BioSpec"]["BioSpecRetention"] = study_design[14]
-    design_module["BioSpec"]["BioSpecDescription"] = study_design[15]
+        design_module["BioSpec"] = {}
+        design_module["BioSpec"]["BioSpecRetention"] = study_design[14]
+        design_module["BioSpec"]["BioSpecDescription"] = study_design[15]
 
-    design_module["TargetDuration"] = study_design[16]
-    design_module["NumberGroupsCohorts"] = study_design[17]
+        design_module["TargetDuration"] = study_design[16]
+        design_module["NumberGroupsCohorts"] = str(study_design[17])
 
     study_metadata["DesignModule"] = design_module
 
@@ -262,12 +290,13 @@ def pipeline():
         item = {}
 
         item["ArmGroupLabel"] = row[0]
-        item["ArmGroupType"] = row[1]
+        if study_type == "Interventional":
+            item["ArmGroupType"] = row[1]
         item["ArmGroupDescription"] = row[2]
 
-        item["ArmGroupInterventionList"] = []
+        if study_type == "Interventional" and row[3] is not None and len(row[3]) > 0:
+            item["ArmGroupInterventionList"] = []
 
-        if row[3] is not None:
             for intervention in row[3]:
                 item["ArmGroupInterventionList"].append(intervention)
 
@@ -400,7 +429,6 @@ def pipeline():
             item["LocationState"] = row[3]
             item["LocationZip"] = row[4]
             item["LocationCountry"] = row[5]
-            item["LocationContactList"] = []
 
             contacts_locations_module["LocationList"].append(item)
 
@@ -484,7 +512,9 @@ def pipeline():
             item["AvailIPDId"] = row[0]
             item["AvailIPDType"] = row[1]
             item["AvailIPDURL"] = row[2]
-            item["AvailIPDComment"] = row[3]
+
+            if row[3]:
+                item["AvailIPDComment"] = row[3]
 
             references_module["AvailIPDList"].append(item)
 
@@ -493,16 +523,21 @@ def pipeline():
     conn.commit()
     conn.close()
 
-    # return json.dumps(study_metadata, indent=4, sort_keys=True, default=str)
+    # Create a temporary folder on the local machine
+    temp_folder_path = tempfile.mkdtemp()
 
-    # generate temp file
-    temp_file, temp_file_path = tempfile.mkstemp(suffix=".json")
+    temp_file_path = pathlib.Path(temp_folder_path, "study_description.json")
 
-    with open(temp_file_path, mode="w", encoding="utf-8") as f:
-        formatted_text = json.dumps(
-            study_metadata, indent=4, sort_keys=True, default=str
-        )
-        f.write(formatted_text)
+    data_is_valid = pyfairdatatools.validate.validate_study_description(
+        data=study_metadata
+    )
+
+    if not data_is_valid:
+        raise Exception("Study description is not valid")
+
+    pyfairdatatools.generate.generate_study_description(
+        data=study_metadata, file_path=temp_file_path, file_type="json"
+    )
 
     # upload the file to the metadata folder
 
@@ -525,7 +560,8 @@ def pipeline():
 
     # upload the file to the metadata folder
     blob_client = blob_service_client.get_blob_client(
-        container="stage-1-container", blob=f"{metadata_folder}/study_description.json"
+        container="stage-1-container",
+        blob=f"{metadata_folder}/study_description.json",
     )
 
     with open(temp_file_path, "rb") as data:

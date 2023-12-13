@@ -3,6 +3,9 @@ import logging
 
 import azure.functions as func
 
+from publish_pipeline.generate_high_level_metadata.generate_dataset_description import (
+    pipeline as generate_dataset_description_pipeline,
+)
 from publish_pipeline.generate_high_level_metadata.generate_study_description import (
     pipeline as generate_study_description_pipeline,
 )
@@ -39,10 +42,10 @@ def preprocess_stage_one_env(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         stage_one_env_sensor_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
     except Exception as e:
         print(f"Exception: {e}")
-
-    return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
 
 
 @app.route(
@@ -56,10 +59,10 @@ def preprocess_stage_one_n_test(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         stage_one_img_identifier_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
     except Exception as e:
         print(f"Exception: {e}")
-
-    return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
 
 
 @app.route(route="generate-study-description", auth_level=func.AuthLevel.FUNCTION)
@@ -68,7 +71,19 @@ def generate_study_description(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         generate_study_description_pipeline()
+        return func.HttpResponse("Sucess", status_code=200, mimetype="text/plain")
     except Exception as e:
         print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
 
-    return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+
+@app.route(route="generate-dataset-description", auth_level=func.AuthLevel.FUNCTION)
+def generate_dataset_description(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the database for the dataset and generates a dataset_description.json file in the metadata folder."""
+
+    try:
+        generate_dataset_description_pipeline()
+        return func.HttpResponse("Sucess", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
