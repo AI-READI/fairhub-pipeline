@@ -529,6 +529,6 @@ def pipeline():
     )
 
     with open(temp_file_path, "rb") as data:
-        blob_client.upload_blob(data)
+        blob_client.upload_blob(data, overwrite=True)
 
     return
