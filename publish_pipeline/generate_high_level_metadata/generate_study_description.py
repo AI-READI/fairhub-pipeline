@@ -520,7 +520,6 @@ def pipeline():
     )
 
     study_references = cur.fetchall()
-    print(study_references)
 
     references_module["ReferenceList"] = []
 
@@ -528,7 +527,8 @@ def pipeline():
         for row in study_references:
             item = {}
 
-            item["ReferenceID"] = row[0]
+            if row[0] is not None and row[0] != "":
+                item["ReferenceID"] = row[0]
             if row[1] is not None and row[1] != "":
                 item["ReferenceType"] = row[1]
             if row[2] is not None and row[2] != "":
@@ -536,6 +536,7 @@ def pipeline():
 
             references_module["ReferenceList"].append(item)
 
+    # Get the study links metadata
     cur.execute(
         "SELECT url, title FROM study_link WHERE study_id = %s",
         (study_id,),
@@ -550,10 +551,12 @@ def pipeline():
             item = {}
 
             item["SeeAlsoLinkURL"] = row[0]
-            item["SeeAlsoLinkLabel"] = row[1]
+            if row[1] is not None and row[1] != "":
+                item["SeeAlsoLinkLabel"] = row[1]
 
             references_module["SeeAlsoLinkList"].append(item)
 
+    # Get the study available IPD
     cur.execute(
         "SELECT identifier, type, url, comment FROM study_available_ipd WHERE study_id = %s",
         (study_id,),
@@ -570,7 +573,6 @@ def pipeline():
             item["AvailIPDId"] = row[0]
             item["AvailIPDType"] = row[1]
             item["AvailIPDURL"] = row[2]
-
             if row[3]:
                 item["AvailIPDComment"] = row[3]
 
