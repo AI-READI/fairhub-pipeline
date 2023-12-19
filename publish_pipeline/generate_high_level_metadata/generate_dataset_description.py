@@ -198,6 +198,7 @@ def pipeline():
 
     dataset_metadata["Contributor"] = contributors
 
+    # Get the publication year
     publication_year = str(datetime.datetime.now().year)
 
     dataset_metadata["PublicationYear"] = publication_year
@@ -393,6 +394,7 @@ def pipeline():
         timestamp = datetime.datetime.fromtimestamp(dataset_access[3] / 1000)
         access_details["urlLastChecked"] = timestamp.strftime("%Y-%m-%d")
 
+    # Get the dataset Access Type
     dataset_metadata["AccessType"] = dataset_access[0]
     dataset_metadata["AccessDetails"] = access_details
 
@@ -523,9 +525,10 @@ def pipeline():
                     item_identifier[
                         "relatedItemIdentifierType"
                     ] = related_item_identifier[1]
-                    item_identifier["relatedMetadataScheme"] = related_item_identifier[
-                        2
-                    ]
+                    if related_item_identifier[2] is not None and related_item_identifier[2] != "":
+                        item_identifier["relatedMetadataScheme"] = related_item_identifier[
+                            2
+                        ]
                     if related_item_identifier[3] is not None and related_item_identifier[3] != "":
                         item_identifier["schemeURI"] = related_item_identifier[3]
                     if related_item_identifier[4] is not None and related_item_identifier[4] != "":
