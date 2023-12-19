@@ -10,7 +10,6 @@ import psycopg2
 import pyfairdatatools
 
 import config
-import json
 
 
 def pipeline():
