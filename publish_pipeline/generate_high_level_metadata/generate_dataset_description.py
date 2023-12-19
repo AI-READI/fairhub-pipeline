@@ -11,7 +11,6 @@ import psycopg2
 import pyfairdatatools
 
 import config
-import json
 
 
 def pipeline():
@@ -513,7 +512,6 @@ def pipeline():
             )
 
             related_item_identifiers = cur.fetchall()
-            # print(related_item_identifiers)
 
             if related_item_identifiers is not None:
                 for related_item_identifier in related_item_identifiers:
@@ -574,7 +572,6 @@ def pipeline():
             if related_item_contributors is not None:
                 for related_item_contributor in related_item_contributors:
                     item_contributor = {}
-                    # print(related_item_contributor)
 
                     item_contributor["contributorName"] = related_item_contributor[0]
                     if related_item_contributor[1] is not None and related_item_contributor[1] != "":
@@ -645,7 +642,6 @@ def pipeline():
 
     dataset_metadata["RelatedIdentifier"] = []
 
-    print(json.dumps(dataset_metadata))
     conn.commit()
     conn.close()
 
