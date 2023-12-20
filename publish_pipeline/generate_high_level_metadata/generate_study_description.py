@@ -489,7 +489,10 @@ def pipeline():
         for row in ipd_sharing[2]:
             ipd_sharing_statement_module["IPDSharingInfoTypeList"].append(row)
 
-    if bool_ipd_share == "No" and ipd_sharing_statement_module["IPDSharingInfoTypeList"] == []:
+    if (
+        bool_ipd_share == "No"
+        and ipd_sharing_statement_module["IPDSharingInfoTypeList"] == []
+    ):
         # Delete key if empty
         del ipd_sharing_statement_module["IPDSharingInfoTypeList"]
 

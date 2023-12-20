@@ -6,13 +6,12 @@ import azure.functions as func
 from publish_pipeline.generate_high_level_metadata.generate_dataset_description import (
     pipeline as generate_dataset_description_pipeline,
 )
-from publish_pipeline.generate_high_level_metadata.generate_study_description import (
-    pipeline as generate_study_description_pipeline,
-)
 from publish_pipeline.generate_high_level_metadata.generate_readme import (
     pipeline as generate_readme_pipeline,
 )
-
+from publish_pipeline.generate_high_level_metadata.generate_study_description import (
+    pipeline as generate_study_description_pipeline,
+)
 from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,

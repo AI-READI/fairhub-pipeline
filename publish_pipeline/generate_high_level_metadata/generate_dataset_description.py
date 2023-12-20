@@ -134,12 +134,22 @@ def pipeline():
                 affiliation_item = {}
 
                 affiliation_item["affiliationValue"] = affiliation["name"]
-                if affiliation["identifier"] is not None and affiliation["identifier"] != "":
-                    affiliation_item["affiliationIdentifier"] = affiliation["identifier"]
+                if (
+                    affiliation["identifier"] is not None
+                    and affiliation["identifier"] != ""
+                ):
+                    affiliation_item["affiliationIdentifier"] = affiliation[
+                        "identifier"
+                    ]
                 if affiliation["scheme"] is not None and affiliation["scheme"] != "":
-                    affiliation_item["affiliationIdentifierScheme"] = affiliation["scheme"]
+                    affiliation_item["affiliationIdentifierScheme"] = affiliation[
+                        "scheme"
+                    ]
 
-                if affiliation["scheme_uri"] is not None and affiliation["scheme_uri"] != "":
+                if (
+                    affiliation["scheme_uri"] is not None
+                    and affiliation["scheme_uri"] != ""
+                ):
                     affiliation_item["schemeURI"] = affiliation["scheme_uri"]
 
                 item["affiliation"].append(affiliation_item)
@@ -184,11 +194,21 @@ def pipeline():
                 affiliation_item = {}
 
                 affiliation_item["affiliationValue"] = affiliation["name"]
-                if affiliation["identifier"] is not None and affiliation["identifier"] != "":
-                    affiliation_item["affiliationIdentifier"] = affiliation["identifier"]
+                if (
+                    affiliation["identifier"] is not None
+                    and affiliation["identifier"] != ""
+                ):
+                    affiliation_item["affiliationIdentifier"] = affiliation[
+                        "identifier"
+                    ]
                 if affiliation["scheme"] is not None and affiliation["scheme"] != "":
-                    affiliation_item["affiliationIdentifierScheme"] = affiliation["scheme"]
-                if affiliation["scheme_uri"] is not None and affiliation["scheme_uri"] != "":
+                    affiliation_item["affiliationIdentifierScheme"] = affiliation[
+                        "scheme"
+                    ]
+                if (
+                    affiliation["scheme_uri"] is not None
+                    and affiliation["scheme_uri"] != ""
+                ):
                     affiliation_item["schemeURI"] = affiliation["scheme_uri"]
 
                 item["affiliation"].append(affiliation_item)
@@ -370,7 +390,10 @@ def pipeline():
     dataset_managing_organisation = cur.fetchone()
 
     managing_organisation["name"] = dataset_managing_organisation[0]
-    if dataset_managing_organisation[1] is not None and dataset_managing_organisation[1] != "":
+    if (
+        dataset_managing_organisation[1] is not None
+        and dataset_managing_organisation[1] != ""
+    ):
         managing_organisation["rorId"] = dataset_managing_organisation[1]
 
     dataset_metadata["ManagingOrganisation"] = managing_organisation
@@ -523,13 +546,22 @@ def pipeline():
                     item_identifier[
                         "relatedItemIdentifierType"
                     ] = related_item_identifier[1]
-                    if related_item_identifier[2] is not None and related_item_identifier[2] != "":
-                        item_identifier["relatedMetadataScheme"] = related_item_identifier[
-                            2
-                        ]
-                    if related_item_identifier[3] is not None and related_item_identifier[3] != "":
+                    if (
+                        related_item_identifier[2] is not None
+                        and related_item_identifier[2] != ""
+                    ):
+                        item_identifier[
+                            "relatedMetadataScheme"
+                        ] = related_item_identifier[2]
+                    if (
+                        related_item_identifier[3] is not None
+                        and related_item_identifier[3] != ""
+                    ):
                         item_identifier["schemeURI"] = related_item_identifier[3]
-                    if related_item_identifier[4] is not None and related_item_identifier[4] != "":
+                    if (
+                        related_item_identifier[4] is not None
+                        and related_item_identifier[4] != ""
+                    ):
                         item_identifier["schemeType"] = related_item_identifier[4]
 
                     item_identifiers.append(item_identifier)
@@ -574,7 +606,10 @@ def pipeline():
                     item_contributor = {}
 
                     item_contributor["contributorName"] = related_item_contributor[0]
-                    if related_item_contributor[1] is not None and related_item_contributor[1] != "":
+                    if (
+                        related_item_contributor[1] is not None
+                        and related_item_contributor[1] != ""
+                    ):
                         item_contributor["nameType"] = related_item_contributor[1]
                     item_contributor["contributorType"] = related_item_contributor[2]
 
@@ -614,7 +649,9 @@ def pipeline():
             related_item_other = cur.fetchone()
 
             if related_item_other[0] is not None and related_item_other[0] != "":
-                timestamp = datetime.datetime.fromtimestamp(related_item_other[0] / 1000)
+                timestamp = datetime.datetime.fromtimestamp(
+                    related_item_other[0] / 1000
+                )
                 item["publicationYear"] = str(timestamp.year)
             if related_item_other[1] is not None and related_item_other[1] != "":
                 item["volume"] = related_item_other[1]
