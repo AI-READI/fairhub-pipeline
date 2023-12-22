@@ -1,0 +1,74 @@
+# Workflow to build fairhub pipeline Python function app, deploy it to Azure Functions App, and propogate any changes to function app slot 
+# configuration when a commit is pushed to any release branch.
+#
+# This workflow assumes you have already created the target Azure Functions app.
+# 
+# To configure this workflow:
+# 1. Set up the following secrets in your repository:
+#   - AZURE_FUNCTIONAPP_PUBLISH_PROFILE
+# 2. Change env variables for your environment-specific configuration.
+# 3. Add secrets to env-specific configuration
+#
+# remote actions used in this workflow:
+#   - GitHub Actions for Azure: https://github.com/Azure/Actions
+#   - Azure Functions Action: https://github.com/Azure/functions-action
+#   - Publish Profile: https://github.com/Azure/functions-action#using-publish-profile-as-deployment-credential-recommended
+#   - Azure CLI from github actions: 
+#
+# For more samples to get started with GitHub Action workflows to deploy to Azure: https://github.com/Azure/actions-workflow-samples/tree/master/FunctionApp
+
+name: Production_Deploy Pipeline Azure Func to Fairhub
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AZURE_FUNCTIONAPP_NAME: 'b2ai-fairhub-pipeline'
+  AZURE_RESOURCEGROUP_NAME: 'B2AI-OT2'
+  AZURE_FUNCTIONAPP_DEPLOYMENT_SLOT: 'b2ai-fairhub-pipeline'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: 'Checkout GitHub Action'
+      uses: actions/checkout@v3
+
+    - name: Setup Python ${{ env.PYTHON_VERSION }} Environment
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: 'Resolve Project Dependencies Using Pip'
+      shell: bash
+      run: |
+        pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt --target=".python_packages/lib/site-packages"
+        popd
+    
+    - name: 'Update Function Slot Configuration settings'
+      uses: Azure/cli@v1.0.9
+      with:
+        azcliversion: 2.53.0
+        inlineScript: |
+            az functionapp config appsettings set --settings SOURCE_CONTAINER_NAME="raw-storage" --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCEGROUP_NAME }} --slot ${{ env.AZURE_FUNCTIONAPP_DEPLOYMENT_SLOT }} 
+            az functionapp config appsettings set --settings DEST_CONTAINER_NAME="stage-1-container" --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCEGROUP_NAME }} --slot ${{ env.AZURE_FUNCTIONAPP_DEPLOYMENT_SLOT }} 
+            az functionapp config appsettings set --settings PROJECT_NAME="AIREADI" --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCEGROUP_NAME }} --slot ${{ env.AZURE_FUNCTIONAPP_DEPLOYMENT_SLOT }}
+            az functionapp config appsettings set --settings SITE_NAMES=["UW","UAB","UCSD","site-test"] --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCEGROUP_NAME }} --slot ${{ env.AZURE_FUNCTIONAPP_DEPLOYMENT_SLOT }}
+            az functionapp config appsettings set --settings AZURE_STORAGE_ACCESS_KEY="${{ secrets.AZURE_STORAGE_ACCESS_KEY_PRODUCTION }}" --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCEGROUP_NAME }} --slot ${{ env.AZURE_FUNCTIONAPP_DEPLOYMENT_SLOT }}
+            az functionapp config appsettings set --settings AZURE_STORAGE_ACCESS_KEY="${{ secrets.AZURE_STORAGE_CONNECTION_STRING_PRODUCTION }}" --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCEGROUP_NAME }} --slot ${{ env.AZURE_FUNCTIONAPP_DEPLOYMENT_SLOT }}
+
+    - name: 'Run Azure Functions Action'
+      uses: Azure/functions-action@v1
+      id: fa
+      with:
+        app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+        package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+        scm-do-build-during-deployment: true
+        enable-oryx-build: true
