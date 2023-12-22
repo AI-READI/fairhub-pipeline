@@ -21,7 +21,7 @@ name: Staging_Deployment Deploy Pipeline Azure Func to Fairhub
 
 on:
   push:
-    branches: [releases/**]
+    branches: [staging]
   workflow_dispatch:
     inputs:
       tags:
