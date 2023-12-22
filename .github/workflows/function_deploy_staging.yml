@@ -22,6 +22,12 @@ name: Staging_Deployment Deploy Pipeline Azure Func to Fairhub
 on:
   push:
     branches: [releases/**]
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'Test scenario tags'
+        required: false
+        type: boolean
 
 env:
   AZURE_FUNCTIONAPP_NAME: 'b2ai-fairhub-pipeline'   # set this to your function app name on Azure
