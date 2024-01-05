@@ -16,7 +16,12 @@ from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipel
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
 )
-
+from publish_pipeline.generate_high_level_metadata.generate_license import (
+    pipeline as generate_license_pipeline,
+)
+from publish_pipeline.generate_high_level_metadata.generate_changelog import (
+    pipeline as generate_changelog_pipeline,
+)
 app = func.FunctionApp()
 
 logging.debug("Function app created")
@@ -74,7 +79,7 @@ def generate_study_description(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         generate_study_description_pipeline()
-        return func.HttpResponse("Sucess", status_code=200, mimetype="text/plain")
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
@@ -86,7 +91,7 @@ def generate_dataset_description(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         generate_dataset_description_pipeline()
-        return func.HttpResponse("Sucess", status_code=200, mimetype="text/plain")
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
@@ -98,7 +103,30 @@ def generate_readme(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         generate_readme_pipeline()
-        return func.HttpResponse("Sucess", status_code=200, mimetype="text/plain")
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+
+@app.route(route="generate-license", auth_level=func.AuthLevel.FUNCTION)
+def generate_license(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the database for the study and generates a license.txt file in the metadata folder."""
+
+    try:
+        generate_license_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+@app.route(route="generate-changelog", auth_level=func.AuthLevel.FUNCTION)
+def generate_changelog(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the database for the study and generates a changelog.md file in the metadata folder."""
+
+    try:
+        generate_changelog_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
