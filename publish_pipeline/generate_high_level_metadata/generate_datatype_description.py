@@ -35,3 +35,15 @@ def pipeline():
     cur.execute("SELECT * FROM dataset WHERE id = %s AND study_id = %s", (dataset_id, study_id))
 
     dataset = cur.fetchone()
+
+    if dataset is None:
+        return "Dataset not found"
+
+    # Get the folder names of the dataset
+    container_name = ""
+    blob_service_client = azureblob.BlobServiceClient.from_connection_string(config.AZURE_STORAGE_CONNECTION_STRING)
+    container_client = blob_service_client.get_container_client(container_name)
+
+    blobs = container_client.list_blobs(delimiter='/')
+    folder_names = [blob.name for blob in blobs if blob.name.endswith('/')]
+    
