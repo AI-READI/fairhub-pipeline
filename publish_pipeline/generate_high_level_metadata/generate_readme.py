@@ -112,11 +112,45 @@ def pipeline():
 
     readme_metadata["StandardsFollowed"] = standards_followed
 
-    # todo: resources
+    # resources
+    resource = ""
+    cur.execute(
+        "SELECT resource_type FROM dataset_other WHERE dataset_id = %s",
+        (dataset_id,),
+    )
 
-    # todo: license
+    dataset_other_resource = cur.fetchone()
+    # resource = dataset_other.join(",")
+    resource = dataset_other_resource[0]
+    readme_metadata["Resource"] = resource
 
-    # todo: create citation
+    # license
+
+    license_text = ""
+
+    cur.execute(
+        "SELECT rights FROM dataset_rights WHERE dataset_id = %s",
+        (dataset_id,),
+    )
+
+    dataset_rights = cur.fetchone()
+    # license_text = dataset_other.join(",")
+    license_text = dataset_rights[0]
+    readme_metadata["License"] = license_text
+
+
+    # create citation
+
+
+    citation = ""
+    cur.execute(
+        "SELECT citation FROM study_reference WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_reference = cur.fetchone()
+    citation = study_reference[0]
+    readme_metadata["Citation"] = citation
 
     acknowledgement = ""
 
@@ -141,6 +175,7 @@ def pipeline():
     temp_file_path = pathlib.Path(temp_folder_path, "README.md")
 
     data_is_valid = pyfairdatatools.validate.validate_readme(data=readme_metadata)
+    print(readme_metadata)
     if not data_is_valid:
         raise Exception("Dataset description is not valid")
 
