@@ -44,7 +44,7 @@ def pipeline():
     license_text = ""
 
     cur.execute(
-        "SELECT rights FROM dataset_rights WHERE dataset_id = %s",
+        "SELECT license_text FROM dataset_rights WHERE dataset_id = %s",
         (dataset_id,),
     )
 
@@ -59,12 +59,6 @@ def pipeline():
     temp_folder_path = tempfile.mkdtemp()
 
     temp_file_path = pathlib.Path(temp_folder_path, "license.txt")
-
-    data_is_valid = pyfairdatatools.validate.validate_license(identifier=license_metadata)
-    print(data_is_valid)
-    if not data_is_valid:
-        raise Exception("Dataset description is not valid")
-
     pyfairdatatools.generate.generate_license_file(
         data=license_metadata, file_path=temp_file_path, file_type="txt"
     )

@@ -22,6 +22,9 @@ from publish_pipeline.generate_high_level_metadata.generate_license import (
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
     pipeline as generate_changelog_pipeline,
 )
+from publish_pipeline.generate_high_level_metadata.generate_discovery_metadata import (
+    pipeline as generate_discovery_metadata_pipeline,
+)
 app = func.FunctionApp()
 
 logging.debug("Function app created")
@@ -130,3 +133,14 @@ def generate_changelog(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+@app.route(route="generate-discovery_metadata", auth_level=func.AuthLevel.FUNCTION)
+def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the database for the study and generates a discovery_metadata.json file in the metadata folder."""
+
+    try:
+        generate_discovery_metadata_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="application/json")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="application/json")
