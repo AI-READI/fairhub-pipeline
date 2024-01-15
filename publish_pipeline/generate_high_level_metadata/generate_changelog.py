@@ -1,5 +1,5 @@
 # pylint: disable=line-too-long
-"""Process environmental sensor data files"""
+"""Process changelog.md files"""
 
 import datetime
 import pathlib
@@ -16,7 +16,7 @@ import config
 def pipeline():
     """Reads the database for the dataset and generates a changelog.md file in the metadata folder."""
 
-    changelog_metadata = {}
+    changelog_metadata = ""
 
     conn = psycopg2.connect(
         host=config.FAIRHUB_DATABASE_HOST,
@@ -64,10 +64,11 @@ def pipeline():
         data=changelog_metadata, file_path=temp_file_path, file_type="md"
     )
 
-    #upload the file to the metadata folder
+    # upload the file to the metadata folder
     metadata_folder = "AI-READI/metadata"
 
-    sas_token = azureblob.generate_account_sas(        account_name="b2aistaging",
+    sas_token = azureblob.generate_account_sas(
+        account_name="b2aistaging",
         account_key=config.AZURE_STORAGE_ACCESS_KEY,
         resource_types=azureblob.ResourceTypes(container=True, object=True),
         permission=azureblob.AccountSasPermissions(read=True, write=True, list=True),
