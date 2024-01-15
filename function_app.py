@@ -3,8 +3,20 @@ import logging
 
 import azure.functions as func
 
+from publish_pipeline.generate_high_level_metadata.generate_changelog import (
+    pipeline as generate_changelog_pipeline,
+)
 from publish_pipeline.generate_high_level_metadata.generate_dataset_description import (
     pipeline as generate_dataset_description_pipeline,
+)
+from publish_pipeline.generate_high_level_metadata.generate_datatype_dictionary import (
+    pipeline as generate_datatype_dictionary_pipeline,
+)
+from publish_pipeline.generate_high_level_metadata.generate_discovery_metadata import (
+    pipeline as generate_discovery_metadata_pipeline,
+)
+from publish_pipeline.generate_high_level_metadata.generate_license import (
+    pipeline as generate_license_pipeline,
 )
 from publish_pipeline.generate_high_level_metadata.generate_readme import (
     pipeline as generate_readme_pipeline,
@@ -12,22 +24,11 @@ from publish_pipeline.generate_high_level_metadata.generate_readme import (
 from publish_pipeline.generate_high_level_metadata.generate_study_description import (
     pipeline as generate_study_description_pipeline,
 )
-from publish_pipeline.generate_high_level_metadata.generate_datatype_dictionary import (
-    pipeline as generate_datatype_dictionary_pipeline,
-)
 from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
 )
-from publish_pipeline.generate_high_level_metadata.generate_license import (
-    pipeline as generate_license_pipeline,
-)
-from publish_pipeline.generate_high_level_metadata.generate_changelog import (
-    pipeline as generate_changelog_pipeline,
-)
-from publish_pipeline.generate_high_level_metadata.generate_discovery_metadata import (
-    pipeline as generate_discovery_metadata_pipeline,
-)
+
 app = func.FunctionApp()
 
 logging.debug("Function app created")
@@ -138,6 +139,7 @@ def generate_license(req: func.HttpRequest) -> func.HttpResponse:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
 
+
 @app.route(route="generate-changelog", auth_level=func.AuthLevel.FUNCTION)
 def generate_changelog(req: func.HttpRequest) -> func.HttpResponse:
     """Reads the database for the study and generates a changelog.md file in the metadata folder."""
@@ -163,13 +165,16 @@ def generate_datatype_dictionary(req: func.HttpRequest) -> func.HttpResponse:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
 
-@app.route(route="generate-discovery_metadata", auth_level=func.AuthLevel.FUNCTION)
+
+@app.route(route="generate-discovery-metadata", auth_level=func.AuthLevel.FUNCTION)
 def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
     """Reads the database for the study and generates a discovery_metadata.json file in the metadata folder."""
 
     try:
         generate_discovery_metadata_pipeline()
-        return func.HttpResponse("Success", status_code=200, mimetype="application/json")
+        return func.HttpResponse(
+            "Success", status_code=200, mimetype="application/json"
+        )
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="application/json")

@@ -16,7 +16,7 @@ import config
 def pipeline():
     """Reads the database for the dataset and generates a license.txt file in the metadata folder."""
 
-    license_metadata = {}
+    license_text = ""
 
     conn = psycopg2.connect(
         host=config.FAIRHUB_DATABASE_HOST,
@@ -41,7 +41,6 @@ def pipeline():
     if dataset is None:
         return "Dataset not found"
 
-    license_text = ""
 
     cur.execute(
         "SELECT license_text FROM dataset_rights WHERE dataset_id = %s",
@@ -51,7 +50,6 @@ def pipeline():
     dataset_other = cur.fetchone()
     # license_text = dataset_other.join(",")
     license_text = dataset_other[0]
-    license_metadata = license_text
 
     conn.close()
 
@@ -60,7 +58,7 @@ def pipeline():
 
     temp_file_path = pathlib.Path(temp_folder_path, "license.txt")
     pyfairdatatools.generate.generate_license_file(
-        data=license_metadata, file_path=temp_file_path, file_type="txt"
+        data=license_text, file_path=temp_file_path, file_type="txt"
     )
 
     # upload the file to the metadata folder
