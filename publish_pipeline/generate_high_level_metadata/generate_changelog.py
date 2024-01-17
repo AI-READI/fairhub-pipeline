@@ -51,8 +51,7 @@ def pipeline():
     version_changelog = cur.fetchone()
     changelog = version_changelog[0]
 
-    if changelog:
-        changelog_metadata = changelog
+    changelog_metadata = changelog
 
     conn.close()
 

@@ -53,14 +53,6 @@ def pipeline():
 
     conn.close()
 
-    # Create a temporary folder on the local machine
-    temp_folder_path = tempfile.mkdtemp()
-
-    temp_file_path = pathlib.Path(temp_folder_path, "license.txt")
-    pyfairdatatools.generate.generate_license_file(
-        data=license_text, file_path=temp_file_path, file_type="txt"
-    )
-
     # upload the file to the metadata folder
 
     metadata_folder = "AI-READI/metadata"
@@ -86,7 +78,6 @@ def pipeline():
         blob=f"{metadata_folder}/license.txt",
     )
 
-    with open(temp_file_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    blob_client.upload_blob(license_text, overwrite=True)
 
     return
