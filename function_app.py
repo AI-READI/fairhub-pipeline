@@ -16,7 +16,8 @@ from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipel
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
 )
-
+from azure.storage.filedatalake import FileSystemClient, DataLakeDirectoryClient, DataLakeServiceClient, \
+    DataLakeFileClient
 app = func.FunctionApp()
 
 logging.debug("Function app created")
@@ -102,3 +103,26 @@ def generate_readme(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+@app.route(route="moving-folders", auth_level=func.AuthLevel.FUNCTION)
+def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
+    """Moves the directories along with the files in the Azure Database."""
+    file_system = (
+        FileSystemClient.from_connection_string(
+            f"DefaultEndpointsProtocol=https;AccountName=b2aistaging;AccountKey=ARD+Hr4hEquCtqw9jnmSgaO/hxIg5QBXZBVurhVrWt+nnK4KI34IgwCxCLmRUCwND6Sz5rMSy5xt+ASt1rMvYw==;EndpointSuffix=core.windows.net",
+            file_system_name="stage-1-container"
+        ))
+    dir_name = "AI-READI/temp/copy-test"
+
+    directory = file_system.get_directory_client(dir_name)
+
+    new_dir_name = "AI-READI/copy-test"
+    try:
+        directory.rename_directory(
+        new_name=f"{directory.file_system_name}/{new_dir_name}")
+
+        return func.HttpResponse("Sucess", status_code=200)
+
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500)
