@@ -1,6 +1,3 @@
-# pylint: disable=line-too-long
-"""Process environmental sensor data files"""
-
 import datetime
 import pathlib
 import tempfile
@@ -70,33 +67,24 @@ def pipeline():
     readme_metadata["PublicationDate"] = publication_date
 
     abstract = ""
-
     cur.execute(
         "SELECT description FROM dataset_description WHERE dataset_id = %s AND type = 'Abstract'",
         (dataset_id,),
     )
-
     dataset_abstract = cur.fetchone()
-
     abstract = dataset_abstract[0]
-
-    readme_metadata["About"] = abstract
-
+    readme_metadata["DatasetDescription"] = abstract
     detailed_description = ""
 
     cur.execute(
         "SELECT detailed_description FROM study_description WHERE study_id = %s",
         (study_id,),
     )
-
     study_description = cur.fetchone()
-
     detailed_description = study_description[0]
-
-    readme_metadata["DatasetDescription"] = detailed_description
+    readme_metadata["About"] = detailed_description
 
     access_details = ""
-
     cur.execute(
         "SELECT type, description FROM dataset_access WHERE dataset_id = %s",
         (dataset_id,),
@@ -121,11 +109,43 @@ def pipeline():
 
     readme_metadata["StandardsFollowed"] = standards_followed
 
-    # todo: resources
+    # resources
+    resource = ""
+    cur.execute(
+        "SELECT resource_type FROM dataset_other WHERE dataset_id = %s",
+        (dataset_id,),
+    )
 
-    # todo: license
+    dataset_other_resource = cur.fetchone()
+    # resource = dataset_other.join(",")
+    resource = dataset_other_resource[0]
+    readme_metadata["Resource"] = resource
 
-    # todo: create citation
+    # license
+
+    license_identifier = ""
+
+    cur.execute(
+        "SELECT identifier FROM dataset_rights WHERE dataset_id = %s",
+        (dataset_id,),
+    )
+
+    dataset_rights = cur.fetchone()
+    # license_text = dataset_other.join(",")
+    license_identifier = dataset_rights[0]
+    readme_metadata["License"] = license_identifier
+
+    # create citation
+
+    citation = ""
+    cur.execute(
+        "SELECT citation FROM study_reference WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_reference = cur.fetchone()
+    citation = study_reference[0]
+    readme_metadata["Citation"] = citation
 
     acknowledgement = ""
 
@@ -141,7 +161,7 @@ def pipeline():
     if acknowledgement:
         readme_metadata["Acknowledgement"] = acknowledgement
 
-    conn.commit()
+    # conn.commit()
     conn.close()
 
     # Create a temporary folder on the local machine
@@ -150,7 +170,6 @@ def pipeline():
     temp_file_path = pathlib.Path(temp_folder_path, "README.md")
 
     data_is_valid = pyfairdatatools.validate.validate_readme(data=readme_metadata)
-
     if not data_is_valid:
         raise Exception("Dataset description is not valid")
 

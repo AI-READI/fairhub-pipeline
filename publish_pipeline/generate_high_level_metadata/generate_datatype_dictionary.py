@@ -45,11 +45,7 @@ def pipeline():
             pooled_data_folders.append(blob.name.split("/")[2])
 
     # print(pooled_data_folders)
-    pooled_data_folders = [
-        "ekg",
-        "redcap_data",
-        "oct"
-    ]
+    pooled_data_folders = ["ekg", "redcap_data", "oct"]
 
     # Create a temporary folder on the local machine
     temp_folder_path = tempfile.mktemp()
