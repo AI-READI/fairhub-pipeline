@@ -126,17 +126,17 @@ def pipeline():
 
     # license
 
-    license_text = ""
+    license_identifier = ""
 
     cur.execute(
-        "SELECT rights FROM dataset_rights WHERE dataset_id = %s",
+        "SELECT identifier FROM dataset_rights WHERE dataset_id = %s",
         (dataset_id,),
     )
 
     dataset_rights = cur.fetchone()
     # license_text = dataset_other.join(",")
-    license_text = dataset_rights[0]
-    readme_metadata["License"] = license_text
+    license_identifier = dataset_rights[0]
+    readme_metadata["License"] = license_identifier
 
     # create citation
 
@@ -173,6 +173,7 @@ def pipeline():
     temp_file_path = pathlib.Path(temp_folder_path, "README.md")
 
     data_is_valid = pyfairdatatools.validate.validate_readme(data=readme_metadata)
+    print(readme_metadata)
     if not data_is_valid:
         raise Exception("Dataset description is not valid")
 
