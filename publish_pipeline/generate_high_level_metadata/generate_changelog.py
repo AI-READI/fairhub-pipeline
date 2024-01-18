@@ -1,6 +1,3 @@
-# pylint: disable=line-too-long
-"""Process changelog.md files"""
-
 import datetime
 import pathlib
 import tempfile

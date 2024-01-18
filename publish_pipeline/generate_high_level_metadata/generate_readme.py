@@ -1,6 +1,3 @@
-# pylint: disable=line-too-long
-"""Process environmental sensor data files"""
-
 import datetime
 import pathlib
 import tempfile
