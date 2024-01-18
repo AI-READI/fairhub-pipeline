@@ -173,7 +173,6 @@ def pipeline():
     temp_file_path = pathlib.Path(temp_folder_path, "README.md")
 
     data_is_valid = pyfairdatatools.validate.validate_readme(data=readme_metadata)
-    print(readme_metadata)
     if not data_is_valid:
         raise Exception("Dataset description is not valid")
 
