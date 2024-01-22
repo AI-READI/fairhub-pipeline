@@ -1,11 +1,8 @@
 """Azure Function App for ETL pipeline."""
 import logging
 import os
-
 import azure.functions as func
-from azure.storage.filedatalake import (
-    FileSystemClient,
-)
+from azure.storage.filedatalake import FileSystemClient
 
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
     pipeline as generate_changelog_pipeline,
@@ -32,6 +29,7 @@ from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipel
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
 )
+import config
 
 app = func.FunctionApp()
 
@@ -175,6 +173,10 @@ def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="moving-folders", auth_level=func.AuthLevel.FUNCTION)
 def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Moves the directories along with the files in the Azure Database."""
+    file_system = FileSystemClient.from_connection_string(
+        config.AZURE_STORAGE_CONNECTION_STRING,
+        file_system_name="stage-1-container",
+    )
     dir_name = "AI-READI/temp/copy-test"
     new_dir_name = "AI-READI/copy-test"
     try:
@@ -191,36 +193,54 @@ def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="copying_folders", auth_level=func.AuthLevel.FUNCTION)
 def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
-    """Moves the directories along with the files in the Azure Database."""
+    """Copies the directories along with the files in the Azure Database."""
 
+    file_system = FileSystemClient.from_connection_string(
+        config.AZURE_STORAGE_CONNECTION_STRING,
+        file_system_name="stage-1-container",
+    )
     dir_name = "AI-READI/metadata/test1"
     new_dir_name = "AI-READI/metadata/final_dest"
     try:
         directory_path = file_system.get_directory_client(dir_name)
+
         directory = directory_path.get_directory_properties().name
+
         copy_directory(file_system, directory, new_dir_name)
+
         return func.HttpResponse("Success", status_code=200)
+
     except Exception as e:
+
         print(f"Exception: {e}")
+
         return func.HttpResponse("Failed", status_code=500)
 
 
 def copy_directory(
     file_system: FileSystemClient, source: str, destination: str
 ) -> None:
+
     directory_client = file_system.get_directory_client(destination)
+
     if not directory_client.exists():
         directory_client.create_directory()
+
     for path in file_system.get_paths(source, recursive=False):
         target = (
             destination + "/" + os.path.basename(path.name.rstrip("/").rstrip("\\"))
         )
         if not path.is_directory:
             source_file = file_system.get_file_client(path.name)
+
             destination_file = file_system.get_file_client(target)
+
             source_file_bytes = source_file.download_file().readall()
+
             if not destination_file.exists():
                 destination_file.create_file()
+
             destination_file.upload_data(source_file_bytes, overwrite=True)
+
         else:
             copy_directory(file_system, path.name, target)
