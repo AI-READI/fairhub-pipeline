@@ -3,8 +3,20 @@ import logging
 import os
 import azure.functions as func
 
+from publish_pipeline.generate_high_level_metadata.generate_changelog import (
+    pipeline as generate_changelog_pipeline,
+)
 from publish_pipeline.generate_high_level_metadata.generate_dataset_description import (
     pipeline as generate_dataset_description_pipeline,
+)
+from publish_pipeline.generate_high_level_metadata.generate_datatype_dictionary import (
+    pipeline as generate_datatype_dictionary_pipeline,
+)
+from publish_pipeline.generate_high_level_metadata.generate_discovery_metadata import (
+    pipeline as generate_discovery_metadata_pipeline,
+)
+from publish_pipeline.generate_high_level_metadata.generate_license import (
+    pipeline as generate_license_pipeline,
 )
 from publish_pipeline.generate_high_level_metadata.generate_readme import (
     pipeline as generate_readme_pipeline,
@@ -103,6 +115,58 @@ def generate_readme(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+
+@app.route(route="generate-license", auth_level=func.AuthLevel.FUNCTION)
+def generate_license(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the database for the study and generates a license.txt file in the metadata folder."""
+
+    try:
+        generate_license_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+
+@app.route(route="generate-changelog", auth_level=func.AuthLevel.FUNCTION)
+def generate_changelog(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the database for the study and generates a changelog.md file in the metadata folder."""
+    try:
+        generate_changelog_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+
+@app.route(route="generate-datatype-dictionary", auth_level=func.AuthLevel.FUNCTION)
+def generate_datatype_dictionary(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    Reads the database for the dataset folders and generates datatype_dictionary.yaml file
+    in the metadata folder.
+    """
+
+    try:
+        generate_datatype_dictionary_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+
+@app.route(route="generate-discovery-metadata", auth_level=func.AuthLevel.FUNCTION)
+def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
+    """Reads the database for the study and generates a discovery_metadata.json file in the metadata folder."""
+
+    try:
+        generate_discovery_metadata_pipeline()
+        return func.HttpResponse(
+            "Success", status_code=200, mimetype="application/json"
+        )
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="application/json")
 
 @app.route(route="moving-folders", auth_level=func.AuthLevel.FUNCTION)
 def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
