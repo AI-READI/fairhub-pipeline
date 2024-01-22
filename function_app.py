@@ -177,17 +177,22 @@ def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    dir_name = "AI-READI/temp/copy-test"
-    new_dir_name = "AI-READI/copy-test"
+    dir_name = "AI-READI/copy-test/temp"
+
+    new_dir_name = "AI-READI/temp"
     try:
         directory_path = file_system.get_directory_client(dir_name)
+
         directory_path.rename_directory(
             new_name=f"{directory_path.file_system_name}/{new_dir_name}"
         )
+
         return func.HttpResponse("Success", status_code=200)
 
     except Exception as e:
+
         print(f"Exception: {e}")
+
         return func.HttpResponse("Failed", status_code=500)
 
 
@@ -199,12 +204,13 @@ def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    dir_name = "AI-READI/metadata/test1"
-    new_dir_name = "AI-READI/metadata/final_dest"
+    dir_name: str = "AI-READI/metadata/test2"
+
+    new_dir_name: str = "AI-READI/metadata/test1"
     try:
         directory_path = file_system.get_directory_client(dir_name)
 
-        directory = directory_path.get_directory_properties().name
+        directory: str = directory_path.get_directory_properties().name
 
         copy_directory(file_system, directory, new_dir_name)
 
