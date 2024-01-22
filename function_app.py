@@ -175,10 +175,6 @@ def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="moving-folders", auth_level=func.AuthLevel.FUNCTION)
 def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Moves the directories along with the files in the Azure Database."""
-    file_system = FileSystemClient.from_connection_string(
-        "DefaultEndpointsProtocol=https;AccountName=b2aistaging;AccountKey=ARD+Hr4hEquCtqw9jnmSgaO/hxIg5QBXZBVurhVrWt+nnK4KI34IgwCxCLmRUCwND6Sz5rMSy5xt+ASt1rMvYw==;EndpointSuffix=core.windows.net",
-        file_system_name="stage-1-container",
-    )
     dir_name = "AI-READI/temp/copy-test"
     new_dir_name = "AI-READI/copy-test"
     try:
@@ -196,10 +192,7 @@ def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="copying_folders", auth_level=func.AuthLevel.FUNCTION)
 def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Moves the directories along with the files in the Azure Database."""
-    file_system = FileSystemClient.from_connection_string(
-        "DefaultEndpointsProtocol=https;AccountName=b2aistaging;AccountKey=ARD+Hr4hEquCtqw9jnmSgaO/hxIg5QBXZBVurhVrWt+nnK4KI34IgwCxCLmRUCwND6Sz5rMSy5xt+ASt1rMvYw==;EndpointSuffix=core.windows.net",
-        file_system_name="stage-1-container",
-    )
+
     dir_name = "AI-READI/metadata/test1"
     new_dir_name = "AI-READI/metadata/final_dest"
     try:
