@@ -226,7 +226,7 @@ def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
 def copy_directory(
     file_system: FileSystemClient, source: str, destination: str
 ) -> None:
-
+    """Moving directories while implementing subsequent copies (recursion) """
     directory_client = file_system.get_directory_client(destination)
 
     if not directory_client.exists():
