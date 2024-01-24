@@ -1,9 +1,11 @@
 """Azure Function App for ETL pipeline."""
 import logging
 import os
+
 import azure.functions as func
 from azure.storage.filedatalake import FileSystemClient
 
+import config
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
     pipeline as generate_changelog_pipeline,
 )
@@ -29,7 +31,6 @@ from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipel
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
 )
-import config
 
 app = func.FunctionApp()
 
@@ -37,9 +38,7 @@ logging.debug("Function app created")
 
 
 @app.route(route="hello", auth_level=func.AuthLevel.ANONYMOUS)
-def hello(
-    req: func.HttpRequest,
-) -> func.HttpResponse:
+def hello(req: func.HttpRequest) -> func.HttpResponse:
     """Return a simple hello world."""
     return func.HttpResponse("Hello world!!")
 
@@ -190,48 +189,57 @@ def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("Success", status_code=200)
 
     except Exception as e:
-
         print(f"Exception: {e}")
 
         return func.HttpResponse("Failed", status_code=500)
 
 
-@app.route(route="copying_folders", auth_level=func.AuthLevel.FUNCTION)
+@app.route(route="copying-folders", auth_level=func.AuthLevel.FUNCTION)
 def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Copies the directories along with the files in the Azure Database."""
-
+    overwrite_permitted = req.params.get("overwrite-permitted")
     file_system = FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    dir_name: str = "AI-READI/metadata/test2"
+    dir_name: str = "AI-READI/metadata/test2/sub3/sub4"
 
-    new_dir_name: str = "AI-READI/metadata/test1"
+    new_dir_name: str = "AI-READI/metadata/test2/sub4"
     try:
         directory_path = file_system.get_directory_client(dir_name)
 
         directory: str = directory_path.get_directory_properties().name
-
-        copy_directory(file_system, directory, new_dir_name)
+        if overwrite_permitted != "true" and overwrite_permitted != "false":
+            return func.HttpResponse("only true or false accepted", status_code=403)
+        copy_directory(
+            file_system,
+            directory,
+            new_dir_name,
+            True if overwrite_permitted.lower().strip() == "true" else False,
+        )
 
         return func.HttpResponse("Success", status_code=200)
 
     except Exception as e:
-
         print(f"Exception: {e}")
 
         return func.HttpResponse("Failed", status_code=500)
 
 
 def copy_directory(
-    file_system: FileSystemClient, source: str, destination: str
+    file_system: FileSystemClient,
+    source: str,
+    destination: str,
+    overwrite_permitted: bool,
 ) -> None:
-    """Moving directories while implementing subsequent copies (recursion) """
+    """Moving directories while implementing subsequent copies (recursion)"""
     directory_client = file_system.get_directory_client(destination)
 
     if not directory_client.exists():
         directory_client.create_directory()
-
+    else:
+        if not overwrite_permitted:
+            raise Exception("overwriting directories is not accepted")
     for path in file_system.get_paths(source, recursive=False):
         target = (
             destination + "/" + os.path.basename(path.name.rstrip("/").rstrip("\\"))
@@ -249,4 +257,4 @@ def copy_directory(
             destination_file.upload_data(source_file_bytes, overwrite=True)
 
         else:
-            copy_directory(file_system, path.name, target)
+            copy_directory(file_system, path.name, target, overwrite_permitted)
