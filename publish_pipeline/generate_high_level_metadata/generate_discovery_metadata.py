@@ -2,10 +2,10 @@
 """Process environmental sensor data files"""
 
 import datetime
-
 import uuid
 
 import psycopg2
+
 import config
 
 
