@@ -202,15 +202,15 @@ def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    dir_name: str = "AI-READI/metadata/test2/sub3/sub4"
+    dir_name: str = "AI-READI/metadata/test1"
 
-    new_dir_name: str = "AI-READI/metadata/test2/sub4"
+    new_dir_name: str = "AI-READI/metadata/test2/test1"
     try:
         directory_path = file_system.get_directory_client(dir_name)
 
         directory: str = directory_path.get_directory_properties().name
         if overwrite_permitted != "true" and overwrite_permitted != "false":
-            return func.HttpResponse("only true or false accepted", status_code=403)
+            return func.HttpResponse("Only overwrite-permitted=true or overwrite-permitted=false accepted", status_code=403)
         copy_directory(
             file_system,
             directory,
@@ -234,7 +234,9 @@ def copy_directory(
 ) -> None:
     """Moving directories while implementing subsequent copies (recursion)"""
     directory_client = file_system.get_directory_client(destination)
-
+    if destination.lower().startswith(source.lower()):
+        raise Exception("the destination is inside of the source")
+    print(directory_client.exists())
     if not directory_client.exists():
         directory_client.create_directory()
     else:
