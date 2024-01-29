@@ -172,52 +172,73 @@ def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="moving-folders", auth_level=func.AuthLevel.FUNCTION)
 def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Moves the directories along with the files in the Azure Database."""
+    overwrite_permitted = (
+        req.params["overwrite-permitted"]
+        if "overwrite-permitted" in req.params
+        else "true"
+    )
     file_system = FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    dir_name = "AI-READI/copy-test/temp"
+    dir_name: str = "AI-READI/metadata/test2/sub4"
 
-    new_dir_name = "AI-READI/temp"
-    try:
-        directory_path = file_system.get_directory_client(dir_name)
+    new_dir_name: str = "AI-READI/metadata/test2/sub5"
+    source_path = file_system.get_directory_client(dir_name)
+    destination_path = file_system.get_directory_client(new_dir_name)
 
-        directory_path.rename_directory(
-            new_name=f"{directory_path.file_system_name}/{new_dir_name}"
+    if overwrite_permitted != "true" and overwrite_permitted != "false":
+        return func.HttpResponse(
+            "Only overwrite-permitted=true or overwrite-permitted=false accepted",
+            status_code=403,
         )
-
-        return func.HttpResponse("Success", status_code=200)
-
-    except Exception as e:
-        print(f"Exception: {e}")
-
-        return func.HttpResponse("Failed", status_code=500)
+    if overwrite_permitted == "false" and destination_path.exists():
+        return func.HttpResponse(
+            "overwriting directories is not accepted", status_code=500
+        )
+    if destination_path.exists() and source_path.exists():
+        destination_path.delete_directory()
+        try:
+            source_path.rename_directory(
+                new_name=f"{source_path.file_system_name}/{new_dir_name}"
+            )
+            return func.HttpResponse("Success", status_code=200)
+        except Exception as e:
+            print(f"Exception: {e}")
+    return func.HttpResponse("Failed", status_code=500)
 
 
 @app.route(route="copying-folders", auth_level=func.AuthLevel.FUNCTION)
 def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Copies the directories along with the files in the Azure Database."""
-    overwrite_permitted = req.params.get("overwrite-permitted")
+    overwrite_permitted = (
+        req.params["overwrite-permitted"]
+        if "overwrite-permitted" in req.params
+        else "true"
+    )
     file_system = FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    dir_name: str = "AI-READI/metadata/test1"
+    dir_name: str = "AI-READI/metadata/test2/sub4"
 
-    new_dir_name: str = "AI-READI/metadata/test2/test1"
+    new_dir_name: str = "AI-READI/metadata/test2/sub5"
+
+    directory_path = file_system.get_directory_client(dir_name)
+    directory: str = directory_path.get_directory_properties().name
+
+    if overwrite_permitted != "true" and overwrite_permitted != "false":
+        return func.HttpResponse(
+            "Only overwrite-permitted=true or overwrite-permitted=false accepted",
+            status_code=403,
+        )
     try:
-        directory_path = file_system.get_directory_client(dir_name)
-
-        directory: str = directory_path.get_directory_properties().name
-        if overwrite_permitted != "true" and overwrite_permitted != "false":
-            return func.HttpResponse("Only overwrite-permitted=true or overwrite-permitted=false accepted", status_code=403)
         copy_directory(
             file_system,
             directory,
             new_dir_name,
             True if overwrite_permitted.lower().strip() == "true" else False,
         )
-
         return func.HttpResponse("Success", status_code=200)
 
     except Exception as e:
@@ -236,7 +257,6 @@ def copy_directory(
     directory_client = file_system.get_directory_client(destination)
     if destination.lower().startswith(source.lower()):
         raise Exception("the destination is inside of the source")
-    print(directory_client.exists())
     if not directory_client.exists():
         directory_client.create_directory()
     else:
@@ -255,8 +275,9 @@ def copy_directory(
 
             if not destination_file.exists():
                 destination_file.create_file()
-
             destination_file.upload_data(source_file_bytes, overwrite=True)
 
         else:
             copy_directory(file_system, path.name, target, overwrite_permitted)
+            # check if dir is empty:
+            #     delete_directory
