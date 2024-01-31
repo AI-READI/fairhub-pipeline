@@ -181,9 +181,9 @@ def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    dir_name: str = "AI-READI/metadata/test2/sub4"
+    new_dir_name: str = "AI-READI/metadata/test2/sub4"
 
-    new_dir_name: str = "AI-READI/metadata/test2/sub5"
+    dir_name: str = "AI-READI/metadata/test2/sub5"
     source_path = file_system.get_directory_client(dir_name)
     destination_path = file_system.get_directory_client(new_dir_name)
 
