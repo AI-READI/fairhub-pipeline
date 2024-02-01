@@ -38,7 +38,6 @@ def pipeline():
     if dataset is None:
         return "Dataset not found"
 
-
     cur.execute(
         "SELECT license_text FROM dataset_rights WHERE dataset_id = %s",
         (dataset_id,),

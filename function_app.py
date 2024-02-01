@@ -1,4 +1,5 @@
 """Azure Function App for ETL pipeline."""
+
 import logging
 
 import azure.functions as func

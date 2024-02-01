@@ -540,19 +540,19 @@ def pipeline():
                 for related_item_identifier in related_item_identifiers:
                     item_identifier = {}
 
-                    item_identifier[
-                        "relatedItemIdentifierValue"
-                    ] = related_item_identifier[0]
-                    item_identifier[
-                        "relatedItemIdentifierType"
-                    ] = related_item_identifier[1]
+                    item_identifier["relatedItemIdentifierValue"] = (
+                        related_item_identifier[0]
+                    )
+                    item_identifier["relatedItemIdentifierType"] = (
+                        related_item_identifier[1]
+                    )
                     if (
                         related_item_identifier[2] is not None
                         and related_item_identifier[2] != ""
                     ):
-                        item_identifier[
-                            "relatedMetadataScheme"
-                        ] = related_item_identifier[2]
+                        item_identifier["relatedMetadataScheme"] = (
+                            related_item_identifier[2]
+                        )
                     if (
                         related_item_identifier[3] is not None
                         and related_item_identifier[3] != ""
