@@ -1,7 +1,6 @@
 import datetime
 import pathlib
 import tempfile
-import uuid
 
 import azure.storage.blob as azureblob
 import psycopg2
@@ -25,7 +24,7 @@ def pipeline():
 
     cur = conn.cursor()
 
-    study_id = "c588f59c-cacb-4e52-99dd-95b37dcbfd5c"
+    # study_id = "c588f59c-cacb-4e52-99dd-95b37dcbfd5c"
     dataset_id = "af4be921-e507-41a9-9328-4cbb4b7dca1c"
     version_id = "3880f581-e142-44ea-bc4c-10242eca7d75"
 

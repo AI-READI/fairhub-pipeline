@@ -1,11 +1,7 @@
 import datetime
-import pathlib
-import tempfile
-import uuid
 
 import azure.storage.blob as azureblob
 import psycopg2
-import pyfairdatatools
 
 import config
 
