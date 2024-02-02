@@ -25,6 +25,7 @@ from publish_pipeline.generate_high_level_metadata.generate_readme import (
 from publish_pipeline.generate_high_level_metadata.generate_study_description import (
     pipeline as generate_study_description_pipeline,
 )
+from publish_pipeline.register_doi.register_doi import pipeline as register_doi_pipeline
 from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
@@ -179,3 +180,15 @@ def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="application/json")
+
+
+@app.route(route="register-doi", auth_level=func.AuthLevel.FUNCTION)
+def register_doi(req: func.HttpRequest) -> func.HttpResponse:
+    """Registers a DOI for the study."""
+
+    try:
+        register_doi_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
