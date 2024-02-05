@@ -1,7 +1,6 @@
 import os
 import config
 from azure.storage.filedatalake import FileSystemClient
-import azure.functions as func
 
 
 class CopyException(Exception):
@@ -48,15 +47,6 @@ def copy_directory(overwrite_permitted: bool) -> None:
 
 
 def copying_permissions(overwrite_permitted):
-    file_system = FileSystemClient.from_connection_string(
-        config.AZURE_STORAGE_CONNECTION_STRING,
-        file_system_name="stage-1-container",
-    )
-    dir_name: str = "AI-READI/metadata/test2/sub4"
-    new_dir_name: str = "AI-READI/metadata/test2/sub5"
-    directory_path = file_system.get_directory_client(dir_name)
-    directory: str = directory_path.get_directory_properties().name
-
     if overwrite_permitted != "true" and overwrite_permitted != "false":
         raise CopyException("Only overwrite-permitted=true or overwrite-permitted=false accepted")
 

@@ -1,7 +1,6 @@
 import os
 import config
 from azure.storage.filedatalake import FileSystemClient
-import azure.functions as func
 
 
 class MoveException(Exception):

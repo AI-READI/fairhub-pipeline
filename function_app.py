@@ -3,8 +3,7 @@ import logging
 
 import azure.functions as func
 
-import copying_dir
-import moving_dir
+from utils import copying_dir, moving_dir
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
     pipeline as generate_changelog_pipeline,
 )
@@ -199,5 +198,3 @@ def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500)
-
-
