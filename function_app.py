@@ -1,11 +1,10 @@
 """Azure Function App for ETL pipeline."""
 import logging
-import os
 
 import azure.functions as func
-from azure.storage.filedatalake import FileSystemClient
-import config
-import moving_directories
+
+import copying_dir
+import moving_dir
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
     pipeline as generate_changelog_pipeline,
 )
@@ -172,20 +171,13 @@ def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="moving-folders", auth_level=func.AuthLevel.FUNCTION)
 def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Moves the directories along with the files in the Azure Database."""
-    file_system = FileSystemClient.from_connection_string(
-        config.AZURE_STORAGE_CONNECTION_STRING,
-        file_system_name="stage-1-container",
+    overwrite_permitted = (
+        req.params["overwrite-permitted"]
+        if "overwrite-permitted" in req.params
+        else "true"
     )
-    dir_name: str = "AI-READI/metadata/test2/sub5"
-    new_dir_name: str = "AI-READI/metadata/test2/sub4"
-    source_path = file_system.get_directory_client(dir_name)
-    destination_path = file_system.get_directory_client(new_dir_name)
-
-    moving_directories.moving_dirs(req, source_path, destination_path)
     try:
-        source_path.rename_directory(
-            new_name=f"{source_path.file_system_name}/{new_dir_name}"
-        )
+        moving_dir.move_directory(overwrite_permitted)
         return func.HttpResponse("Success", status_code=200)
     except Exception as e:
         print(f"Exception: {e}")
@@ -200,23 +192,9 @@ def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
         if "overwrite-permitted" in req.params
         else "true"
     )
-    file_system = FileSystemClient.from_connection_string(
-        config.AZURE_STORAGE_CONNECTION_STRING,
-        file_system_name="stage-1-container",
-    )
-    dir_name: str = "AI-READI/metadata/test2/sub4"
-    new_dir_name: str = "AI-READI/metadata/test2/sub5"
-    directory_path = file_system.get_directory_client(dir_name)
-    directory: str = directory_path.get_directory_properties().name
-
-    moving_directories.copying_dirs_beginning(req)
+    copying_dir.copying_permissions(overwrite_permitted)
     try:
-        moving_directories.copy_directory(
-            file_system,
-            directory,
-            new_dir_name,
-            True if overwrite_permitted.lower().strip() == "true" else False,
-        )
+        copying_dir.copy_directory(True if overwrite_permitted.lower().strip() == "true" else False)
         return func.HttpResponse("Success", status_code=200)
     except Exception as e:
         print(f"Exception: {e}")
