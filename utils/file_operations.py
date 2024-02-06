@@ -17,18 +17,18 @@ def move_directory(container: str, source: str, destination: str, overwrite_perm
 
     source_client = file_system.get_directory_client(source)
     destination_client = file_system.get_directory_client(destination)
+
     if not source_client.exists():
         raise FileException("source directory does not exist!")
 
     if not overwrite_permitted and destination_client.exists():
         raise FileException("overwriting directories is not accepted")
-
     if destination_client.exists() and source_client.exists():
         destination_client.delete_directory()
-
-    source_client.rename_directory(
-        new_name=f"{source_client.file_system_name}/{destination}"
-    )
+    if not destination_client.exists():
+        source_client.rename_directory(
+            new_name=f"{source_client.file_system_name}/{destination}"
+        )
 
 
 def copy_directory(container: str, source: str, destination: str, overwrite_permitted: bool) -> None:
@@ -38,8 +38,12 @@ def copy_directory(container: str, source: str, destination: str, overwrite_perm
         file_system_name=container,
     )
     source_client = file_system.get_directory_client(source)
+
     if not source_client.exists():
         raise FileException("source directory does not exist!")
+
+    if not overwrite_permitted:
+        raise FileException("overwriting directories is not accepted")
     source_path: str = source_client.get_directory_properties().name
 
     destination_client = file_system.get_directory_client(destination)
@@ -48,8 +52,6 @@ def copy_directory(container: str, source: str, destination: str, overwrite_perm
         raise FileException("the destination is inside of the source")
     if not destination_client.exists():
         destination_client.create_directory()
-    if not overwrite_permitted:
-        raise FileException("overwriting directories is not accepted")
 
     for child_path in file_system.get_paths(source_path, recursive=False):
         target_path = f"{destination}/" + os.path.basename(
@@ -81,8 +83,8 @@ def file_operation(operation: Callable, req: func.HttpRequest) -> func.HttpRespo
 
     overwrite: bool = overwrite_permitted.lower().strip() == "true"
 
-    source: str = "AI-READI/metadata/test2/sub4"
-    destination: str = "AI-READI/metadata/test2/sub5"
+    source: str = "AI-READI/metadata/test2/t1"
+    destination: str = "AI-READI/metadata/test2/t2"
     container = "stage-1-container"
 
     try:

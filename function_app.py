@@ -178,12 +178,3 @@ def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
     return file_operations.file_operation(file_operations.copy_directory, req)
 
 
-@app.route(route="create_files", auth_level=func.AuthLevel.FUNCTION)
-def create_files(req: func.HttpRequest) -> func.HttpResponse:
-    """Copies the directories along with the files in the Azure Database."""
-    try:
-        return func.HttpResponse("Success", status_code=200)
-    except Exception as e:
-        print(f"Exception: {e}")
-        return func.HttpResponse("Failed", status_code=500)
-6
