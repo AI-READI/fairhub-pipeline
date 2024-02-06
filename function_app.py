@@ -1,9 +1,8 @@
 """Azure Function App for ETL pipeline."""
 import logging
-
 import azure.functions as func
 
-from utils import copying_dir, moving_dir
+from utils import file_operations
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
     pipeline as generate_changelog_pipeline,
 )
@@ -170,31 +169,21 @@ def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="moving-folders", auth_level=func.AuthLevel.FUNCTION)
 def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Moves the directories along with the files in the Azure Database."""
-    overwrite_permitted = (
-        req.params["overwrite-permitted"]
-        if "overwrite-permitted" in req.params
-        else "true"
-    )
-    try:
-        moving_dir.move_directory(overwrite_permitted)
-        return func.HttpResponse("Success", status_code=200)
-    except Exception as e:
-        print(f"Exception: {e}")
-    return func.HttpResponse("Failed", status_code=500)
+    return file_operations.file_operation(file_operations.move_directory, req)
 
 
 @app.route(route="copying-folders", auth_level=func.AuthLevel.FUNCTION)
 def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Copies the directories along with the files in the Azure Database."""
-    overwrite_permitted = (
-        req.params["overwrite-permitted"]
-        if "overwrite-permitted" in req.params
-        else "true"
-    )
-    copying_dir.copying_permissions(overwrite_permitted)
+    return file_operations.file_operation(file_operations.copy_directory, req)
+
+
+@app.route(route="create_files", auth_level=func.AuthLevel.FUNCTION)
+def create_files(req: func.HttpRequest) -> func.HttpResponse:
+    """Copies the directories along with the files in the Azure Database."""
     try:
-        copying_dir.copy_directory(True if overwrite_permitted.lower().strip() == "true" else False)
         return func.HttpResponse("Success", status_code=200)
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500)
+6
