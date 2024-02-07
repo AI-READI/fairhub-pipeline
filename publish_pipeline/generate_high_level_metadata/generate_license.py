@@ -1,11 +1,7 @@
 import datetime
-import pathlib
-import tempfile
-import uuid
 
 import azure.storage.blob as azureblob
 import psycopg2
-import pyfairdatatools
 
 import config
 
@@ -37,7 +33,6 @@ def pipeline():
 
     if dataset is None:
         return "Dataset not found"
-
 
     cur.execute(
         "SELECT license_text FROM dataset_rights WHERE dataset_id = %s",

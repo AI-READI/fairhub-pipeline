@@ -1,8 +1,8 @@
 """Azure Function App for ETL pipeline."""
 import logging
-
 import azure.functions as func
 
+from utils import file_operations
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
     pipeline as generate_changelog_pipeline,
 )
@@ -35,9 +35,7 @@ logging.debug("Function app created")
 
 
 @app.route(route="hello", auth_level=func.AuthLevel.ANONYMOUS)
-def hello(
-    req: func.HttpRequest,
-) -> func.HttpResponse:
+def hello(req: func.HttpRequest) -> func.HttpResponse:
     """Return a simple hello world."""
     return func.HttpResponse("Hello world!!")
 
@@ -50,9 +48,7 @@ def echo(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="preprocess-stage-one-env-files", auth_level=func.AuthLevel.FUNCTION)
 def preprocess_stage_one_env(req: func.HttpRequest) -> func.HttpResponse:
-    """
-    Reads the data in the stage-1-container. Each file name is added to a log file in
-    the logs folder for the study.
+    """Reads the data in the stage-1-container. Each file name is added to a log file in the logs folder for the study.
     Will also create an output file with a modified name to simulate a processing step.
     POC so this is just a test to see if we can read the files in the stage-1-container.
     """
@@ -69,9 +65,7 @@ def preprocess_stage_one_env(req: func.HttpRequest) -> func.HttpResponse:
     route="preprocess-stage-one-files-n-test", auth_level=func.AuthLevel.FUNCTION
 )
 def preprocess_stage_one_n_test(req: func.HttpRequest) -> func.HttpResponse:
-    """
-    Reads the data in the stage-1-container. Each file name is added to a log
-    file in the logs folder for the study.
+    """Reads the data in the stage-1-container. Each file name is added to a log file in the logs folder for the study.
     Will also create an output file with a modified name to simulate a processing step.
     POC so this is just a test to see if we can read the files in the stage-1-container.
     """
@@ -86,10 +80,7 @@ def preprocess_stage_one_n_test(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="generate-study-description", auth_level=func.AuthLevel.FUNCTION)
 def generate_study_description(req: func.HttpRequest) -> func.HttpResponse:
-    """
-    Reads the database for the study and generates a study_description.json
-    file in the metadata folder.
-    """
+    """Reads the database for the study and generates a study_description.json file in the metadata folder."""
 
     try:
         generate_study_description_pipeline()
@@ -101,10 +92,7 @@ def generate_study_description(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="generate-dataset-description", auth_level=func.AuthLevel.FUNCTION)
 def generate_dataset_description(req: func.HttpRequest) -> func.HttpResponse:
-    """
-    Reads the database for the dataset and generates a dataset_description.json
-    file in the metadata folder.
-    """
+    """Reads the database for the dataset and generates a dataset_description.json file in the metadata folder."""
 
     try:
         generate_dataset_description_pipeline()
@@ -116,9 +104,7 @@ def generate_dataset_description(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="generate-readme", auth_level=func.AuthLevel.FUNCTION)
 def generate_readme(req: func.HttpRequest) -> func.HttpResponse:
-    """
-    Reads the database for the study and generates a readme.md file in the metadata folder.
-    """
+    """Reads the database for the study and generates a readme.md file in the metadata folder."""
 
     try:
         generate_readme_pipeline()
@@ -178,3 +164,17 @@ def generate_discovery_metadata(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Failed", status_code=500, mimetype="application/json")
+
+
+@app.route(route="moving-folders", auth_level=func.AuthLevel.FUNCTION)
+def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
+    """Moves the directories along with the files in the Azure Database."""
+    return file_operations.file_operation(file_operations.move_directory, req)
+
+
+@app.route(route="copying-folders", auth_level=func.AuthLevel.FUNCTION)
+def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
+    """Copies the directories along with the files in the Azure Database."""
+    return file_operations.file_operation(file_operations.copy_directory, req)
+
+
