@@ -35,15 +35,19 @@ def create_payload(dataset_description):
             for identifier in related_item["relatedItemIdentifier"]:
                 identifier_obj = {
                     "relatedItemIdentifier": identifier["relatedItemIdentifier"],
-                    "relatedItemIdentifierType": identifier["relatedItemIdentifierType"],
+                    "relatedItemIdentifierType": identifier[
+                        "relatedItemIdentifierType"
+                    ],
                 }
                 if "relatedMetadataScheme" in identifier:
-                    identifier_obj["relatedMetadataScheme"] = identifier["relatedMetadataScheme"]
+                    identifier_obj["relatedMetadataScheme"] = identifier[
+                        "relatedMetadataScheme"
+                    ]
                 if "schemeURI" in identifier:
                     identifier_obj["schemeUri"] = identifier["schemeURI"]
                 if "schemeType" in identifier:
                     identifier_obj["schemeType"] = identifier["schemeType"]
-                    
+
                 related_item_identifier.append(identifier_obj)
         if "title" in related_item:
             related_item_titles = []
@@ -109,7 +113,9 @@ def create_payload(dataset_description):
         alternate_identifiers.append(
             {
                 "alternateIdentifier": alternate_identifier["alternateIdentifier"],
-                "alternateIdentifierType": alternate_identifier["alternateIdentifierType"],
+                "alternateIdentifierType": alternate_identifier[
+                    "alternateIdentifierType"
+                ],
             }
         )
 
@@ -222,14 +228,22 @@ def create_payload(dataset_description):
         creators.append(creator_obj)
 
     for funding_reference in dataset_description["FundingReference"]:
-        funder_obj = {
-            "funderName": funding_reference["funderName"]
-        }
-        if "funderIdentifier" in funding_reference and "funderIdentifierValue" in funding_reference["funderIdentifier"]:
-            funder_obj["funderIdentifer"] = funding_reference["funderIdentifier"]["funderIdentifierValue"]
-        if "funderIdentifier" in funding_reference and "funderIdentifierType" in funding_reference["funderIdentifier"]:
-            funder_obj["funderIdentifierType"] = funding_reference["funderIdentifier"]["funderIdentifierType"]
-    
+        funder_obj = {"funderName": funding_reference["funderName"]}
+        if (
+            "funderIdentifier" in funding_reference
+            and "funderIdentifierValue" in funding_reference["funderIdentifier"]
+        ):
+            funder_obj["funderIdentifer"] = funding_reference["funderIdentifier"][
+                "funderIdentifierValue"
+            ]
+        if (
+            "funderIdentifier" in funding_reference
+            and "funderIdentifierType" in funding_reference["funderIdentifier"]
+        ):
+            funder_obj["funderIdentifierType"] = funding_reference["funderIdentifier"][
+                "funderIdentifierType"
+            ]
+
     return {
         "data": {
             "type": "dois",

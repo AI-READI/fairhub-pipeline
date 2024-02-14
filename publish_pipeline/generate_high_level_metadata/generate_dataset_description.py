@@ -48,7 +48,7 @@ def pipeline():
         "SELECT doi FROM version WHERE dataset_id = %s",
         (dataset_id,),
     )
-    
+
     doi = cur.fetchone()
     identifier["identifierValue"] = doi[0]
     identifier["identifierType"] = "DOI"
