@@ -28,6 +28,41 @@ def create_payload(dataset_description):
     alternate_identifiers = []
     related_items = []
     funding_references = []
+    rights_list = []
+    descriptions = []
+
+    for description in dataset_description["Description"]:
+        description_obj = {
+            "description": description["descriptionValue"],
+            "descriptionType": description["descriptionType"],
+        }
+        descriptions.append(description_obj)
+
+    for rights in dataset_description["Rights"]:
+        rights_obj = {"rights": rights["rightsValue"]}
+        if "rightsURI" in rights:
+            rights_obj["rightsUri"] = rights["rightsURI"]
+        if "rightsIdentifier" in rights:
+            rights_obj["rightsIdentifier"] = rights["rightsIdentifier"]
+        if "rightsIdentifierScheme" in rights:
+            rights_obj["rightsIdentifierScheme"] = rights["rightsIdentifierScheme"]
+        rights_list.append(rights_obj)
+
+    for funder in dataset_description["FundingReference"]:
+        funder_obj = {
+            "funderName": funder["funderName"],
+            "funderIdentifier": funder["funderIdentifier"]["funderIdentifierValue"],
+            "awardNumber": funder["awardNumber"]["awardNumberValue"],
+        }
+        if "awardURI" in funder["awardNumber"]:
+            funder_obj["awardUri"] = funder["awardNumber"]["awardURI"]
+        if "awardTitle" in funder["awardNumber"]:
+            funder_obj["awardTitle"] = funder["awardNumber"]["awardTitle"]
+        if "funderIentifierType" in funder["funderIdentifier"]:
+            funder_obj["funderIdentifierType"] = funder["funderIdentifier"][
+                "funderIdentifierType"
+            ]
+        funding_references.append(funder_obj)
 
     for related_item in dataset_description["RelatedItem"]:
         if "relatedItemIdentifier" in related_item:
@@ -48,7 +83,7 @@ def create_payload(dataset_description):
                 if "schemeType" in identifier:
                     identifier_obj["schemeType"] = identifier["schemeType"]
 
-                related_item_identifier.append(identifier_obj)
+                related_item_identifiers.append(identifier_obj)
         if "title" in related_item:
             related_item_titles = []
             for title in related_item["title"]:
@@ -263,10 +298,10 @@ def create_payload(dataset_description):
                 "relatedIdentifiers": dataset_description["RelatedIdentifier"],
                 "relatedItems": related_items,
                 "sizes": dataset_description["Size"],
-                "rightsList": dataset_description["Rights"],
+                "rightsList": rights_list,
                 "description": dataset_description["Description"],
                 "version": dataset_description["Version"],
-                "fundingReferences": dataset_description["FundingReference"],
+                "fundingReferences": funding_references,
                 "url": "https://staging.fairhub.io/datasets/2",
             },
         }
