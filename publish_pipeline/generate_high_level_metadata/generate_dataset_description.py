@@ -43,10 +43,14 @@ def pipeline():
 
     identifier = {}
 
-    # todo: generating a random uuid for now
-    # todo: replace with the actual doi when we have it
     # Get the dataset identifier
-    identifier["identifierValue"] = str(uuid.uuid4())
+    cur.execute(
+        "SELECT doi FROM version WHERE dataset_id = %s",
+        (dataset_id,),
+    )
+    
+    doi = cur.fetchone()
+    identifier["identifierValue"] = doi[0]
     identifier["identifierType"] = "DOI"
 
     dataset_metadata["Identifier"] = identifier

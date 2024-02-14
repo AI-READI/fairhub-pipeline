@@ -45,6 +45,7 @@ def pipeline():
             pooled_data_folders.append(blob.name.split("/")[2])
 
     # print(pooled_data_folders)
+    # Replacing the list of folders from DB with a hardcoded list
     pooled_data_folders = ["ekg", "redcap_data", "oct"]
 
     # Create a temporary folder on the local machine
