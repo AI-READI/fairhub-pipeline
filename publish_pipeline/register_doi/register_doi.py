@@ -69,7 +69,7 @@ def create_payload(dataset_description):
             related_item_identifiers = []
             for identifier in related_item["relatedItemIdentifier"]:
                 identifier_obj = {
-                    "relatedItemIdentifier": identifier["relatedItemIdentifier"],
+                    "relatedItemIdentifier": identifier["relatedItemIdentifierValue"],
                     "relatedItemIdentifierType": identifier[
                         "relatedItemIdentifierType"
                     ],
@@ -88,9 +88,10 @@ def create_payload(dataset_description):
             related_item_titles = []
             for title in related_item["title"]:
                 title_obj = {
-                    "title": title["titleValue"],
-                    "titleType": title["titleType"],
+                    "title": title["titleValue"]
                 }
+                if "titleType" in title:
+                    title_obj["titleType"] = title["titleType"]
                 related_item_titles.append(title_obj)
         if "creator" in related_item:
             related_item_creators = []
@@ -147,7 +148,7 @@ def create_payload(dataset_description):
     for alternate_identifier in dataset_description["AlternateIdentifier"]:
         alternate_identifiers.append(
             {
-                "alternateIdentifier": alternate_identifier["alternateIdentifier"],
+                "alternateIdentifier": alternate_identifier["alternateIdentifierValue"],
                 "alternateIdentifierType": alternate_identifier[
                     "alternateIdentifierType"
                 ],
@@ -167,7 +168,10 @@ def create_payload(dataset_description):
         if "affiliation" in contributor:
             contributor_affiliations = []
             for affiliation in contributor["affiliation"]:
-                affiliate = {}
+                # TODO: VERIFY BY KEY IS AFFILIATIONVALUE AND NOT NAME
+                affiliate = {
+                    "name": affiliation["affiliationValue"],
+                }
                 if "schemeURI" in affiliation:
                     affiliate["schemeUri"] = affiliation["schemeURI"]
                 if "affiliationIdentifierScheme" in affiliation:
@@ -178,14 +182,13 @@ def create_payload(dataset_description):
                     affiliate["affiliationIdentifier"] = affiliation[
                         "affiliationIdentifier"
                     ]
-                affiliate["name"] = affiliation["affiliationValue"]
 
                 contributor_affiliations.append(affiliate)
         if "nameIdentifier" in contributor:
             name_identifiers = []
             for name_identifier in contributor["nameIdentifier"]:
                 name_identifier = {
-                    "nameIdentifier": name_identifier["nameIdentifier"],
+                    "nameIdentifier": name_identifier["nameIdentifierValue"],
                     "nameIdentifierScheme": name_identifier["nameIdentifierScheme"],
                 }
                 if "schemeURI" in name_identifier:
@@ -216,7 +219,7 @@ def create_payload(dataset_description):
         subjects.append(subject_obj)
 
     for title in dataset_description["Title"]:
-        title_obj = {"title": title}
+        title_obj = {"title": title["titleValue"]}
         if "titleType" in title:
             title_obj["titleType"] = title["titleType"]
         titles.append(title_obj)
@@ -244,7 +247,7 @@ def create_payload(dataset_description):
             name_identifiers = []
             for name_identifier in creator["nameIdentifier"]:
                 name_identifier = {
-                    "nameIdentifier": name_identifier["nameIdentifier"],
+                    "nameIdentifier": name_identifier["nameIdentifierValue"],
                     "nameIdentifierScheme": name_identifier["nameIdentifierScheme"],
                 }
                 if "schemeURI" in name_identifier:
@@ -279,7 +282,7 @@ def create_payload(dataset_description):
                 "funderIdentifierType"
             ]
 
-    return {
+    payload = {
         "data": {
             "type": "dois",
             "attributes": {
@@ -287,7 +290,7 @@ def create_payload(dataset_description):
                 "doi": doi,
                 "creators": creators,
                 "titles": titles,
-                "publisher": dataset_description["Publisher"],
+                "publisher": {"name": dataset_description["Publisher"]},
                 "publicationYear": dataset_description["PublicationYear"],
                 "subjects": subjects,
                 "contributors": dataset_description["Contributor"],
@@ -295,17 +298,24 @@ def create_payload(dataset_description):
                 "alternateIdentifiers": alternate_identifiers,
                 "language": dataset_description["Language"],
                 "types": dataset_description["ResourceType"],
-                "relatedIdentifiers": dataset_description["RelatedIdentifier"],
                 "relatedItems": related_items,
-                "sizes": dataset_description["Size"],
                 "rightsList": rights_list,
-                "description": dataset_description["Description"],
+                "description": descriptions,
                 "version": dataset_description["Version"],
                 "fundingReferences": funding_references,
                 "url": "https://staging.fairhub.io/datasets/2",
             },
         }
     }
+
+    if len(dataset_description["RelatedIdentifier"]) > 0:
+        payload["data"]["attributes"]["relatedIdentifiers"] = dataset_description[
+            "RelatedIdentifier"
+        ]
+    if len(dataset_description["Size"]) > 0:
+        payload["data"]["attributes"]["sizes"] = dataset_description["Size"]
+
+    return payload
 
 
 def pipeline():
@@ -348,6 +358,7 @@ def pipeline():
 
     # print(json.dumps(dataset_description))
     # Create payload for doi registration
+    print("UHHHH")
     payload = create_payload(dataset_description)
     print(json.dumps(payload))
 
@@ -357,11 +368,13 @@ def pipeline():
         "Authorization": f"Basic {credentials}",
     }
 
+    print(json.dumps(payload))
+
     # Register the DOI with DataCite
     response = requests.post(url, headers=headers, json=payload, timeout=10)
 
     if response.status_code != 201:
-        raise ValueError(f"Failed to register DOI: {response.text}")
+        raise ValueError(f"Failed to register DOI: {response.text} {response.status_code}")
 
     return response.json()
 
