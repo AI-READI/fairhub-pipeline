@@ -19,7 +19,7 @@ def generate_random_identifier(k):
 def create_payload(dataset_description):
     """Generate payload for DOI registration"""
     # doi =  dataset_description["Identifier"]["identifierValue"]
-    doi = f"10.82914/fairhub.{generate_random_identifier(7)}"
+    doi = f"10.82914/fairhub.{generate_random_identifier(6)}"
     creators = []
     titles = []
     subjects = []
@@ -62,6 +62,8 @@ def create_payload(dataset_description):
             funder_obj["funderIdentifierType"] = funder["funderIdentifier"][
                 "funderIdentifierType"
             ]
+        else:
+            funder_obj["funderIdentifierType"] = "Other"
         funding_references.append(funder_obj)
 
     for related_item in dataset_description["RelatedItem"]:
@@ -181,6 +183,7 @@ def create_payload(dataset_description):
                         "affiliationIdentifier"
                     ]
 
+                print(affiliate)
                 contributor_affiliations.append(affiliate)
         if "nameIdentifier" in contributor:
             name_identifiers = []
@@ -199,6 +202,7 @@ def create_payload(dataset_description):
             "contributorType": contributor["contributorType"],
         }
         if contributor_affiliations:
+            print(contributor_affiliations)
             contributor_obj["affiliation"] = contributor_affiliations
         if name_identifiers:
             contributor_obj["nameIdentifiers"] = name_identifiers
@@ -291,12 +295,16 @@ def create_payload(dataset_description):
                 "publisher": {"name": dataset_description["Publisher"]},
                 "publicationYear": dataset_description["PublicationYear"],
                 "subjects": subjects,
-                "contributors": dataset_description["Contributor"],
+                "contributors": contributors,
                 "dates": dates,
                 "alternateIdentifiers": alternate_identifiers,
-                "language": dataset_description["Language"],
-                "types": dataset_description["ResourceType"],
-                "relatedItems": related_items,
+                "types": {
+                    "resourceTypeGeneral": dataset_description["ResourceType"][
+                        "resourceTypeGeneral"
+                    ],
+                    "resourceType": dataset_description["ResourceType"]["resourceTypeValue"],
+                },
+                # "relatedItems": related_items,
                 "rightsList": rights_list,
                 "description": descriptions,
                 "version": dataset_description["Version"],
@@ -306,12 +314,15 @@ def create_payload(dataset_description):
         }
     }
 
+    print(dataset_description["Version"])
     if len(dataset_description["RelatedIdentifier"]) > 0:
         payload["data"]["attributes"]["relatedIdentifiers"] = dataset_description[
             "RelatedIdentifier"
         ]
     if len(dataset_description["Size"]) > 0:
         payload["data"]["attributes"]["sizes"] = dataset_description["Size"]
+    if dataset_description["Language"]:
+        payload["data"]["attributes"]["language"] = dataset_description["Language"]
 
     return payload
 
@@ -365,8 +376,6 @@ def pipeline():
         "Content-Type": "application/vnd.api+json",
         "Authorization": f"Basic {credentials}",
     }
-
-    print(json.dumps(payload))
 
     # Register the DOI with DataCite
     response = requests.post(url, headers=headers, json=payload, timeout=10)
