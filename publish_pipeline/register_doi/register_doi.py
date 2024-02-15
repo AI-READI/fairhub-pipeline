@@ -302,7 +302,9 @@ def create_payload(dataset_description):
                     "resourceTypeGeneral": dataset_description["ResourceType"][
                         "resourceTypeGeneral"
                     ],
-                    "resourceType": dataset_description["ResourceType"]["resourceTypeValue"],
+                    "resourceType": dataset_description["ResourceType"][
+                        "resourceTypeValue"
+                    ],
                 },
                 # "relatedItems": related_items,
                 "rightsList": rights_list,
