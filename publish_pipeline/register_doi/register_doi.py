@@ -87,9 +87,7 @@ def create_payload(dataset_description):
         if "title" in related_item:
             related_item_titles = []
             for title in related_item["title"]:
-                title_obj = {
-                    "title": title["titleValue"]
-                }
+                title_obj = {"title": title["titleValue"]}
                 if "titleType" in title:
                     title_obj["titleType"] = title["titleType"]
                 related_item_titles.append(title_obj)
@@ -374,7 +372,9 @@ def pipeline():
     response = requests.post(url, headers=headers, json=payload, timeout=10)
 
     if response.status_code != 201:
-        raise ValueError(f"Failed to register DOI: {response.text} {response.status_code}")
+        raise ValueError(
+            f"Failed to register DOI: {response.text} {response.status_code}"
+        )
 
     return response.json()
 
