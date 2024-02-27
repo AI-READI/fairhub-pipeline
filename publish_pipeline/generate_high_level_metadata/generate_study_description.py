@@ -49,25 +49,25 @@ def pipeline():
     identification_module["OrgStudyIdInfo"] = {}
 
     # Study Identifier
-    identification_module["OrgStudyIdInfo"][
-        "OrgStudyId"
-    ] = primary_study_identification[0]
+    identification_module["OrgStudyIdInfo"]["OrgStudyId"] = (
+        primary_study_identification[0]
+    )
     # Study Identifier Type
-    identification_module["OrgStudyIdInfo"][
-        "OrgStudyIdType"
-    ] = primary_study_identification[1]
+    identification_module["OrgStudyIdInfo"]["OrgStudyIdType"] = (
+        primary_study_identification[1]
+    )
 
     if primary_study_identification[2] and primary_study_identification[2] != "":
         # Study Identifier Domain
-        identification_module["OrgStudyIdInfo"][
-            "OrgStudyIdDomain"
-        ] = primary_study_identification[2]
+        identification_module["OrgStudyIdInfo"]["OrgStudyIdDomain"] = (
+            primary_study_identification[2]
+        )
 
     if primary_study_identification[3] and primary_study_identification[3] != "":
         # Study Identifier Link
-        identification_module["OrgStudyIdInfo"][
-            "OrgStudyIdLink"
-        ] = primary_study_identification[3]
+        identification_module["OrgStudyIdInfo"]["OrgStudyIdLink"] = (
+            primary_study_identification[3]
+        )
 
     # Get the secondary study identification metadata
     cur.execute(
@@ -235,18 +235,18 @@ def pipeline():
         design_module["DesignInfo"]["DesignAllocation"] = study_design[1]
         design_module["DesignInfo"]["DesignInterventionModel"] = study_design[2]
         if study_design[3] and study_design[3] != "":
-            design_module["DesignInfo"][
-                "DesignInterventionModelDescription"
-            ] = study_design[3]
+            design_module["DesignInfo"]["DesignInterventionModelDescription"] = (
+                study_design[3]
+            )
         design_module["DesignInfo"]["DesignPrimaryPurpose"] = study_design[4]
 
         design_module["DesignInfo"]["DesignMaskingInfo"] = {}
-        design_module["DesignInfo"]["DesignMaskingInfo"][
-            "DesignMasking"
-        ] = study_design[5]
-        design_module["DesignInfo"]["DesignMaskingInfo"][
-            "DesignMaskingDescription"
-        ] = study_design[6]
+        design_module["DesignInfo"]["DesignMaskingInfo"]["DesignMasking"] = (
+            study_design[5]
+        )
+        design_module["DesignInfo"]["DesignMaskingInfo"]["DesignMaskingDescription"] = (
+            study_design[6]
+        )
 
         design_module["DesignInfo"]["DesignMaskingInfo"]["DesignWhoMaskedList"] = []
 
