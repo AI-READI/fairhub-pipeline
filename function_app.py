@@ -1,8 +1,8 @@
 """Azure Function App for ETL pipeline."""
+import json
 import logging
 
 import azure.functions as func
-import json
 
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
     pipeline as generate_changelog_pipeline,
@@ -187,7 +187,9 @@ def listing_folder_structure(req: func.HttpRequest) -> func.HttpResponse:
         file_operations.pipeline()
         file_operations.get_file_tree()
         # return func.HttpResponse("Success", status_code=200)
-        return func.HttpResponse(json.dumps(file_operations.get_file_tree().to_dict()), status_code=200)
+        return func.HttpResponse(
+            json.dumps(file_operations.get_file_tree().to_dict()), status_code=200
+        )
     except Exception as e:
         print(f"Exception: {e}")
         return func.HttpResponse("Internal Server Error", status_code=500)
