@@ -4,7 +4,6 @@ import json
 import logging
 import azure.functions as func
 
-from utils import file_operations
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
     pipeline as generate_changelog_pipeline,
 )
