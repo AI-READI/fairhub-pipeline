@@ -6,7 +6,6 @@
 pyfairdatatools
 jsonschema
 
-
 # Azure
 azure-functions
 azure-storage-blob

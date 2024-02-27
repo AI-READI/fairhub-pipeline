@@ -179,7 +179,7 @@ rules = [
             and str(entry.columns) == "768"
             and str(entry.privatetag) == "Super Slim"
         ],
-    )
+    ),
     # OCTA
     # FLIO
 ]
@@ -324,9 +324,9 @@ def extract_dicom_entry(file):
         ]["Value"][0]
         implementationversion = ds.file_meta.ImplementationVersionName
         numberoffiles = filecount
-        rows = (
-            columns
-        ) = framenumber = slicethickness = privatetag = gaze = softwareversion = "N/A"
+        rows = columns = framenumber = slicethickness = privatetag = gaze = (
+            softwareversion
+        ) = "N/A"
 
     elif sopclassuid == "1.2.840.10008.5.1.4.1.1.77.1.5.7":  # en face
         laterality = dicom["00200062"]["Value"][0]
@@ -340,19 +340,11 @@ def extract_dicom_entry(file):
 
     else:  # unknown
         sopinstanceuid = f"Unknown SOP Class UID: {sopclassuid}"
-        laterality = (
-            device
-        ) = (
-            rows
-        ) = (
-            referencedsopinstance
-        ) = (
-            implementationversion
-        ) = (
+        laterality = device = rows = referencedsopinstance = implementationversion = (
             columns
-        ) = (
-            framenumber
-        ) = slicethickness = privatetag = gaze = numberoffiles = softwareversion = "N/A"
+        ) = framenumber = slicethickness = privatetag = gaze = numberoffiles = (
+            softwareversion
+        ) = "N/A"
 
     output = DicomEntry(
         filename,

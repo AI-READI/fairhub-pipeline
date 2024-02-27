@@ -1,0 +1,33 @@
+flowchart LR
+    subgraph G01[prepare data]
+        direction TB
+        GB1[generate CDS data structure]
+        GB2[generate derivatives]
+        GB1 --> GB2
+    end
+    
+    subgraph G1[Generate high level metadata]
+        direction TB
+        GA1[generate study_description.json]
+        GA2[generate dataset_description.json]
+        GA3[generate README.md]
+        GA4[generate CHANGELOG.md]
+        GA5[generate LICENSE]
+        GA6[generate datasheet.md]
+        GA7[generate citation.md]
+        GA8[generate datatype_dictionary.json]
+        GA9[generate participants.tsv]
+        GA10[generate participants.json]
+        GA1 --> GA2 --> GA3 --> GA4 --> GA5 --> GA6 --> GA7 --> GA8 --> GA9 --> GA10
+    end
+
+    subgraph G2[Generate CDS data structure]
+        direction TB
+        GC1[generate CDS data structure]
+    end
+
+    G01 --> G1
+    GB2 --> G2
+    A[User clicks 'publish' in UI]
+    A  --> G01
+  

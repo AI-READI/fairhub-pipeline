@@ -30,23 +30,25 @@ classifiers = [
 
 [tool.poe.tasks]
 
-dev = "func start"
+init = "func init"
+
+dev = "func start --python"
 dev_docker = "docker run -p 5000:5000 fairhub-flask-api:local"
 
 freeze_dependencies = "pip list --format=freeze > requirements.txt"
 
 docs = "mkdocs serve"
 
-flake8 = "flake8 function_app.py config.py stage_one"
+flake8 = "flake8 function_app.py config.py stage_one publish_pipeline"
 
-format_with_isort = "isort function_app.py config.py stage_one"
-format_with_black = "black function_app.py config.py stage_one"
+format_with_isort = "isort function_app.py config.py stage_one publish_pipeline"
+format_with_black = "black function_app.py config.py stage_one publish_pipeline"
 
 format = ["format_with_isort", "format_with_black"]
 
-typecheck = "mypy function_app.py config.py stage_one"
+typecheck = "mypy function_app.py config.py stage_one publish_pipeline"
 
-pylint = "pylint function_app.py config.py stage_one --rcfile=.pylint.ini"
+pylint = "pylint function_app.py config.py stage_one publish_pipeline --rcfile=.pylint.ini"
 
 lint = ["flake8", "typecheck", "pylint"]
 
