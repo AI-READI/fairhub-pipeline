@@ -53,7 +53,7 @@ def pipeline():
     identifier["identifierValue"] = doi[0]
     identifier["identifierType"] = "DOI"
 
-    dataset_metadata["Identifier"] = identifier
+    dataset_metadata["identifier"] = identifier
 
     titles = []
 
@@ -76,13 +76,13 @@ def pipeline():
 
             titles.append(item)
 
-    dataset_metadata["Title"] = titles
+    dataset_metadata["title"] = titles
 
     # todo: generating a random uuid for now
     # Get the dataset version
     version = str(uuid.uuid4())
 
-    dataset_metadata["Version"] = version
+    dataset_metadata["version"] = version
 
     alternate_identifiers = []
 
@@ -103,13 +103,13 @@ def pipeline():
 
             alternate_identifiers.append(item)
 
-    dataset_metadata["AlternateIdentifier"] = alternate_identifiers
+    dataset_metadata["alternateIdentifier"] = alternate_identifiers
 
     creators = []
 
     # Get the dataset creators
     cur.execute(
-        "SELECT name, name_type, name_identifier, name_identifier_scheme, name_identifier_scheme_uri, affiliations FROM dataset_contributor WHERE dataset_id = %s AND creator = true",
+        "SELECT family_name, given_name, name_type, name_identifier, name_identifier_scheme, name_identifier_scheme_uri, affiliations FROM dataset_contributor WHERE dataset_id = %s AND creator = true",
         (dataset_id,),
     )
 
@@ -119,25 +119,36 @@ def pipeline():
         for creator in dataset_creators:
             item = {}
 
-            item["creatorName"] = creator[0]
-            item["nameType"] = creator[1]
+            creator_name = ""
+
+            if (creator[0] is not None and creator[0] != "") and (
+                creator[1] is not None and creator[1] != ""
+            ):
+                creator_name = f"{creator[0]}, {creator[1]}"
+            elif creator[0] is not None and creator[0] != "":
+                creator_name = creator[0]
+            elif creator[1] is not None and creator[1] != "":
+                creator_name = creator[1]
+
+            item["creatorName"] = creator_name
+            item["nameType"] = creator[2]
 
             name_identifier = {}
-            name_identifier["nameIdentifierValue"] = creator[2]
-            name_identifier["nameIdentifierScheme"] = creator[3]
-            if creator[4] is not None and creator[4] != "":
-                name_identifier["schemeURI"] = creator[4]
+            name_identifier["nameIdentifierValue"] = creator[3]
+            name_identifier["nameIdentifierScheme"] = creator[4]
+            if creator[5] is not None and creator[5] != "":
+                name_identifier["schemeURI"] = creator[5]
 
             item["nameIdentifier"] = [name_identifier]
 
-            affiliations = creator[5]
+            affiliations = creator[6]
 
             item["affiliation"] = []
 
             for affiliation in affiliations:
                 affiliation_item = {}
 
-                affiliation_item["affiliationValue"] = affiliation["name"]
+                affiliation_item["affiliationName"] = affiliation["name"]
                 if (
                     affiliation["identifier"] is not None
                     and affiliation["identifier"] != ""
@@ -160,13 +171,13 @@ def pipeline():
 
             creators.append(item)
 
-    dataset_metadata["Creator"] = creators
+    dataset_metadata["creator"] = creators
 
     contributors = []
 
     # Get the dataset contributors
     cur.execute(
-        "SELECT name, name_type, name_identifier, name_identifier_scheme, name_identifier_scheme_uri, contributor_type, affiliations FROM dataset_contributor WHERE dataset_id = %s AND creator = false",
+        "SELECT family_name, given_name, name_type, name_identifier, name_identifier_scheme, name_identifier_scheme_uri, contributor_type, affiliations FROM dataset_contributor WHERE dataset_id = %s AND creator = false",
         (dataset_id,),
     )
 
@@ -176,7 +187,19 @@ def pipeline():
         for contributor in dataset_contributors:
             item = {}
 
-            item["contributorName"] = contributor[0]
+            contributor_name = ""
+
+            if (contributor[0] is not None and contributor[0] != "") and (
+                contributor[1] is not None and contributor[1] != ""
+            ):
+                contributor_name = f"{contributor[0]}, {contributor[1]}"
+            elif contributor[0] is not None and contributor[0] != "":
+                contributor_name = contributor[0]
+            elif contributor[1] is not None and contributor[1] != "":
+                contributor_name = contributor[1]
+
+            item["contributorName"] = contributor_name
+
             item["nameType"] = contributor[1]
 
             name_identifier = {}
@@ -197,7 +220,7 @@ def pipeline():
             for affiliation in affiliations:
                 affiliation_item = {}
 
-                affiliation_item["affiliationValue"] = affiliation["name"]
+                affiliation_item["affiliationName"] = affiliation["name"]
                 if (
                     affiliation["identifier"] is not None
                     and affiliation["identifier"] != ""
@@ -219,12 +242,12 @@ def pipeline():
 
             contributors.append(item)
 
-    dataset_metadata["Contributor"] = contributors
+    dataset_metadata["contributor"] = contributors
 
     # Get the publication year
     publication_year = str(datetime.datetime.now().year)
 
-    dataset_metadata["PublicationYear"] = publication_year
+    dataset_metadata["publicationYear"] = publication_year
 
     dates = []
 
@@ -249,7 +272,7 @@ def pipeline():
 
             dates.append(item)
 
-    dataset_metadata["Date"] = dates
+    dataset_metadata["date"] = dates
 
     resource_type = {}
 
@@ -264,23 +287,7 @@ def pipeline():
     resource_type["resourceTypeValue"] = dataset_resource_type[0]
     resource_type["resourceTypeGeneral"] = "Dataset"
 
-    dataset_metadata["ResourceType"] = resource_type
-
-    dataset_record_keys = {}
-
-    # Get the dataset record keys
-    cur.execute(
-        "SELECT key_type, key_details FROM dataset_record_keys WHERE dataset_id = %s",
-        (dataset_id,),
-    )
-
-    record_keys = cur.fetchone()
-
-    dataset_record_keys["keysType"] = record_keys[0]
-    if record_keys[1] is not None and record_keys[1] != "":
-        dataset_record_keys["keysDetails"] = record_keys[1]
-
-    dataset_metadata["DatasetRecordKeys"] = dataset_record_keys
+    dataset_metadata["resourceType"] = resource_type
 
     dataset_de_ident_level = {}
 
@@ -301,7 +308,7 @@ def pipeline():
     if de_ident_level[6] is not None and de_ident_level[6] != "":
         dataset_de_ident_level["deIdentDetails"] = de_ident_level[6]
 
-    dataset_metadata["DatasetDeIdentLevel"] = dataset_de_ident_level
+    dataset_metadata["datasetDeIdentLevel"] = dataset_de_ident_level
 
     dataset_consent = {}
 
@@ -322,7 +329,7 @@ def pipeline():
     if consent[6] is not None and consent[6] != "":
         dataset_consent["consentsDetails"] = consent[6]
 
-    dataset_metadata["DatasetConsent"] = dataset_consent
+    dataset_metadata["datasetConsent"] = dataset_consent
 
     descriptions = []
 
@@ -343,7 +350,7 @@ def pipeline():
 
             descriptions.append(item)
 
-    dataset_metadata["Description"] = descriptions
+    dataset_metadata["description"] = descriptions
 
     cur.execute(
         "SELECT language FROM dataset_other WHERE dataset_id = %s",
@@ -353,7 +360,7 @@ def pipeline():
     dataset_language = cur.fetchone()
 
     if dataset_language[0] is not None and dataset_language[0] != "":
-        dataset_metadata["Language"] = dataset_language[0]
+        dataset_metadata["language"] = dataset_language[0]
 
     subjects = []
 
@@ -381,7 +388,7 @@ def pipeline():
 
             subjects.append(item)
 
-    dataset_metadata["Subject"] = subjects
+    dataset_metadata["subject"] = subjects
 
     managing_organisation = {}
 
@@ -400,7 +407,7 @@ def pipeline():
     ):
         managing_organisation["rorId"] = dataset_managing_organisation[1]
 
-    dataset_metadata["ManagingOrganisation"] = managing_organisation
+    dataset_metadata["managingOrganisation"] = managing_organisation
 
     access_details = {}
 
@@ -421,14 +428,14 @@ def pipeline():
         access_details["urlLastChecked"] = timestamp.strftime("%Y-%m-%d")
 
     # Get the dataset Access Type
-    dataset_metadata["AccessType"] = dataset_access[0]
-    dataset_metadata["AccessDetails"] = access_details
+    dataset_metadata["accessType"] = dataset_access[0]
+    dataset_metadata["accessDetails"] = access_details
 
     rights = []
 
     # Get the dataset rights
     cur.execute(
-        "SELECT rights, uri, identifier, identifier_scheme FROM dataset_rights WHERE dataset_id = %s",
+        "SELECT rightsName, uri, identifier, identifier_scheme FROM dataset_rights WHERE dataset_id = %s",
         (dataset_id,),
     )
 
@@ -439,6 +446,7 @@ def pipeline():
             item = {}
 
             item["rightsValue"] = right[0]
+
             if right[1] is not None and right[1] != "":
                 item["rightsURI"] = right[1]
             if right[2] is not None and right[2] != "":
@@ -448,17 +456,28 @@ def pipeline():
 
             rights.append(item)
 
-    dataset_metadata["Rights"] = rights
+    dataset_metadata["rights"] = rights
 
     # Get the dataset publisher information
     cur.execute(
-        "SELECT publisher FROM dataset_other WHERE dataset_id = %s",
+        "SELECT publisher, identifier, identifier_scheme, scheme_uri FROM dataset_publisher WHERE dataset_id = %s",
         (dataset_id,),
     )
 
     dataset_publisher = cur.fetchone()
 
-    dataset_metadata["Publisher"] = dataset_publisher[0]
+    publisher = {}
+
+    publisher["publisherName"] = dataset_publisher[0]
+
+    if dataset_publisher[1] is not None and dataset_publisher[1] != "":
+        publisher["publisherIdentifier"] = dataset_publisher[1]
+    if dataset_publisher[2] is not None and dataset_publisher[2] != "":
+        publisher["publisherIdentifierScheme"] = dataset_publisher[2]
+    if dataset_publisher[3] is not None and dataset_publisher[3] != "":
+        publisher["schemeURI"] = dataset_publisher[3]
+
+    dataset_metadata["publisher"] = publisher
 
     sizes = []
 
@@ -474,7 +493,23 @@ def pipeline():
         for size in dataset_sizes[0]:
             sizes.append(size)
 
-    dataset_metadata["Size"] = sizes
+    dataset_metadata["size"] = sizes
+
+    formats = []
+
+    # Get the dataset formats
+    cur.execute(
+        "SELECT format FROM dataset_other WHERE dataset_id = %s",
+        (dataset_id,),
+    )
+
+    dataset_formats = cur.fetchone()
+
+    if len(dataset_formats[0]) > 0:
+        for dataset_format in dataset_formats[0]:
+            formats.append(dataset_format)
+
+    dataset_metadata["format"] = formats
 
     funding_references = []
 
@@ -509,179 +544,38 @@ def pipeline():
 
             funding_references.append(item)
 
-    dataset_metadata["FundingReference"] = funding_references
+    dataset_metadata["fundingReference"] = funding_references
 
-    related_items = []
+    related_identifiers = []
 
-    # Get the dataset related items
+    # Get the dataset related identifiers
     cur.execute(
-        "SELECT id, type, relation_type FROM dataset_related_item WHERE dataset_id = %s",
+        "SELECT identifier, identifier_type, relation_type, related_metadata_scheme, scheme_uri, scheme_type, resource_type FROM dataset_related_identifier WHERE dataset_id = %s",
         (dataset_id,),
     )
 
-    dataset_related_items = cur.fetchall()
+    dataset_related_identifiers = cur.fetchall()
 
-    if dataset_related_items is not None:
-        for related_item in dataset_related_items:
-            related_item_id = related_item[0]
-
+    if dataset_related_identifiers is not None:
+        for related_identifier in dataset_related_identifiers:
             item = {}
 
-            item["relatedItemType"] = related_item[1]
-            item["relationType"] = related_item[2]
+            item["relatedIdentifierValue"] = related_identifier[0]
+            item["relatedIdentifierType"] = related_identifier[1]
+            item["relationType"] = related_identifier[2]
 
-            item_identifiers = []
+            if related_identifier[3] is not None and related_identifier[3] != "":
+                item["relatedMetadataScheme"] = related_identifier[3]
+            if related_identifier[4] is not None and related_identifier[4] != "":
+                item["schemeURI"] = related_identifier[4]
+            if related_identifier[5] is not None and related_identifier[5] != "":
+                item["schemeType"] = related_identifier[5]
+            if related_identifier[6] is not None and related_identifier[6] != "":
+                item["resourceTypeGeneral"] = related_identifier[6]
 
-            # Get the related item's identifiers
-            cur.execute(
-                "SELECT identifier, type, metadata_scheme, scheme_uri, scheme_type FROM dataset_related_item_identifier WHERE dataset_related_item_id = %s",
-                (related_item_id,),
-            )
+            related_identifiers.append(item)
 
-            related_item_identifiers = cur.fetchall()
-
-            if related_item_identifiers is not None:
-                for related_item_identifier in related_item_identifiers:
-                    item_identifier = {}
-
-                    item_identifier["relatedItemIdentifierValue"] = (
-                        related_item_identifier[0]
-                    )
-                    item_identifier["relatedItemIdentifierType"] = (
-                        related_item_identifier[1]
-                    )
-                    if (
-                        related_item_identifier[2] is not None
-                        and related_item_identifier[2] != ""
-                    ):
-                        item_identifier["relatedMetadataScheme"] = (
-                            related_item_identifier[2]
-                        )
-                    if (
-                        related_item_identifier[3] is not None
-                        and related_item_identifier[3] != ""
-                    ):
-                        item_identifier["schemeURI"] = related_item_identifier[3]
-                    if (
-                        related_item_identifier[4] is not None
-                        and related_item_identifier[4] != ""
-                    ):
-                        item_identifier["schemeType"] = related_item_identifier[4]
-
-                    item_identifiers.append(item_identifier)
-
-            item["relatedItemIdentifier"] = item_identifiers
-
-            related_items.append(item)
-
-            item_creators = []
-
-            # Get the related item's creators
-            cur.execute(
-                "SELECT name, name_type FROM dataset_related_item_contributor WHERE dataset_related_item_id = %s AND creator = true",
-                (related_item_id,),
-            )
-
-            related_item_creators = cur.fetchall()
-
-            if related_item_creators is not None:
-                for related_item_creator in related_item_creators:
-                    item_creator = {}
-
-                    item_creator["creatorName"] = related_item_creator[0]
-                    item_creator["nameType"] = related_item_creator[1]
-
-                    item_creators.append(item_creator)
-
-            item["creator"] = item_creators
-
-            item_contributors = []
-
-            # Get the related item's contributors
-            cur.execute(
-                "SELECT name, name_type, contributor_type FROM dataset_related_item_contributor WHERE dataset_related_item_id = %s AND creator = false",
-                (related_item_id,),
-            )
-
-            related_item_contributors = cur.fetchall()
-
-            if related_item_contributors is not None:
-                for related_item_contributor in related_item_contributors:
-                    item_contributor = {}
-
-                    item_contributor["contributorName"] = related_item_contributor[0]
-                    if (
-                        related_item_contributor[1] is not None
-                        and related_item_contributor[1] != ""
-                    ):
-                        item_contributor["nameType"] = related_item_contributor[1]
-                    item_contributor["contributorType"] = related_item_contributor[2]
-
-                    item_contributors.append(item_contributor)
-
-            item["contributor"] = item_contributors
-
-            item_titles = []
-
-            # Get the related item's titles
-            cur.execute(
-                "SELECT title, type FROM dataset_related_item_title WHERE dataset_related_item_id = %s",
-                (related_item_id,),
-            )
-
-            related_item_titles = cur.fetchall()
-
-            if related_item_titles is not None:
-                for related_item_title in related_item_titles:
-                    item_title = {}
-
-                    item_title["titleValue"] = related_item_title[0]
-
-                    if not related_item_title[1] == "MainTitle":
-                        item_title["titleType"] = related_item_title[1]
-
-                    item_titles.append(item_title)
-
-            item["title"] = item_titles
-
-            # Get the related item's dates
-            cur.execute(
-                "SELECT publication_year, volume, issue, number_value, number_type, first_page, last_page, publisher, edition FROM dataset_related_item_other WHERE dataset_related_item_id = %s",
-                (related_item_id,),
-            )
-
-            related_item_other = cur.fetchone()
-
-            if related_item_other[0] is not None and related_item_other[0] != "":
-                timestamp = datetime.datetime.fromtimestamp(
-                    related_item_other[0] / 1000
-                )
-                item["publicationYear"] = str(timestamp.year)
-            if related_item_other[1] is not None and related_item_other[1] != "":
-                item["volume"] = related_item_other[1]
-            if related_item_other[2] is not None and related_item_other[2] != "":
-                item["issue"] = related_item_other[2]
-
-            item["number"] = {}
-            if related_item_other[3] is not None and related_item_other[3] != "":
-                item["number"]["numberValue"] = related_item_other[3]
-            if related_item_other[4] is not None and related_item_other[4] != "":
-                item["number"]["numberType"] = related_item_other[4]
-            if item["number"] == {}:
-                del item["number"]
-
-            if related_item_other[5] is not None and related_item_other[5] != "":
-                item["firstPage"] = related_item_other[5]
-            if related_item_other[6] is not None and related_item_other[6] != "":
-                item["lastPage"] = related_item_other[6]
-            if related_item_other[7] is not None and related_item_other[7] != "":
-                item["publisher"] = related_item_other[7]
-            if related_item_other[8] is not None and related_item_other[8] != "":
-                item["edition"] = related_item_other[8]
-
-    dataset_metadata["RelatedItem"] = related_items
-
-    dataset_metadata["RelatedIdentifier"] = []
+    dataset_metadata["relatedIdentifier"] = related_identifiers
 
     conn.commit()
     conn.close()
@@ -695,6 +589,7 @@ def pipeline():
         data=dataset_metadata
     )
 
+    # sourcery skip: raise-specific-error
     if not data_is_valid:
         raise Exception("Dataset description is not valid")
 
