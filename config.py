@@ -1,4 +1,5 @@
 """Configuration for the application."""
+
 from os import environ
 from pathlib import Path
 
@@ -32,5 +33,15 @@ FAIRHUB_DATABASE_HOST = get_env("FAIRHUB_DATABASE_HOST", optional=True)
 FAIRHUB_DATABASE_USER = get_env("FAIRHUB_DATABASE_USER", optional=True)
 FAIRHUB_DATABASE_PORT = get_env("FAIRHUB_DATABASE_PORT", optional=True)
 
+FAIRHUB_ENVIRONMENT = get_env("FAIRHUB_ENVIRONMENT")
+
+DATACITE_CREDENTIALS = get_env("DATACITE_CREDENTIALS", optional=True)
+
 AZURE_STORAGE_ACCESS_KEY = get_env("AZURE_STORAGE_ACCESS_KEY")
 AZURE_STORAGE_CONNECTION_STRING = get_env("AZURE_STORAGE_CONNECTION_STRING")
+
+DATACITE_API_URL = "https://api.datacite.org"
+
+if FAIRHUB_ENVIRONMENT in ["staging", "dev"]:
+    # Using the test environment for DataCite
+    DATACITE_API_URL = "https://api.test.datacite.org"

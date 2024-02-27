@@ -1,0 +1,31 @@
+name: Lint
+
+on: [push]
+
+jobs:
+  lint:
+    name: Run linters
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint with flake8
+        run: poe flake8
+
+      - name: Type check with mypy
+        run: poe typecheck
+
+      - name: Lint with pylint
+        run: poe pylint

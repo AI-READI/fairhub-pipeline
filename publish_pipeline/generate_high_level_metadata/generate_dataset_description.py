@@ -43,10 +43,14 @@ def pipeline():
 
     identifier = {}
 
-    # todo: generating a random uuid for now
-    # todo: replace with the actual doi when we have it
     # Get the dataset identifier
-    identifier["identifierValue"] = str(uuid.uuid4())
+    cur.execute(
+        "SELECT doi FROM version WHERE dataset_id = %s",
+        (dataset_id,),
+    )
+
+    doi = cur.fetchone()
+    identifier["identifierValue"] = doi[0]
     identifier["identifierType"] = "DOI"
 
     dataset_metadata["Identifier"] = identifier
@@ -487,9 +491,9 @@ def pipeline():
             item = {}
 
             item["funderName"] = funding_reference[0]
-
             item["funderIdentifier"] = {}
             item["funderIdentifier"]["funderIdentifierValue"] = funding_reference[1]
+
             if funding_reference[2] is not None and funding_reference[2] != "":
                 item["funderIdentifier"]["funderIdentifierType"] = funding_reference[2]
             if funding_reference[3] is not None and funding_reference[3] != "":
@@ -497,9 +501,9 @@ def pipeline():
 
             item["awardNumber"] = {}
             item["awardNumber"]["awardNumberValue"] = funding_reference[4]
+
             if funding_reference[5] is not None and funding_reference[5] != "":
                 item["awardNumber"]["awardURI"] = funding_reference[5]
-
             if funding_reference[6] is not None and funding_reference[6] != "":
                 item["awardTitle"] = funding_reference[6]
 
@@ -540,19 +544,19 @@ def pipeline():
                 for related_item_identifier in related_item_identifiers:
                     item_identifier = {}
 
-                    item_identifier[
-                        "relatedItemIdentifierValue"
-                    ] = related_item_identifier[0]
-                    item_identifier[
-                        "relatedItemIdentifierType"
-                    ] = related_item_identifier[1]
+                    item_identifier["relatedItemIdentifierValue"] = (
+                        related_item_identifier[0]
+                    )
+                    item_identifier["relatedItemIdentifierType"] = (
+                        related_item_identifier[1]
+                    )
                     if (
                         related_item_identifier[2] is not None
                         and related_item_identifier[2] != ""
                     ):
-                        item_identifier[
-                            "relatedMetadataScheme"
-                        ] = related_item_identifier[2]
+                        item_identifier["relatedMetadataScheme"] = (
+                            related_item_identifier[2]
+                        )
                     if (
                         related_item_identifier[3] is not None
                         and related_item_identifier[3] != ""
