@@ -106,8 +106,8 @@ def file_operation(operation: Callable, req: func.HttpRequest) -> func.HttpRespo
 
     overwrite: bool = overwrite_permitted.lower().strip() == "true"
 
-    source: str = "AI-READI/metadata/test2/t1"
-    destination: str = "AI-READI/metadata/test2/t2"
+    source: str = "AI-READI/metadata/test2/t1/test"
+    destination: str = "AI-READI/metadata/test2/t3/t4"
     container = "stage-1-container"
 
     try:
@@ -155,7 +155,6 @@ def pipeline():
     """
         Reads the file structure from azure
     """
-    license_text = ""
 
     conn = psycopg2.connect(
         host=config.FAIRHUB_DATABASE_HOST,
@@ -197,11 +196,5 @@ def pipeline():
     # blob_service_client = azureblob.BlobServiceClient(
     #     account_url="https://b2aistaging.blob.core.windows.net/",
     #     credential=sas_token,
-    # )
-    #
-    # # upload the file to the metadata folder
-    # blob_client = blob_service_client.get_blob_client(
-    #     container="stage-1-container",
-    #     blob=f"{metadata_folder}/",
     # )
     return
