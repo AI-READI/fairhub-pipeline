@@ -1,12 +1,13 @@
 """Register a DOI for the dataset"""
 
-import random
-import json
-import string
-import datetime
 import base64
-import requests
+import datetime
+import json
+import random
+import string
+
 import azure.storage.blob as azureblob
+import requests
 
 import config
 
