@@ -458,26 +458,11 @@ def pipeline():
 
     dataset_metadata["rights"] = rights
 
-    # Get the dataset publisher information
-    cur.execute(
-        "SELECT publisher, identifier, identifier_scheme, scheme_uri FROM dataset_publisher WHERE dataset_id = %s",
-        (dataset_id,),
-    )
-
-    dataset_publisher = cur.fetchone()
-
-    publisher = {}
-
-    publisher["publisherName"] = dataset_publisher[0]
-
-    if dataset_publisher[1] is not None and dataset_publisher[1] != "":
-        publisher["publisherIdentifier"] = dataset_publisher[1]
-    if dataset_publisher[2] is not None and dataset_publisher[2] != "":
-        publisher["publisherIdentifierScheme"] = dataset_publisher[2]
-    if dataset_publisher[3] is not None and dataset_publisher[3] != "":
-        publisher["schemeURI"] = dataset_publisher[3]
-
-    dataset_metadata["publisher"] = publisher
+    # Create the publisher object
+    dataset_metadata["publisher"] = {
+        "publisherName": "FAIRhub",
+        "publisherIdentifier": "https://fairhub.io",
+    }
 
     sizes = []
 
