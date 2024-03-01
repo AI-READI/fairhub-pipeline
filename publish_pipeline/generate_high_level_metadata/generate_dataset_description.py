@@ -514,9 +514,8 @@ def pipeline():
             item["funderName"] = funding_reference[0]
             item["funderIdentifier"] = {}
             item["funderIdentifier"]["funderIdentifierValue"] = funding_reference[1]
+            item["funderIdentifier"]["funderIdentifierType"] = funding_reference[2]
 
-            if funding_reference[2] is not None and funding_reference[2] != "":
-                item["funderIdentifier"]["funderIdentifierType"] = funding_reference[2]
             if funding_reference[3] is not None and funding_reference[3] != "":
                 item["funderIdentifier"]["schemeURI"] = funding_reference[3]
 
