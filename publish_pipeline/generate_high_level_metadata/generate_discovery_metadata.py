@@ -48,19 +48,19 @@ def pipeline():
 
     title = dataset_title[0]
 
-    discovery_metadata["Title"] = title
+    discovery_metadata["title"] = title
 
     identifier = "10.5281/zenodo.7641684"
 
-    discovery_metadata["Identifier"] = identifier
+    discovery_metadata["identifier"] = identifier
 
     version = str(uuid.uuid4())
 
-    discovery_metadata["Version"] = version
+    discovery_metadata["version"] = version
 
     publication_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
-    discovery_metadata["PublicationDate"] = publication_date
+    discovery_metadata["publicationDate"] = publication_date
 
     detailed_description = ""
 
@@ -70,7 +70,7 @@ def pipeline():
     )
     study_description = cur.fetchone()
     detailed_description = study_description[0]
-    discovery_metadata["About"] = detailed_description
+    discovery_metadata["about"] = detailed_description
 
     # license
 
@@ -84,7 +84,7 @@ def pipeline():
     dataset_rights = cur.fetchone()
     # license_text = dataset_other.join(",")
     license_text = dataset_rights[0]
-    discovery_metadata["License"] = license_text
+    discovery_metadata["license"] = license_text
 
     acknowledgement = ""
 
@@ -96,7 +96,7 @@ def pipeline():
     dataset_acknowledgement = cur.fetchone()
     acknowledgement = dataset_acknowledgement[0]
     if acknowledgement:
-        discovery_metadata["Acknowledgement"] = acknowledgement
+        discovery_metadata["acknowledgement"] = acknowledgement
 
     # conn.commit()
     conn.close()
