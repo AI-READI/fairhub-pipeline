@@ -390,7 +390,7 @@ def pipeline():
 
     dataset_metadata["subject"] = subjects
 
-    managing_organisation = {}
+    managing_organization = {}
 
     # Get the dataset managing organization
     cur.execute(
@@ -398,16 +398,16 @@ def pipeline():
         (dataset_id,),
     )
 
-    dataset_managing_organisation = cur.fetchone()
+    dataset_managing_organization = cur.fetchone()
 
-    managing_organisation["name"] = dataset_managing_organisation[0]
+    managing_organization["name"] = dataset_managing_organization[0]
     if (
-        dataset_managing_organisation[1] is not None
-        and dataset_managing_organisation[1] != ""
+        dataset_managing_organization[1] is not None
+        and dataset_managing_organization[1] != ""
     ):
-        managing_organisation["rorId"] = dataset_managing_organisation[1]
+        managing_organization["rorId"] = dataset_managing_organization[1]
 
-    dataset_metadata["managingOrganisation"] = managing_organisation
+    dataset_metadata["managingOrganization"] = managing_organization
 
     access_details = {}
 
@@ -435,7 +435,7 @@ def pipeline():
 
     # Get the dataset rights
     cur.execute(
-        "SELECT rightsName, uri, identifier, identifier_scheme FROM dataset_rights WHERE dataset_id = %s",
+        "SELECT rights, uri, identifier, identifier_scheme, identifier_scheme_uri FROM dataset_rights WHERE dataset_id = %s",
         (dataset_id,),
     )
 
@@ -445,7 +445,7 @@ def pipeline():
         for right in dataset_rights:
             item = {}
 
-            item["rightsValue"] = right[0]
+            item["rightsName"] = right[0]
 
             if right[1] is not None and right[1] != "":
                 item["rightsURI"] = right[1]
@@ -453,6 +453,8 @@ def pipeline():
                 item["rightsIdentifier"] = right[2]
             if right[3] is not None and right[3] != "":
                 item["rightsIdentifierScheme"] = right[3]
+            if right[4] is not None and right[4] != "":
+                item["schemeURI"] = right[4]
 
             rights.append(item)
 
@@ -461,7 +463,6 @@ def pipeline():
     # Create the publisher object
     dataset_metadata["publisher"] = {
         "publisherName": "FAIRhub",
-        "publisherIdentifier": "https://fairhub.io",
     }
 
     sizes = []
