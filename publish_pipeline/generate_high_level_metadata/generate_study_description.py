@@ -29,11 +29,11 @@ def pipeline():
 
     study_id = "c588f59c-cacb-4e52-99dd-95b37dcbfd5c"
 
-    cur.execute("SELECT * FROM study WHERE id = %s", (study_id,))
+    cur.execute("SELECT title, acronym FROM study WHERE id = %s", (study_id,))
 
     study = cur.fetchone()
 
-    if study is None:
+    if study[0] is None:
         return "Study not found"
 
     identification_module = {}
@@ -46,26 +46,31 @@ def pipeline():
 
     primary_study_identification = cur.fetchone()
 
-    identification_module["OrgStudyIdInfo"] = {}
+    identification_module["officialTitle"] = study[0]
+
+    if study[1] is not None and study[1] != "":
+        identification_module["acronym"] = {}
+
+    identification_module["orgStudyIdInfo"] = {}
 
     # Study Identifier
-    identification_module["OrgStudyIdInfo"]["OrgStudyId"] = (
+    identification_module["orgStudyIdInfo"]["orgStudyId"] = (
         primary_study_identification[0]
     )
     # Study Identifier Type
-    identification_module["OrgStudyIdInfo"]["OrgStudyIdType"] = (
+    identification_module["orgStudyIdInfo"]["orgStudyIdType"] = (
         primary_study_identification[1]
     )
 
     if primary_study_identification[2] and primary_study_identification[2] != "":
         # Study Identifier Domain
-        identification_module["OrgStudyIdInfo"]["OrgStudyIdDomain"] = (
+        identification_module["orgStudyIdInfo"]["orgStudyIdDomain"] = (
             primary_study_identification[2]
         )
 
     if primary_study_identification[3] and primary_study_identification[3] != "":
         # Study Identifier Link
-        identification_module["OrgStudyIdInfo"]["OrgStudyIdLink"] = (
+        identification_module["orgStudyIdInfo"]["orgStudyIdLink"] = (
             primary_study_identification[3]
         )
 
@@ -77,25 +82,25 @@ def pipeline():
 
     secondary_study_identification = cur.fetchall()
 
-    identification_module["SecondaryIdInfoList"] = []
+    identification_module["secondaryIdInfoList"] = []
 
     for row in secondary_study_identification:
         item = {}
         # Study Identifier and Study Identifier Type
-        item["SecondaryId"] = row[0]
-        item["SecondaryIdType"] = row[1]
+        item["secondaryId"] = row[0]
+        item["secondaryIdType"] = row[1]
 
         if row[2]:
             # Study Identifer Domain
-            item["SecondaryIdDomain"] = row[2]
+            item["secondaryIdDomain"] = row[2]
 
         if row[3]:
             # Study Identifier Link
-            item["SecondaryIdLink"] = row[3]
+            item["secondaryIdLink"] = row[3]
 
-        identification_module["SecondaryIdInfoList"].append(item)
+        identification_module["secondaryIdInfoList"].append(item)
 
-    study_metadata["IdentificationModule"] = identification_module
+    study_metadata["identificationModule"] = identification_module
 
     status_module = {}
 
@@ -107,75 +112,166 @@ def pipeline():
 
     study_status = cur.fetchone()
 
-    status_module["OverallStatus"] = study_status[0]
-    status_module["WhyStopped"] = study_status[1]
+    status_module["overallStatus"] = study_status[0]
+    status_module["whyStopped"] = study_status[1]
 
     start_date = datetime.datetime.strptime(study_status[2], "%Y-%m-%d %H:%M:%S")
 
-    status_module["StartDateStruct"] = {
+    status_module["startDateStruct"] = {
         # date format: Month DD, YYYY
-        "StartDate": start_date.strftime("%B %d, %Y"),
-        "StartDateType": study_status[3],
+        "startDate": start_date.strftime("%B %d, %Y"),
+        "startDateType": study_status[3],
     }
 
     completion_date = datetime.datetime.strptime(study_status[4], "%Y-%m-%d %H:%M:%S")
 
-    status_module["CompletionDateStruct"] = {
-        "CompletionDate": completion_date.strftime("%B %d, %Y"),
-        "CompletionDateType": study_status[5],
+    status_module["completionDateStruct"] = {
+        "completionDate": completion_date.strftime("%B %d, %Y"),
+        "completionDateType": study_status[5],
     }
 
-    study_metadata["StatusModule"] = status_module
+    study_metadata["statusModule"] = status_module
 
     sponsor_collaborators_module = {}
 
-    # Get the study sponsor and collaborators metadata
+    # Get the study sponsor metadata
     cur.execute(
-        "SELECT responsible_party_type, responsible_party_investigator_name, responsible_party_investigator_title, responsible_party_investigator_affiliation, lead_sponsor_name, collaborator_name FROM study_sponsors_collaborators WHERE study_id = %s",
+        "SELECT responsible_party_type, responsible_party_investigator_first_name, responsible_party_investigator_last_name, responsible_party_investigator_title, responsible_party_investigator_identifier_value, responsible_party_investigator_identifier_scheme, responsible_party_investigator_identifier_scheme_uri, responsible_party_investigator_affiliation_name, responsible_party_investigator_affiliation_identifier_value, responsible_party_investigator_affiliation_identifier_scheme, responsible_party_investigator_affiliation_identifier_scheme_uri, lead_sponsor_name, lead_sponsor_identifier, lead_sponsor_scheme, lead_sponsor_scheme_uri FROM study_sponsors WHERE study_id = %s",
         (study_id,),
     )
 
-    sponsor_collaborators = cur.fetchone()
+    study_sponsors = cur.fetchone()
 
-    sponsor_collaborators_module["ResponsibleParty"] = {
-        "ResponsiblePartyType": sponsor_collaborators[0],
-        "ResponsiblePartyInvestigatorFullName": sponsor_collaborators[1],
-        "ResponsiblePartyInvestigatorTitle": sponsor_collaborators[2],
-        "ResponsiblePartyInvestigatorAffiliation": sponsor_collaborators[3],
-    }
+    responsible_party = {}
 
-    sponsor_collaborators_module["LeadSponsor"] = {
-        "LeadSponsorName": sponsor_collaborators[4]
-    }
+    responsible_party["responsiblePartyType"] = study_sponsors[0]
 
-    sponsor_collaborators_module["CollaboratorList"] = []
+    if study_sponsors[1] is not None and study_sponsors[1] != "":
+        responsible_party["responsiblePartyInvestigatorFirstName"] = study_sponsors[1]
+    if study_sponsors[2] is not None and study_sponsors[2] != "":
+        responsible_party["responsiblePartyInvestigatorLastName"] = study_sponsors[2]
+    if study_sponsors[3] is not None and study_sponsors[3] != "":
+        responsible_party["responsiblePartyInvestigatorTitle"] = study_sponsors[3]
+    if study_sponsors[4] is not None and study_sponsors[4] != "":
+        responsible_party["responsiblePartyInvestigatorIdentifier"] = {}
 
-    sponsor_collaborators = sponsor_collaborators[5]
+        responsible_party["responsiblePartyInvestigatorIdentifier"][
+            "responsiblePartyInvestigatorIdentifierValue"
+        ] = study_sponsors[4]
 
-    for row in sponsor_collaborators:
-        # Add the collabarator(s) to the list
-        item = {"CollaboratorName": row}
+        if study_sponsors[5] is not None and study_sponsors[5] != "":
+            responsible_party["responsiblePartyInvestigatorIdentifier"][
+                "responsiblePartyInvestigatorIdentifierScheme"
+            ] = study_sponsors[5]
 
-        sponsor_collaborators_module["CollaboratorList"].append(item)
+        if study_sponsors[6] is not None and study_sponsors[6] != "":
+            responsible_party["responsiblePartyInvestigatorIdentifier"]["schemeURI"] = (
+                study_sponsors[6]
+            )
 
-    study_metadata["SponsorCollaboratorsModule"] = sponsor_collaborators_module
+    if study_sponsors[7] is not None and study_sponsors[7] != "":
+        responsible_party["responsiblePartyInvestigatorAffiliation"] = {}
+
+        responsible_party["responsiblePartyInvestigatorAffiliation"][
+            "responsiblePartyInvestigatorAffiliationName"
+        ] = study_sponsors[7]
+
+        if study_sponsors[8] is not None and study_sponsors[8] != "":
+            responsible_party["responsiblePartyInvestigatorAffiliation"][
+                "responsiblePartyInvestigatorAffiliationIdentifier"
+            ] = {}
+
+            responsible_party["responsiblePartyInvestigatorAffiliation"][
+                "responsiblePartyInvestigatorAffiliationIdentifier"
+            ][
+                "responsiblePartyInvestigatorAffiliationIdentifierValue"
+            ] = study_sponsors[
+                8
+            ]
+
+            if study_sponsors[9] is not None and study_sponsors[9] != "":
+                responsible_party["responsiblePartyInvestigatorAffiliation"][
+                    "responsiblePartyInvestigatorAffiliationIdentifier"
+                ][
+                    "responsiblePartyInvestigatorAffiliationIdentifierScheme"
+                ] = study_sponsors[
+                    9
+                ]
+
+            if study_sponsors[10] is not None and study_sponsors[10] != "":
+                responsible_party["responsiblePartyInvestigatorAffiliation"][
+                    "responsiblePartyInvestigatorAffiliationIdentifier"
+                ]["schemeURI"] = study_sponsors[10]
+
+    sponsor_collaborators_module["responsibleParty"] = responsible_party
+
+    lead_sponsor = {"leadSponsorName": study_sponsors[11]}
+
+    if study_sponsors[12] is not None and study_sponsors[12] != "":
+        lead_sponsor["leadSponsor"]["leadSponsorIdentifier"] = {
+            "leadSponsorIdentifierValue": study_sponsors[12]
+        }
+        if study_sponsors[13] is not None and study_sponsors[13] != "":
+            lead_sponsor["leadSponsor"]["leadSponsorIdentifier"][
+                "leadSponsorIdentifierScheme"
+            ] = study_sponsors[13]
+
+    sponsor_collaborators_module["leadSponsor"] = lead_sponsor
+
+    # Get the study collaborators metadata
+    cur.execute(
+        "SELECT name, identifier, scheme, scheme_uri FROM study_collaborators WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_collaborators = cur.fetchall()
+
+    collaborators = []
+
+    for row in study_collaborators:
+        item = {}
+
+        item["collaboratorName"] = row[0]
+
+        if row[1] is not None and row[1] != "":
+            item["collaboratorNameIdentifier"] = {
+                "collaboratorNameIdentifierValue": row[1]
+            }
+
+            if row[2] is not None and row[2] != "":
+                item["collaboratorNameIdentifier"][
+                    "collaboratorNameIdentifierScheme"
+                ] = row[2]
+            if row[3] is not None and row[3] != "":
+                item["collaboratorNameIdentifier"]["schemeURI"] = row[3]
+
+        collaborators.append(item)
+
+    sponsor_collaborators_module["collaboratorList"] = collaborators
+
+    study_metadata["sponsorCollaboratorsModule"] = sponsor_collaborators_module
 
     oversight_module = {}
 
     # Get the study oversight metadata
     cur.execute(
-        "SELECT oversight_has_dmc FROM study_other WHERE study_id = %s",
+        "SELECT fda_regulated_drug, fda_regulated_device, human_subject_review_status, has_dmc FROM study_oversight WHERE study_id = %s",
         (study_id,),
     )
 
     study_oversight = cur.fetchone()
 
-    if study_oversight[0]:
-        oversight_module["OversightHasDMC"] = "Yes"
-    else:
-        oversight_module["OversightHasDMC"] = "No"
+    if study_oversight[0] is not None and study_oversight[0] != "":
+        oversight_module["isFDARegulatedDrug"] = study_oversight[0]
+    if study_oversight[1] is not None and study_oversight[1] != "":
+        oversight_module["isFDARegulatedDevice"] = study_oversight[1]
 
-    study_metadata["OversightModule"] = oversight_module
+    oversight_module["humanSubjectReviewStatus"] = study_oversight[2]
+
+    if study_oversight[3] is not None and study_oversight[3] != "":
+        oversight_module["oversightHasDMC"] = study_oversight[3]
+
+    study_metadata["oversightModule"] = oversight_module
 
     description_module = {}
 
@@ -187,110 +283,157 @@ def pipeline():
 
     study_description = cur.fetchone()
 
-    description_module["BriefSummary"] = study_description[0]
+    description_module["briefSummary"] = study_description[0]
     if study_description[1] and study_description[1] != "":
-        description_module["DetailedDescription"] = study_description[1]
+        description_module["detailedDescription"] = study_description[1]
 
-    study_metadata["DescriptionModule"] = description_module
+    study_metadata["descriptionModule"] = description_module
 
     conditions_module = {}
 
     # Get the study conditions metadata
     cur.execute(
-        "SELECT conditions, keywords FROM study_other WHERE study_id = %s",
+        "SELECT name, classification_code, scheme, scheme_uri, condition_uri FROM study_conditions WHERE study_id = %s",
         (study_id,),
     )
 
-    study_conditions = cur.fetchone()
+    study_conditions = cur.fetchall()
 
-    conditions_module["ConditionList"] = []
-    conditions = study_conditions[0]
+    conditions_list = []
 
-    for row in conditions:
-        conditions_module["ConditionList"].append(row)
+    for row in study_conditions:
+        item = {}
 
-    # todo: add keywords from the UI and API
-    conditions_module["KeywordList"] = ["Dataset"]
-    keywords = study_conditions[1]
-    for row in keywords:
-        conditions_module["KeywordList"].append(row)
+        item["conditionName"] = row[0]
 
-    study_metadata["ConditionsModule"] = conditions_module
+        if row[1] is not None and row[1] != "":
+            item["conditionIdentifier"] = {"conditionClassificationCode": row[1]}
+
+            if row[2] is not None and row[2] != "":
+                item["conditionIdentifier"]["conditionScheme"] = row[2]
+
+            if row[3] is not None and row[3] != "":
+                item["conditionIdentifier"]["schemeURI"] = row[3]
+
+            if row[4] is not None and row[4] != "":
+                item["conditionIdentifier"]["conditionURI"] = row[4]
+
+        conditions_list.append(item)
+
+    conditions_module["conditionList"] = conditions_list
+
+    # Get the study keywords metadata
+    cur.execute(
+        "SELECT name, classification_code, scheme, scheme_uri, keyword_uri FROM study_keywords WHERE study_id = %s",
+        (study_id,),
+    )
+
+    study_keywords = cur.fetchall()
+
+    keywords_list = []
+
+    for row in study_keywords:
+        item = {}
+
+        item["keywordName"] = row[0]
+
+        if row[1] is not None and row[1] != "":
+            item["keywordIdentifier"] = {"keywordClassificationCode": row[1]}
+
+            if row[2] is not None and row[2] != "":
+                item["keywordIdentifier"]["keywordScheme"] = row[2]
+
+            if row[3] is not None and row[3] != "":
+                item["keywordIdentifier"]["schemeURI"] = row[3]
+
+            if row[4] is not None and row[4] != "":
+                item["keywordIdentifier"]["keywordURI"] = row[4]
+
+        keywords_list.append(item)
+
+    conditions_module["keywordList"] = keywords_list
+
+    study_metadata["conditionsModule"] = conditions_module
 
     design_module = {}
 
     # Get the study design metadata
     cur.execute(
-        "SELECT study_type, design_allocation, design_intervention_model, design_intervention_model_description, design_primary_purpose, design_masking, design_masking_description, design_who_masked_list, phase_list, enrollment_count, enrollment_type, number_arms,design_observational_model_list, design_time_perspective_list, bio_spec_retention, bio_spec_description, target_duration, number_groups_cohorts FROM study_design WHERE study_id = %s",
+        "SELECT study_type, design_allocation, design_intervention_model, design_intervention_model_description, design_primary_purpose, design_masking, design_masking_description, design_who_masked_list, phase_list, enrollment_count, enrollment_type, number_arms,design_observational_model_list, design_time_perspective_list, bio_spec_retention, bio_spec_description, target_duration, number_groups_cohorts, isPatientRegistry FROM study_design WHERE study_id = %s",
         (study_id,),
     )
 
     study_design = cur.fetchone()
 
     study_type = study_design[0]
-    design_module["StudyType"] = study_type
+    design_module["studyType"] = study_type
 
     if study_type == "Interventional":
-        design_module["DesignInfo"] = {}
-        design_module["DesignInfo"]["DesignAllocation"] = study_design[1]
-        design_module["DesignInfo"]["DesignInterventionModel"] = study_design[2]
+        design_module["designInfo"] = {}
+        design_module["designInfo"]["designAllocation"] = study_design[1]
+        design_module["designInfo"]["designInterventionModel"] = study_design[2]
         if study_design[3] and study_design[3] != "":
-            design_module["DesignInfo"]["DesignInterventionModelDescription"] = (
+            design_module["designInfo"]["designInterventionModelDescription"] = (
                 study_design[3]
             )
-        design_module["DesignInfo"]["DesignPrimaryPurpose"] = study_design[4]
+        design_module["designInfo"]["designPrimaryPurpose"] = study_design[4]
 
-        design_module["DesignInfo"]["DesignMaskingInfo"] = {}
-        design_module["DesignInfo"]["DesignMaskingInfo"]["DesignMasking"] = (
+        design_module["designInfo"]["designMaskingInfo"] = {}
+        design_module["designInfo"]["designMaskingInfo"]["designMasking"] = (
             study_design[5]
         )
-        design_module["DesignInfo"]["DesignMaskingInfo"]["DesignMaskingDescription"] = (
+        design_module["designInfo"]["designMaskingInfo"]["designMaskingDescription"] = (
             study_design[6]
         )
 
-        design_module["DesignInfo"]["DesignMaskingInfo"]["DesignWhoMaskedList"] = []
+        design_module["designInfo"]["designMaskingInfo"]["designWhoMaskedList"] = []
 
         if study_design[7] is not None:
             for row in study_design[7]:
-                design_module["DesignInfo"]["DesignMaskingInfo"][
-                    "DesignWhoMaskedList"
+                design_module["designInfo"]["designMaskingInfo"][
+                    "designWhoMaskedList"
                 ].append(row)
 
-        design_module["PhaseList"] = []
+        design_module["phaseList"] = []
 
         if study_design[8] is not None:
             for row in study_design[8]:
-                design_module["PhaseList"].append(row)
+                design_module["phaseList"].append(row)
 
-    design_module["EnrollmentInfo"] = {}
-    design_module["EnrollmentInfo"]["EnrollmentCount"] = str(study_design[9])
-    design_module["EnrollmentInfo"]["EnrollmentType"] = study_design[10]
+    design_module["enrollmentInfo"] = {}
+    design_module["enrollmentInfo"]["enrollmentCount"] = str(study_design[9])
+    design_module["enrollmentInfo"]["enrollmentType"] = study_design[10]
 
-    if study_type == "Interventional":
-        design_module["NumberArms"] = str(study_design[11])
+    if study_type == "interventional":
+        design_module["numberArms"] = str(study_design[11])
 
-    if study_type == "Observational":
-        design_module["DesignInfo"] = {}
-        design_module["DesignInfo"]["DesignObservationalModelList"] = []
+    if study_type == "observational":
+        design_module["designInfo"] = {}
+        design_module["designInfo"]["designObservationalModelList"] = []
+
         if study_design[12] is not None:
             for row in study_design[12]:
-                design_module["DesignInfo"]["DesignObservationalModelList"].append(row)
+                design_module["designInfo"]["designObservationalModelList"].append(row)
 
-        design_module["DesignInfo"]["DesignTimePerspectiveList"] = []
+        design_module["designInfo"]["designTimePerspectiveList"] = []
 
         if study_design[13] is not None:
             for row in study_design[13]:
-                design_module["DesignInfo"]["DesignTimePerspectiveList"].append(row)
+                design_module["designInfo"]["designTimePerspectiveList"].append(row)
 
-        design_module["BioSpec"] = {}
-        design_module["BioSpec"]["BioSpecRetention"] = study_design[14]
+        design_module["bioSpec"] = {}
+        design_module["bioSpec"]["bioSpecRetention"] = study_design[14]
+
         if study_design[15] is not None and study_design[15] != "":
-            design_module["BioSpec"]["BioSpecDescription"] = study_design[15]
+            design_module["bioSpec"]["bioSpecDescription"] = study_design[15]
 
-        design_module["TargetDuration"] = study_design[16]
-        design_module["NumberGroupsCohorts"] = str(study_design[17])
+        design_module["targetDuration"] = study_design[16]
+        design_module["numberGroupsCohorts"] = str(study_design[17])
 
-    study_metadata["DesignModule"] = design_module
+        if study_design[18] is not None and study_design[18] != "":
+            design_module["isPatientRegistry"] = study_design[18]
+
+    study_metadata["designModule"] = design_module
 
     arms_interventions_module = {}
 
@@ -302,285 +445,251 @@ def pipeline():
 
     study_arms = cur.fetchall()
 
-    arms_interventions_module["ArmGroupList"] = []
+    arms_interventions_module["armGroupList"] = []
 
     for row in study_arms:
         item = {}
 
-        item["ArmGroupLabel"] = row[0]
+        item["armGroupLabel"] = row[0]
         if study_type == "Interventional":
-            item["ArmGroupType"] = row[1]
+            item["armGroupType"] = row[1]
 
-        if row[2] is not None and row[2] != "":
-            item["ArmGroupDescription"] = row[2]
+        item["armGroupDescription"] = row[2]
 
         if study_type == "Interventional" and row[3] is not None and len(row[3]) > 0:
-            item["ArmGroupInterventionList"] = []
+            item["armGroupInterventionList"] = []
 
             for intervention in row[3]:
-                item["ArmGroupInterventionList"].append(intervention)
+                item["armGroupInterventionList"].append(intervention)
 
-        arms_interventions_module["ArmGroupList"].append(item)
+        arms_interventions_module["armGroupList"].append(item)
 
     # Get the study interventions metadata
     cur.execute(
-        "SELECT type, name, description, arm_group_label_list, other_name_list FROM study_intervention WHERE study_id = %s",
+        "SELECT type, name, description, other_name_list FROM study_intervention WHERE study_id = %s",
         (study_id,),
     )
 
     study_interventions = cur.fetchall()
 
-    arms_interventions_module["InterventionList"] = []
+    arms_interventions_module["interventionList"] = []
 
     for row in study_interventions:
         item = {}
 
-        item["InterventionType"] = row[0]
-        item["InterventionName"] = row[1]
-        if row[2] is not None and row[2] != "":
-            item["InterventionDescription"] = row[2]
+        item["interventionType"] = row[0]
+        item["interventionName"] = row[1]
+        item["interventionDescription"] = row[2]
 
-        item["InterventionArmGroupLabelList"] = []
+        if row[3] is not None and len(row[3]) > 0:
+            item["interventionOtherNameList"] = []
 
-        if row[3] is not None:
-            for arm_group_label in row[3]:
-                item["InterventionArmGroupLabelList"].append(arm_group_label)
+            for other_name in row[3]:
+                item["interventionOtherNameList"].append(other_name)
 
-        item["InterventionOtherNameList"] = []
+        arms_interventions_module["interventionList"].append(item)
 
-        if row[4] is not None:
-            for other_name in row[4]:
-                item["InterventionOtherNameList"].append(other_name)
-
-        arms_interventions_module["InterventionList"].append(item)
-
-    study_metadata["ArmsInterventionsModule"] = arms_interventions_module
+    study_metadata["armsInterventionsModule"] = arms_interventions_module
 
     eligibility_module = {}
 
     # Get the study eligibility metadata
     cur.execute(
-        "SELECT gender, gender_based, gender_description, minimum_age_value, minimum_age_unit, maximum_age_value, maximum_age_unit, healthy_volunteers, inclusion_criteria, exclusion_criteria, study_population, sampling_method FROM study_eligibility WHERE study_id = %s",
+        "SELECT sex, gender_based, gender_description, minimum_age_value, minimum_age_unit, maximum_age_value, maximum_age_unit, healthy_volunteers, inclusion_criteria, exclusion_criteria, study_population, sampling_method FROM study_eligibility WHERE study_id = %s",
         (study_id,),
     )
 
     study_eligibility = cur.fetchone()
 
-    eligibility_module["Gender"] = study_eligibility[0]
-    eligibility_module["GenderBased"] = study_eligibility[1]
-    eligibility_module["GenderDescription"] = study_eligibility[2]
-    eligibility_module["MinimumAge"] = f"{study_eligibility[3]} {study_eligibility[4]}"
-    eligibility_module["MaximumAge"] = f"{study_eligibility[5]} {study_eligibility[6]}"
-    if study_eligibility[7] is not None and study_eligibility[7] != "":
-        eligibility_module["HealthyVolunteers"] = study_eligibility[7]
+    eligibility_module["sex"] = study_eligibility[0]
+    eligibility_module["genderBased"] = study_eligibility[1]
+    eligibility_module["genderDescription"] = study_eligibility[2]
+    eligibility_module["minimumAge"] = f"{study_eligibility[3]} {study_eligibility[4]}"
+    eligibility_module["maximumAge"] = f"{study_eligibility[5]} {study_eligibility[6]}"
+    eligibility_module["healthyVolunteers"] = study_eligibility[7]
+
     if study_type == "Observational":
-        eligibility_module["StudyPopulation"] = study_eligibility[10]
-        eligibility_module["SamplingMethod"] = study_eligibility[11]
+        eligibility_module["studyPopulation"] = study_eligibility[10]
+        eligibility_module["samplingMethod"] = study_eligibility[11]
 
-    eligibility_criteria = ""
+    eligibility_criteria = {
+        "eligibilityCriteriaInclusion": [],
+        "eligibilityCriteriaExclusion": [],
+    }
 
-    if study_eligibility[8] is not None:
-        eligibility_criteria = "Inclusion Criteria\n"
+    if study_eligibility[8] is not None and len(study_eligibility[8]) > 0:
+        eligibility_criteria["eligibilityCriteriaInclusion"] = study_eligibility[8]
 
-        for criteria in study_eligibility[8]:
-            eligibility_criteria += f"* {criteria}\n"
+    if study_eligibility[9] is not None and len(study_eligibility[9]) > 0:
+        eligibility_criteria["eligibilityCriteriaExclusion"] = study_eligibility[9]
 
-    if study_eligibility[9] is not None:
-        eligibility_criteria += "\nExclusion Criteria\n"
+    eligibility_module["eligibilityCriteria"] = eligibility_criteria
 
-        for criteria in study_eligibility[9]:
-            eligibility_criteria += f"* {criteria}\n"
-
-    eligibility_module["EligibilityCriteria"] = eligibility_criteria
-
-    study_metadata["EligibilityModule"] = eligibility_module
+    study_metadata["eligibilityModule"] = eligibility_module
 
     contacts_locations_module = {}
 
     # Get the study contacts and locations metadata
     cur.execute(
-        "SELECT name, affiliation, phone, phone_ext, email_address FROM study_contact WHERE study_id = %s AND central_contact = true",
+        "SELECT first_name, last_name, degree, identifier, identifier_scheme, identifier_scheme_uri, affiliation, affiliation_identifier, affiliation_identifier_scheme, affiliation_identifier_scheme_uri, phone, phone_ext, email_address FROM study_central_contact WHERE study_id = %s",
         (study_id,),
     )
 
     study_central_contacts = cur.fetchall()
 
-    contacts_locations_module["CentralContactList"] = []
+    central_contacts = []
 
     if study_central_contacts is not None:
         for row in study_central_contacts:
             item = {}
 
-            item["CentralContactName"] = row[0]
-            item["CentralContactAffiliation"] = row[1]
-            item["CentralContactPhone"] = row[2]
-            if row[3] is not None and row[3] != "":
-                item["CentralContactPhoneExt"] = row[3]
-            item["CentralContactEMail"] = row[4]
+            item["centralContactFirstName"] = row[0]
+            item["centralContactLastName"] = row[1]
 
-            contacts_locations_module["CentralContactList"].append(item)
+            if row[2] is not None and row[2] != "":
+                item["centralContactDegree"] = row[2]
+
+            if row[3] is not None and row[3] != "":
+                item["centralContactIdentifier"] = {}
+
+                item["centralContactIdentifier"]["centralContactIdentifierValue"] = row[
+                    3
+                ]
+                item["centralContactIdentifierScheme"] = row[4]
+
+                if row[5] is not None and row[5] != "":
+                    item["schemeURI"] = row[5]
+
+            item["centralContactAffiliation"] = {
+                "centralContactAffiliationName": row[6]
+            }
+
+            if row[7] is not None and row[7] != "":
+                item["centralContactAffiliation"][
+                    "centralContactAffiliationIdentifier"
+                ] = {}
+
+                item["centralContactAffiliation"][
+                    "centralContactAffiliationIdentifier"
+                ]["centralContactAffiliationIdentifierValue"] = row[7]
+                item["centralContactAffiliation"][
+                    "centralContactAffiliationIdentifier"
+                ]["centralContactAffiliationIdentifierScheme"] = row[8]
+
+                if row[9] is not None and row[9] != "":
+                    item["centralContactAffiliation"][
+                        "centralContactAffiliationIdentifier"
+                    ]["schemeURI"] = row[9]
+
+            if row[10] is not None and row[10] != "":
+                item["centralContactPhone"] = row[10]
+
+            if row[11] is not None and row[11] != "":
+                item["centralContactPhoneExt"] = row[11]
+
+            item["centralContactEMail"] = row[12]
+
+            central_contacts.append(item)
+
+    contacts_locations_module["centralContactList"] = central_contacts
 
     # Get the study contacts metadata
     cur.execute(
-        "SELECT name, affiliation, role FROM study_overall_official WHERE study_id = %s",
+        "SELECT first_name, last_name, degree, identifier, identifier_scheme, identifier_scheme_uri, affiliation, affiliation_identifier, affiliation_identifier_scheme, affiliation_identifier_scheme_uri, role FROM study_overall_official WHERE study_id = %s",
         (study_id,),
     )
 
-    contacts_locations_module["OverallOfficialList"] = []
-
     study_overall_officials = cur.fetchall()
+
+    overall_officals = []
 
     if study_overall_officials is not None:
         for row in study_overall_officials:
             item = {}
 
-            item["OverallOfficialName"] = row[0]
-            item["OverallOfficialAffiliation"] = row[1]
-            item["OverallOfficialRole"] = row[2]
+            item["overallOfficialFirstName"] = row[0]
+            item["overallOfficialLastName"] = row[1]
+            item["overallOfficialDegree"] = row[2]
 
-            contacts_locations_module["OverallOfficialList"].append(item)
+            if row[3] is not None and row[3] != "":
+                item["overallOfficialIdentifier"] = {}
+
+                item["overallOfficialIdentifier"]["overallOfficialIdentifierValue"] = (
+                    row[3]
+                )
+                item["overallOfficialIdentifierScheme"] = row[4]
+
+                if row[5] is not None and row[5] != "":
+                    item["overallOfficialIdentifier"]["schemeURI"] = row[5]
+
+            item["overallOfficialAffiliation"] = {
+                "overallOfficialAffiliationName": row[6]
+            }
+
+            if row[7] is not None and row[7] != "":
+                item["overallOfficialAffiliation"][
+                    "overallOfficialAffiliationIdentifier"
+                ] = {}
+
+                item["overallOfficialAffiliation"][
+                    "overallOfficialAffiliationIdentifier"
+                ]["overallOfficialAffiliationIdentifierValue"] = row[7]
+                item["overallOfficialAffiliation"][
+                    "overallOfficialAffiliationIdentifier"
+                ]["overallOfficialAffiliationIdentifierScheme"] = row[8]
+
+                if row[9] is not None and row[9] != "":
+                    item["overallOfficialAffiliation"][
+                        "overallOfficialAffiliationIdentifier"
+                    ]["schemeURI"] = row[9]
+
+            if row[10] is not None and row[10] != "":
+                item["overallOfficialRole"] = row[10]
+
+            overall_officals.append(item)
+
+    contacts_locations_module["overallOfficialList"] = overall_officals
 
     # Get the study locations metadata
     cur.execute(
-        "SELECT facility, status, city, state, zip, country FROM study_location WHERE study_id = %s",
+        "SELECT facility, status, city, state, zip, country, identifier, identifier_scheme, identifier_scheme_uri FROM study_location WHERE study_id = %s",
         (study_id,),
     )
 
     study_locations = cur.fetchall()
 
-    contacts_locations_module["LocationList"] = []
+    location_list = []
 
     if study_locations is not None:
         for row in study_locations:
             item = {}
 
-            item["LocationFacility"] = row[0]
-            item["LocationStatus"] = row[1]
-            item["LocationCity"] = row[2]
+            item["locationFacility"] = row[0]
+            item["locationStatus"] = row[1]
+            item["locationCity"] = row[2]
+
             if row[3] is not None and row[3] != "":
-                item["LocationState"] = row[3]
+                item["locationState"] = row[3]
+
             if row[4] is not None and row[4] != "":
-                item["LocationZip"] = row[4]
-            item["LocationCountry"] = row[5]
+                item["locationZip"] = row[4]
 
-            contacts_locations_module["LocationList"].append(item)
+            item["locationCountry"] = row[5]
 
-    study_metadata["ContactsLocationsModule"] = contacts_locations_module
+            if row[6] is not None and row[6] != "":
+                item["locationIdentifier"] = {}
 
-    ipd_sharing_statement_module = {}
+                item["locationIdentifier"]["locationIdentifierValue"] = row[6]
+                item["locationIdentifierScheme"] = row[7]
 
-    # Get the study IPD sharing metadata
-    cur.execute(
-        "SELECT ipd_sharing, ipd_sharing_description, ipd_sharing_info_type_list, ipd_sharing_time_frame, ipd_sharing_access_criteria, ipd_sharing_url FROM study_ipdsharing WHERE study_id = %s",
-        (study_id,),
-    )
+                if row[8] is not None and row[8] != "":
+                    item["locationIdentifier"]["schemeURI"] = row[8]
 
-    ipd_sharing = cur.fetchone()
+            location_list.append(item)
 
-    bool_ipd_share = ipd_sharing[0]
-    ipd_sharing_statement_module["IPDSharing"] = ipd_sharing[0]
-    if bool_ipd_share == "No" and ipd_sharing[1] is not None and ipd_sharing[1] != "":
-        ipd_sharing_statement_module["IPDSharingDescription"] = ipd_sharing[1]
-    if bool_ipd_share == "Yes":
-        ipd_sharing_statement_module["IPDSharingDescription"] = ipd_sharing[1]
+    contacts_locations_module["locationList"] = location_list
 
-    ipd_sharing_statement_module["IPDSharingInfoTypeList"] = []
-    if ipd_sharing[2] is not None:
-        for row in ipd_sharing[2]:
-            ipd_sharing_statement_module["IPDSharingInfoTypeList"].append(row)
-
-    if (
-        bool_ipd_share == "No"
-        and ipd_sharing_statement_module["IPDSharingInfoTypeList"] == []
-    ):
-        # Delete key if empty
-        del ipd_sharing_statement_module["IPDSharingInfoTypeList"]
-
-    if bool_ipd_share == "No" and ipd_sharing[3] is not None and ipd_sharing[3] != "":
-        ipd_sharing_statement_module["IPDSharingTimeFrame"] = ipd_sharing[3]
-    if bool_ipd_share == "Yes":
-        ipd_sharing_statement_module["IPDSharingTimeFrame"] = ipd_sharing[3]
-
-    if bool_ipd_share == "No" and ipd_sharing[4] is not None and ipd_sharing[4] != "":
-        ipd_sharing_statement_module["IPDSharingAccessCriteria"] = ipd_sharing[4]
-    if bool_ipd_share == "Yes":
-        ipd_sharing_statement_module["IPDSharingAccessCriteria"] = ipd_sharing[4]
-
-    if bool_ipd_share == "No" and ipd_sharing[5] is not None and ipd_sharing[5] != "":
-        ipd_sharing_statement_module["IPDSharingURL"] = ipd_sharing[5]
-    if bool_ipd_share == "Yes":
-        ipd_sharing_statement_module["IPDSharingURL"] = ipd_sharing[5]
-
-    study_metadata["IPDSharingStatementModule"] = ipd_sharing_statement_module
-
-    references_module = {}
-
-    # Get the study references metadata (publications)
-    cur.execute(
-        "SELECT identifier, type, citation FROM study_reference WHERE study_id = %s",
-        (study_id,),
-    )
-
-    study_references = cur.fetchall()
-
-    references_module["ReferenceList"] = []
-
-    if study_references is not None:
-        for row in study_references:
-            item = {}
-
-            if row[0] is not None and row[0] != "":
-                item["ReferenceID"] = row[0]
-            if row[1] is not None and row[1] != "":
-                item["ReferenceType"] = row[1]
-            if row[2] is not None and row[2] != "":
-                item["ReferenceCitation"] = row[2]
-
-            references_module["ReferenceList"].append(item)
-
-    # Get the study links metadata
-    cur.execute(
-        "SELECT url, title FROM study_link WHERE study_id = %s",
-        (study_id,),
-    )
-
-    study_links = cur.fetchall()
-
-    references_module["SeeAlsoLinkList"] = []
-
-    if study_links is not None:
-        for row in study_links:
-            item = {}
-
-            item["SeeAlsoLinkURL"] = row[0]
-            if row[1] is not None and row[1] != "":
-                item["SeeAlsoLinkLabel"] = row[1]
-
-            references_module["SeeAlsoLinkList"].append(item)
-
-    # Get the study available IPD
-    cur.execute(
-        "SELECT identifier, type, url, comment FROM study_available_ipd WHERE study_id = %s",
-        (study_id,),
-    )
-
-    study_available_ipd = cur.fetchall()
-
-    references_module["AvailIPDList"] = []
-
-    if study_available_ipd is not None:
-        for row in study_available_ipd:
-            item = {}
-
-            item["AvailIPDId"] = row[0]
-            item["AvailIPDType"] = row[1]
-            item["AvailIPDURL"] = row[2]
-            if row[3]:
-                item["AvailIPDComment"] = row[3]
-
-            references_module["AvailIPDList"].append(item)
-
-    study_metadata["ReferencesModule"] = references_module
+    study_metadata["contactsLocationsModule"] = contacts_locations_module
 
     conn.commit()
     conn.close()

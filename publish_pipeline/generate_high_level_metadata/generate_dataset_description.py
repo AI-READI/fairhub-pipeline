@@ -149,23 +149,29 @@ def pipeline():
                 affiliation_item = {}
 
                 affiliation_item["affiliationName"] = affiliation["name"]
+
+                affiliation_item["affiliationIdentifier"] = {}
+
                 if (
                     affiliation["identifier"] is not None
                     and affiliation["identifier"] != ""
                 ):
-                    affiliation_item["affiliationIdentifier"] = affiliation[
-                        "identifier"
-                    ]
+                    affiliation_item["affiliationIdentifier"][
+                        "affiliationIdentifierValue"
+                    ] = affiliation["identifier"]
+
                 if affiliation["scheme"] is not None and affiliation["scheme"] != "":
-                    affiliation_item["affiliationIdentifierScheme"] = affiliation[
-                        "scheme"
-                    ]
+                    affiliation_item["affiliationIdentifier"][
+                        "affiliationIdentifierScheme"
+                    ] = affiliation["scheme"]
 
                 if (
                     affiliation["scheme_uri"] is not None
                     and affiliation["scheme_uri"] != ""
                 ):
-                    affiliation_item["schemeURI"] = affiliation["scheme_uri"]
+                    affiliation_item["affiliationIdentifier"]["schemeURI"] = (
+                        affiliation["scheme_uri"]
+                    )
 
                 item["affiliation"].append(affiliation_item)
 
@@ -221,22 +227,29 @@ def pipeline():
                 affiliation_item = {}
 
                 affiliation_item["affiliationName"] = affiliation["name"]
+
+                affiliation_item["affiliationIdentifier"] = {}
+
                 if (
                     affiliation["identifier"] is not None
                     and affiliation["identifier"] != ""
                 ):
-                    affiliation_item["affiliationIdentifier"] = affiliation[
-                        "identifier"
-                    ]
+                    affiliation_item["affiliationIdentifier"][
+                        "affiliationIdentifierValue"
+                    ] = affiliation["identifier"]
+
                 if affiliation["scheme"] is not None and affiliation["scheme"] != "":
-                    affiliation_item["affiliationIdentifierScheme"] = affiliation[
-                        "scheme"
-                    ]
+                    affiliation_item["affiliationIdentifier"][
+                        "affiliationIdentifierScheme"
+                    ] = affiliation["scheme"]
+
                 if (
                     affiliation["scheme_uri"] is not None
                     and affiliation["scheme_uri"] != ""
                 ):
-                    affiliation_item["schemeURI"] = affiliation["scheme_uri"]
+                    affiliation_item["affiliationIdentifier"]["schemeURI"] = (
+                        affiliation["scheme_uri"]
+                    )
 
                 item["affiliation"].append(affiliation_item)
 
@@ -377,14 +390,20 @@ def pipeline():
             item = {}
 
             item["subjectValue"] = subject[0]
+
+            item["subjectIdentifier"] = {}
+
             if subject[1] is not None and subject[1] != "":
-                item["subjectScheme"] = subject[1]
+                item["subjectIdentifier"]["subjectScheme"] = subject[1]
+
             if subject[2] is not None and subject[2] != "":
-                item["schemeURI"] = subject[2]
+                item["subjectIdentifier"]["schemeURI"] = subject[2]
+
             if subject[3] is not None and subject[3] != "":
-                item["valueURI"] = subject[3]
+                item["subjectIdentifier"]["valueURI"] = subject[3]
+
             if subject[4] is not None and subject[4] != "":
-                item["classificationCode"] = subject[4]
+                item["subjectIdentifier"]["classificationCode"] = subject[4]
 
             subjects.append(item)
 
@@ -449,12 +468,15 @@ def pipeline():
 
             if right[1] is not None and right[1] != "":
                 item["rightsURI"] = right[1]
+
+            item["rightsIdentifier"] = {}
+
             if right[2] is not None and right[2] != "":
-                item["rightsIdentifier"] = right[2]
+                item["rightsIdentifier"]["rightsIdentifierValue"] = right[2]
             if right[3] is not None and right[3] != "":
-                item["rightsIdentifierScheme"] = right[3]
+                item["rightsIdentifier"]["rightsIdentifierScheme"] = right[3]
             if right[4] is not None and right[4] != "":
-                item["schemeURI"] = right[4]
+                item["rightsIdentifier"]["schemeURI"] = right[4]
 
             rights.append(item)
 
