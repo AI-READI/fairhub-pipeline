@@ -51,9 +51,7 @@ def pipeline():
 
     # print(json.dumps(dataset_description))
     # Create payload for doi registration
-    print("UHHHH")
     payload = pyfairdatatools.utils.create_payload(dataset_description)
-    print(json.dumps(payload))
 
     url = f"{config.DATACITE_API_URL}/dois"
     headers = {

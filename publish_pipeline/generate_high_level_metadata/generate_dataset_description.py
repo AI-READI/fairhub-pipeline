@@ -398,9 +398,23 @@ def pipeline():
         dataset_managing_organisation[1] is not None
         and dataset_managing_organisation[1] != ""
     ):
-        managing_organisation["rorId"] = dataset_managing_organisation[1]
+        managing_organisation["managingOrganizationIdentifier"] = {
+            "managingOrganizationIdentifierValue": dataset_managing_organisation[1]
+        }
 
-    dataset_metadata["ManagingOrganisation"] = managing_organisation
+    if (
+        dataset_managing_organisation[2] is not None
+        and dataset_managing_organisation[2] != ""
+    ):
+        managing_organisation["managingOrganizationIdentifier"]["managingOrganizationIdentifierScheme"] = dataset_managing_organisation[2]
+
+    if (
+        dataset_managing_organisation[3] is not None
+        and dataset_managing_organisation[3] != ""
+    ):
+        managing_organisation["managingOrganizationIdentifier"]["schemeURI"] = dataset_managing_organisation[3]
+
+    dataset_metadata["managingOrganization"] = managing_organisation
 
     access_details = {}
 
