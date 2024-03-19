@@ -3,14 +3,12 @@
 import base64
 import datetime
 import json
-import random
-import string
 
 import azure.storage.blob as azureblob
 import requests
 
-import config
 import pyfairdatatools
+import config
 
 
 def pipeline():
