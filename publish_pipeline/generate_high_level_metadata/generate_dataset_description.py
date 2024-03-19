@@ -5,6 +5,7 @@ import datetime
 import pathlib
 import tempfile
 import uuid
+import json
 
 import azure.storage.blob as azureblob
 import psycopg2
@@ -28,8 +29,8 @@ def pipeline():
 
     cur = conn.cursor()
 
-    study_id = "c588f59c-cacb-4e52-99dd-95b37dcbfd5c"
-    dataset_id = "af4be921-e507-41a9-9328-4cbb4b7dca1c"
+    study_id = "e631d9c1-a74a-413f-a5ce-64535a7302b0"
+    dataset_id = "f636e555-4c2d-4c89-a79b-a0a63bc29664"
 
     cur.execute(
         "SELECT * FROM dataset WHERE id = %s AND study_id = %s",
@@ -175,6 +176,9 @@ def pipeline():
 
                 item["affiliation"].append(affiliation_item)
 
+            if item["affiliation"] == []:
+                del item["affiliation"]
+
             creators.append(item)
 
     dataset_metadata["creator"] = creators
@@ -253,9 +257,13 @@ def pipeline():
 
                 item["affiliation"].append(affiliation_item)
 
+            if item["affiliation"] == []:
+                del item["affiliation"]
+
             contributors.append(item)
 
-    dataset_metadata["contributor"] = contributors
+    if len(contributors) > 0:
+        dataset_metadata["contributor"] = contributors
 
     # Get the publication year
     publication_year = str(datetime.datetime.now().year)
@@ -413,19 +421,34 @@ def pipeline():
 
     # Get the dataset managing organization
     cur.execute(
-        "SELECT managing_organization_name, managing_organization_ror_id FROM dataset_other WHERE dataset_id = %s",
+        "SELECT name, identifier, identifier_scheme, identifier_scheme_uri FROM dataset_managing_organization WHERE dataset_id = %s",
         (dataset_id,),
     )
 
     dataset_managing_organization = cur.fetchone()
+    print(dataset_managing_organization)
 
     managing_organization["name"] = dataset_managing_organization[0]
     if (
         dataset_managing_organization[1] is not None
         and dataset_managing_organization[1] != ""
     ):
-        managing_organization["rorId"] = dataset_managing_organization[1]
+        managing_organization["managingOrganizationIdentifier"] = {}
+        managing_organization["managingOrganizationIdentifier"]["managingOrganizationIdentifierValue"] = dataset_managing_organization[1]
 
+    if (
+        dataset_managing_organization[2] is not None
+        and dataset_managing_organization[2] != ""
+    ):
+        managing_organization["managingOrganizationIdentifier"]["managingOrganizationScheme"] = dataset_managing_organization[2]
+
+    if (
+        dataset_managing_organization[3] is not None
+        and dataset_managing_organization[3] != ""
+    ):
+        managing_organization["managingOrganizationIdentifier"]["schemeURI"] = dataset_managing_organization[3]
+
+    print(managing_organization)
     dataset_metadata["managingOrganization"] = managing_organization
 
     access_details = {}
@@ -591,6 +614,8 @@ def pipeline():
     temp_folder_path = tempfile.mkdtemp()
 
     temp_file_path = pathlib.Path(temp_folder_path, "dataset_description.json")
+    
+    print(json.dumps(dataset_metadata))
 
     data_is_valid = pyfairdatatools.validate.validate_dataset_description(
         data=dataset_metadata
