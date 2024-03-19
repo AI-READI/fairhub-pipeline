@@ -413,7 +413,7 @@ def pipeline():
 
     # Get the dataset managing organization
     cur.execute(
-        "SELECT managing_organization_name, identifier, identifier_scheme, identifier_scheme_uri FROM dataset_other WHERE dataset_id = %s",
+        "SELECT managing_organization_name, identifier, identifier_scheme, identifier_scheme_uri FROM dataset_managing_organization WHERE dataset_id = %s",
         (dataset_id,),
     )
 
