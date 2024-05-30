@@ -1,7 +1,7 @@
 """Azure Function App for ETL pipeline."""
+import json
 
 import logging
-
 import azure.functions as func
 
 from publish_pipeline.generate_high_level_metadata.generate_changelog import (
@@ -191,3 +191,18 @@ def moving_folders(req: func.HttpRequest) -> func.HttpResponse:
 def copying_folders(req: func.HttpRequest) -> func.HttpResponse:
     """Copies the directories along with the files in the Azure Database."""
     return file_operations.file_operation(file_operations.copy_directory, req)
+
+
+@app.route(route="listing-structure", auth_level=func.AuthLevel.FUNCTION)
+def listing_folder_structure(req: func.HttpRequest) -> func.HttpResponse:
+    """List the directories along with the files in the Azure Database."""
+    try:
+        file_operations.pipeline()
+        file_operations.get_file_tree()
+        # return func.HttpResponse("Success", status_code=200)
+        return func.HttpResponse(
+            json.dumps(file_operations.get_file_tree().to_dict()), status_code=200
+        )
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Internal Server Error", status_code=500)
