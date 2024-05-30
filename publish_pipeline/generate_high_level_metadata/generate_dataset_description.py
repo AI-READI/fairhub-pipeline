@@ -5,6 +5,7 @@ import datetime
 import pathlib
 import tempfile
 import uuid
+import json
 
 import azure.storage.blob as azureblob
 import psycopg2
@@ -28,8 +29,8 @@ def pipeline():
 
     cur = conn.cursor()
 
-    study_id = "c588f59c-cacb-4e52-99dd-95b37dcbfd5c"
-    dataset_id = "af4be921-e507-41a9-9328-4cbb4b7dca1c"
+    study_id = "e631d9c1-a74a-413f-a5ce-64535a7302b0"
+    dataset_id = "f636e555-4c2d-4c89-a79b-a0a63bc29664"
 
     cur.execute(
         "SELECT * FROM dataset WHERE id = %s AND study_id = %s",
@@ -149,25 +150,34 @@ def pipeline():
                 affiliation_item = {}
 
                 affiliation_item["affiliationName"] = affiliation["name"]
+
+                affiliation_item["affiliationIdentifier"] = {}
+
                 if (
                     affiliation["identifier"] is not None
                     and affiliation["identifier"] != ""
                 ):
-                    affiliation_item["affiliationIdentifier"] = affiliation[
-                        "identifier"
-                    ]
+                    affiliation_item["affiliationIdentifier"][
+                        "affiliationIdentifierValue"
+                    ] = affiliation["identifier"]
+
                 if affiliation["scheme"] is not None and affiliation["scheme"] != "":
-                    affiliation_item["affiliationIdentifierScheme"] = affiliation[
-                        "scheme"
-                    ]
+                    affiliation_item["affiliationIdentifier"][
+                        "affiliationIdentifierScheme"
+                    ] = affiliation["scheme"]
 
                 if (
                     affiliation["scheme_uri"] is not None
                     and affiliation["scheme_uri"] != ""
                 ):
-                    affiliation_item["schemeURI"] = affiliation["scheme_uri"]
+                    affiliation_item["affiliationIdentifier"]["schemeURI"] = (
+                        affiliation["scheme_uri"]
+                    )
 
                 item["affiliation"].append(affiliation_item)
+
+            if item["affiliation"] == []:
+                del item["affiliation"]
 
             creators.append(item)
 
@@ -221,28 +231,39 @@ def pipeline():
                 affiliation_item = {}
 
                 affiliation_item["affiliationName"] = affiliation["name"]
+
+                affiliation_item["affiliationIdentifier"] = {}
+
                 if (
                     affiliation["identifier"] is not None
                     and affiliation["identifier"] != ""
                 ):
-                    affiliation_item["affiliationIdentifier"] = affiliation[
-                        "identifier"
-                    ]
+                    affiliation_item["affiliationIdentifier"][
+                        "affiliationIdentifierValue"
+                    ] = affiliation["identifier"]
+
                 if affiliation["scheme"] is not None and affiliation["scheme"] != "":
-                    affiliation_item["affiliationIdentifierScheme"] = affiliation[
-                        "scheme"
-                    ]
+                    affiliation_item["affiliationIdentifier"][
+                        "affiliationIdentifierScheme"
+                    ] = affiliation["scheme"]
+
                 if (
                     affiliation["scheme_uri"] is not None
                     and affiliation["scheme_uri"] != ""
                 ):
-                    affiliation_item["schemeURI"] = affiliation["scheme_uri"]
+                    affiliation_item["affiliationIdentifier"]["schemeURI"] = (
+                        affiliation["scheme_uri"]
+                    )
 
                 item["affiliation"].append(affiliation_item)
 
+            if item["affiliation"] == []:
+                del item["affiliation"]
+
             contributors.append(item)
 
-    dataset_metadata["contributor"] = contributors
+    if len(contributors) > 0:
+        dataset_metadata["contributor"] = contributors
 
     # Get the publication year
     publication_year = str(datetime.datetime.now().year)
@@ -377,14 +398,20 @@ def pipeline():
             item = {}
 
             item["subjectValue"] = subject[0]
+
+            item["subjectIdentifier"] = {}
+
             if subject[1] is not None and subject[1] != "":
-                item["subjectScheme"] = subject[1]
+                item["subjectIdentifier"]["subjectScheme"] = subject[1]
+
             if subject[2] is not None and subject[2] != "":
-                item["schemeURI"] = subject[2]
+                item["subjectIdentifier"]["schemeURI"] = subject[2]
+
             if subject[3] is not None and subject[3] != "":
-                item["valueURI"] = subject[3]
+                item["subjectIdentifier"]["valueURI"] = subject[3]
+
             if subject[4] is not None and subject[4] != "":
-                item["classificationCode"] = subject[4]
+                item["subjectIdentifier"]["classificationCode"] = subject[4]
 
             subjects.append(item)
 
@@ -394,19 +421,34 @@ def pipeline():
 
     # Get the dataset managing organization
     cur.execute(
-        "SELECT managing_organization_name, managing_organization_ror_id FROM dataset_other WHERE dataset_id = %s",
+        "SELECT name, identifier, identifier_scheme, identifier_scheme_uri FROM dataset_managing_organization WHERE dataset_id = %s",
         (dataset_id,),
     )
 
     dataset_managing_organization = cur.fetchone()
+    print(dataset_managing_organization)
 
     managing_organization["name"] = dataset_managing_organization[0]
     if (
         dataset_managing_organization[1] is not None
         and dataset_managing_organization[1] != ""
     ):
-        managing_organization["rorId"] = dataset_managing_organization[1]
+        managing_organization["managingOrganizationIdentifier"] = {}
+        managing_organization["managingOrganizationIdentifier"]["managingOrganizationIdentifierValue"] = dataset_managing_organization[1]
 
+    if (
+        dataset_managing_organization[2] is not None
+        and dataset_managing_organization[2] != ""
+    ):
+        managing_organization["managingOrganizationIdentifier"]["managingOrganizationScheme"] = dataset_managing_organization[2]
+
+    if (
+        dataset_managing_organization[3] is not None
+        and dataset_managing_organization[3] != ""
+    ):
+        managing_organization["managingOrganizationIdentifier"]["schemeURI"] = dataset_managing_organization[3]
+
+    print(managing_organization)
     dataset_metadata["managingOrganization"] = managing_organization
 
     access_details = {}
@@ -449,12 +491,15 @@ def pipeline():
 
             if right[1] is not None and right[1] != "":
                 item["rightsURI"] = right[1]
+
+            item["rightsIdentifier"] = {}
+
             if right[2] is not None and right[2] != "":
-                item["rightsIdentifier"] = right[2]
+                item["rightsIdentifier"]["rightsIdentifierValue"] = right[2]
             if right[3] is not None and right[3] != "":
-                item["rightsIdentifierScheme"] = right[3]
+                item["rightsIdentifier"]["rightsIdentifierScheme"] = right[3]
             if right[4] is not None and right[4] != "":
-                item["schemeURI"] = right[4]
+                item["rightsIdentifier"]["schemeURI"] = right[4]
 
             rights.append(item)
 
@@ -569,6 +614,8 @@ def pipeline():
     temp_folder_path = tempfile.mkdtemp()
 
     temp_file_path = pathlib.Path(temp_folder_path, "dataset_description.json")
+    
+    print(json.dumps(dataset_metadata))
 
     data_is_valid = pyfairdatatools.validate.validate_dataset_description(
         data=dataset_metadata
