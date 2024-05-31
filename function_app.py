@@ -1,4 +1,5 @@
 """Azure Function App for ETL pipeline."""
+
 import json
 
 import logging
@@ -31,6 +32,13 @@ from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
 )
 from utils import file_operations
+from trigger_pipeline.study_trigger.trigger_all_studies import (
+    pipeline as trigger_pipeline,
+)
+from trigger_pipeline.study_trigger.trigger_study import (
+    pipeline as trigger_study_pipeline,
+)
+
 
 app = func.FunctionApp()
 
@@ -47,6 +55,28 @@ def hello(req: func.HttpRequest) -> func.HttpResponse:
 def echo(req: func.HttpRequest) -> func.HttpResponse:
     """Echo the request body back as a response."""
     return func.HttpResponse(req.get_body(), status_code=200, mimetype="text/plain")
+
+
+@app.route(route="trigger-all-studies", auth_level=func.AuthLevel.FUNCTION)
+def trigger_all_studies(req: func.HttpRequest) -> func.HttpResponse:
+    """Trigger all the data processing pipelines for all the studies."""
+    try:
+        trigger_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+
+@app.route(route="trigger-study", auth_level=func.AuthLevel.FUNCTION)
+def trigger_study(req: func.HttpRequest) -> func.HttpResponse:
+    """Trigger all data processing pipelines for a specific study."""
+    try:
+        trigger_study_pipeline()
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
 
 
 @app.route(route="preprocess-stage-one-env-files", auth_level=func.AuthLevel.FUNCTION)

@@ -21,26 +21,29 @@ class FileStructure:
         self.label = label
 
     def to_dict(self):
-        return {
-            "label": self.label
-        }
+        return {"label": self.label}
 
 
 class FolderStructure(FileStructure):
-    children: List['FileStructure']
+    children: List["FileStructure"]
 
-    def __init__(self, label: str, children: List['FileStructure']):
+    def __init__(self, label: str, children: List["FileStructure"]):
         super().__init__(label)
         self.children = children
 
     def to_dict(self):
         return {
             "children": [child.to_dict() for child in self.children],
-            "label": self.label
+            "label": self.label,
         }
 
 
-def move_directory(file_system: FileSystemClient, source: str, destination: str, overwrite_permitted: bool):
+def move_directory(
+    file_system: FileSystemClient,
+    source: str,
+    destination: str,
+    overwrite_permitted: bool,
+):
     source_client = file_system.get_directory_client(source)
     destination_client = file_system.get_directory_client(destination)
 
@@ -57,7 +60,12 @@ def move_directory(file_system: FileSystemClient, source: str, destination: str,
         )
 
 
-def copy_directory(file_system: FileSystemClient, source: str, destination: str, overwrite_permitted: bool) -> None:
+def copy_directory(
+    file_system: FileSystemClient,
+    source: str,
+    destination: str,
+    overwrite_permitted: bool,
+) -> None:
     """Moving directories while implementing subsequent copies (recursion)"""
 
     source_client = file_system.get_directory_client(source)
@@ -102,7 +110,9 @@ def file_operation(operation: Callable, req: func.HttpRequest) -> func.HttpRespo
     )
 
     if overwrite_permitted not in ["true", "false"]:
-        return func.HttpResponse("Overwrite-permitted must be true or false", status_code=500)
+        return func.HttpResponse(
+            "Overwrite-permitted must be true or false", status_code=500
+        )
 
     overwrite: bool = overwrite_permitted.lower().strip() == "true"
 
@@ -142,18 +152,22 @@ def recurse_file_tree(file_system: FileSystemClient, source: str) -> FileStructu
         raise FileException("source directory does not exist!")
 
     source_path: str = source_client.get_directory_properties().name
-    return FolderStructure(os.path.basename(source_path),
-                           [recurse_file_tree(file_system, child_path)
-                            if child_path.is_directory
-                            else FileStructure(os.path.basename(child_path.name))
-                            for child_path
-                            in file_system.get_paths(source_path, recursive=False)
-                            ])
+    return FolderStructure(
+        os.path.basename(source_path),
+        [
+            (
+                recurse_file_tree(file_system, child_path)
+                if child_path.is_directory
+                else FileStructure(os.path.basename(child_path.name))
+            )
+            for child_path in file_system.get_paths(source_path, recursive=False)
+        ],
+    )
 
 
 def pipeline():
     """
-        Reads the file structure from azure
+    Reads the file structure from azure
     """
 
     conn = psycopg2.connect(

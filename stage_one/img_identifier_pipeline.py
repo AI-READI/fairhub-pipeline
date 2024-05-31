@@ -20,7 +20,7 @@ def pipeline():
         if not zip_file_path.endswith(".zip"):
             return "Not a zip file"
 
-        elif "ENV" in zip_file_path:
+        if "ENV" in zip_file_path:
             return extract_env_info(zip_file_path)
 
         elif any(
