@@ -1,34 +1,37 @@
-"""Trigger all data processing pipelines for a specific study"""
+"""Trigger all the data processing pipelines for all the studies"""
 
 import azure.storage.filedatalake as azurelake
-
+import requests
 import config
 
 
-def pipeline(study_id: str):
-    """Reads the contents of a specific study folder. For each folder trigger the data processing pipeline. Each folder in this stage is a datatype so the datatype is passed to the data processing pipeline as an argument."""
+def pipeline():
+    """Reads the contents of the stage-1-container. For each study, triggers the data processing pipeline. Each folder in the stage-1-container is a study. The study_id is the name of the folder. The study_id is passed to the data processing pipeline as an argument."""
 
-    if study_id is None or not study_id:
-        raise ValueError("study_id is required")
-
-    study_folder = f"{study_id}/pooled-data"
-
-    # Get the container client for the study
-    data_type_folders = azurelake.FileSystemClient.from_connection_string(
+    # Get the container client
+    study_folders = azurelake.FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
 
-    # Get the list of folders in the study folder
-    paths = data_type_folders.get_paths(recursive=False, path=study_folder)
+    paths = study_folders.get_paths(recursive=False)
 
     str_paths = [str(path.name) for path in paths]
 
-    for data_type in str_paths:
+    for study_id in str_paths:
         # Trigger the data processing pipeline
-        print(f"Triggering data processing pipeline for study: {data_type}")
+        print(f"Triggering data processing pipeline for study: {study_id}")
+
+        body = {"study_id": study_id}
 
         # Call the data processing pipeline
-        # data_processing_pipeline(data_type)
+        requests.post(
+            f"{config.FAIRHUB_PIPELINE_URL}/trigger-study",
+            json=body,
+            headers={
+                "Authorization": f"Bearer {config.FAIRHUB_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            },
+        )
 
     return

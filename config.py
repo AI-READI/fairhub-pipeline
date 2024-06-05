@@ -41,7 +41,13 @@ AZURE_STORAGE_ACCESS_KEY = get_env("AZURE_STORAGE_ACCESS_KEY")
 AZURE_STORAGE_CONNECTION_STRING = get_env("AZURE_STORAGE_CONNECTION_STRING")
 
 DATACITE_API_URL = "https://api.datacite.org"
+FAIRHUB_PIPELINE_URL = "https://pipeline.fairhub.io/api"
 
 if FAIRHUB_ENVIRONMENT in ["staging", "dev"]:
     # Using the test environment for DataCite
     DATACITE_API_URL = "https://api.test.datacite.org"
+
+if FAIRHUB_ENVIRONMENT == "staging":
+    FAIRHUB_PIPELINE_URL = "https://staging.pipeline.fairhub.io/api"
+elif FAIRHUB_ENVIRONMENT == "dev":
+    FAIRHUB_PIPELINE_URL = "http://localhost:7071/api"

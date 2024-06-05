@@ -31,6 +31,7 @@ from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipel
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
 )
+from stage_one.maestro_2_pipeline import pipeline as maestro_2_pipeline
 from utils import file_operations
 from trigger_pipeline.study_trigger.trigger_all_studies import (
     pipeline as trigger_pipeline,
@@ -99,6 +100,36 @@ def trigger_study(req: func.HttpRequest) -> func.HttpResponse:
         study_id = content["study_id"]
 
         trigger_study_pipeline(study_id)
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+
+@app.route(route="preprocess-maestro-2", auth_level=func.AuthLevel.FUNCTION)
+def preprocess_maestro_2(req: func.HttpRequest) -> func.HttpResponse:
+    """ADS"""
+
+    # Block all other methods
+    if req.method != "POST":
+        return func.HttpResponse(
+            "Method not allowed", status_code=405, mimetype="text/plain"
+        )
+
+    req_body_bytes = req.get_body()
+    req_body = req_body_bytes.decode("utf-8")
+
+    try:
+        content = json.loads(req_body)
+
+        if "study_id" not in content:
+            return func.HttpResponse(
+                "Missing study_id", status_code=400, mimetype="text/plain"
+            )
+
+        study_id = content["study_id"]
+
+        maestro_2_pipeline(study_id)
         return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
     except Exception as e:
         print(f"Exception: {e}")
