@@ -60,6 +60,13 @@ def echo(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="trigger-all-studies", auth_level=func.AuthLevel.FUNCTION)
 def trigger_all_studies(req: func.HttpRequest) -> func.HttpResponse:
     """Trigger all the data processing pipelines for all the studies."""
+
+    # Block all other methods
+    if req.method != "POST":
+        return func.HttpResponse(
+            "Method not allowed", status_code=405, mimetype="text/plain"
+        )
+
     try:
         trigger_pipeline()
         return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
@@ -71,8 +78,27 @@ def trigger_all_studies(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="trigger-study", auth_level=func.AuthLevel.FUNCTION)
 def trigger_study(req: func.HttpRequest) -> func.HttpResponse:
     """Trigger all data processing pipelines for a specific study."""
+
+    # Block all other methods
+    if req.method != "POST":
+        return func.HttpResponse(
+            "Method not allowed", status_code=405, mimetype="text/plain"
+        )
+
+    req_body_bytes = req.get_body()
+    req_body = req_body_bytes.decode("utf-8")
+
     try:
-        trigger_study_pipeline()
+        content = json.loads(req_body)
+
+        if "study_id" not in content:
+            return func.HttpResponse(
+                "Missing study_id", status_code=400, mimetype="text/plain"
+            )
+
+        study_id = content["study_id"]
+
+        trigger_study_pipeline(study_id)
         return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
     except Exception as e:
         print(f"Exception: {e}")
