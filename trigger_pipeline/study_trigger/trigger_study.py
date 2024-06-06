@@ -1,7 +1,7 @@
 """Trigger all data processing pipelines for a specific study"""
 
 import azure.storage.filedatalake as azurelake
-
+import requests
 import config
 from pathlib import Path
 
@@ -35,6 +35,19 @@ def pipeline(study_id: str):
         if data_type == "Maestro2":
             # Call the data processing pipeline
             print("Maestro2")
+
+            body = {"study_id": study_id}
+
+            # Call the data processing pipeline
+            requests.post(
+                f"{config.FAIRHUB_PIPELINE_URL}/process-maestro-2",
+                json=body,
+                headers={
+                    "Authorization": f"Bearer {config.FAIRHUB_ACCESS_TOKEN}",
+                    "Content-Type": "application/json",
+                },
+            )
+
             # maestro2_pipeline()
         elif data_type == "EnvSensor":
             # Call the data processing pipeline

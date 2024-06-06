@@ -106,7 +106,7 @@ def trigger_study(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
 
 
-@app.route(route="preprocess-maestro-2", auth_level=func.AuthLevel.FUNCTION)
+@app.route(route="process-maestro-2", auth_level=func.AuthLevel.FUNCTION)
 def preprocess_maestro_2(req: func.HttpRequest) -> func.HttpResponse:
     """ADS"""
 
