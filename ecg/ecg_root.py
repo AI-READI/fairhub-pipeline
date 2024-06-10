@@ -1,9 +1,9 @@
 import logging
 
 from .standards import DataDomain
-from . import ecg_converter as ecg_conv
-from . import ecg_metadata as ecg_meta
-from . import ecg_dataplot as ecg_plot
+import ecg.ecg_converter as ecg_conv
+import ecg.ecg_metadata as ecg_meta
+import ecg.ecg_dataplot as ecg_plot
 
 
 # Create logger with 'ecg'

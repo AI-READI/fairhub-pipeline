@@ -6,7 +6,7 @@ import shutil
 from sierraecg import read_file as read_ecg_file
 from wfdb.io.convert.csv import csv_to_wfdb
 
-from converter import ecg_utils as ecg_utils
+from ecg import ecg_utils as ecg_utils
 
 conv_logger = logging.getLogger("ecg.converter")
 

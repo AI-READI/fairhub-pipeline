@@ -5,6 +5,12 @@
 # Core
 pyfairdatatools
 jsonschema
+pandas
+xmltodict
+
+# ecg
+sierraecg
+wfdb
 
 # Azure
 azure-functions
