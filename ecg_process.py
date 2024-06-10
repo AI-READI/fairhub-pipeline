@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import uuid
+import shutil
 import ecg.ecg_root as ecg
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
@@ -36,6 +37,12 @@ def pipeline():
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
+
+    # Delete the output folder if it exists
+    try:
+        file_system_client.delete_directory(output_folder)
+    except:
+        pass
 
     paths = file_system_client.get_paths(path=input_folder)
 
@@ -87,34 +94,27 @@ def pipeline():
 
         xecg = ecg.ECG()
 
-        print("paths", ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path)
-
         conv_retval_dict = xecg.convert(
             ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
         )
 
-        print(
-            f"Converted {file_name} to {wfdb_temp_folder_path} - ({idx}/{len(str_paths)})"
-        )
+        print(f"Converted {file_name} - ({idx}/{len(str_paths)})")
 
-        print(conv_retval_dict)
-
-        # print the contents of the temp folder
-        for root, dirs, files in os.walk(wfdb_temp_folder_path):
-            for file in files:
-                print(file)
+        output_files = conv_retval_dict["output_files"]
 
         print(f"Uploading {file_name} to {output_folder} - ({idx}/{len(str_paths)}")
 
-        # upload the file to the output folder
-        with open(download_path, "rb") as data:
-            output_blob_client = blob_service_client.get_blob_client(
-                container="stage-1-container", blob=f"{output_folder}/{file_name}"
-            )
-            # output_blob_client.upload_blob(data)
+        for file in output_files:
+            with open(f"{file}", "rb") as data:
+                output_blob_client = blob_service_client.get_blob_client(
+                    container="stage-1-container", blob=f"{output_folder}/{file}"
+                )
+                output_blob_client.upload_blob(data)
 
-        os.remove(ecg_temp_folder_path)
-        os.remove(wfdb_temp_folder_path)
+        print(f"Uploaded {file_name} to {output_folder} - ({idx}/{len(str_paths)})")
+
+        shutil.rmtree(ecg_temp_folder_path)
+        shutil.rmtree(wfdb_temp_folder_path)
         os.remove(download_path)
 
     # write the paths to the log file
@@ -133,3 +133,7 @@ def pipeline():
 
 if __name__ == "__main__":
     pipeline()
+
+    # delete the ecg.log file
+    if os.path.exists("ecg.log"):
+        os.remove("ecg.log")
