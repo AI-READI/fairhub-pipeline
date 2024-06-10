@@ -1,6 +1,6 @@
 import logging
 
-from .standards import DataDomain
+from ecg.ecg_standards import DataDomain
 import ecg.ecg_converter as ecg_conv
 import ecg.ecg_metadata as ecg_meta
 import ecg.ecg_dataplot as ecg_plot

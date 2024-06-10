@@ -87,7 +87,9 @@ def pipeline():
 
         xecg = ecg.ECG()
 
-        conv_retval_dict = xecg.convert_ecg(
+        print("paths", ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path)
+
+        conv_retval_dict = xecg.convert(
             ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
         )
 
