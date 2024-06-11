@@ -176,7 +176,7 @@ def pipeline(study_id: str):
 
 
 if __name__ == "__main__":
-    pipeline()
+    pipeline("AI-READI")
 
     # delete the ecg.log file
     if os.path.exists("ecg.log"):
