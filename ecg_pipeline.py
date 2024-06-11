@@ -11,7 +11,9 @@ import azure.storage.filedatalake as azurelake
 import config
 
 
-def pipeline(study_id: str):
+def pipeline():
+
+    study_id = "AI-READI"
 
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
@@ -108,10 +110,11 @@ def pipeline(study_id: str):
             ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
         )
 
+        print("conv_retval_dict", conv_retval_dict)
+
         print(f"Converted {file_name} - ({log_idx}/{len(str_paths)})")
 
         output_files = conv_retval_dict["output_files"]
-        participant_id = conv_retval_dict["participantID"]
 
         print(
             f"Uploading {file_name} to {processed_data_output_folder} - ({log_idx}/{len(str_paths)}"
@@ -122,7 +125,7 @@ def pipeline(study_id: str):
         for file in output_files:
             with open(f"{file}", "rb") as data:
                 file_name = file.split("/")[-1]
-
+                participant_id = file_name.split("_")[0]
                 output_blob_client = blob_service_client.get_blob_client(
                     container="stage-1-container",
                     blob=f"{processed_data_output_folder}/{participant_id}/{file_name}",
