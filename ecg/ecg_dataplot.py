@@ -2,6 +2,7 @@ import logging
 
 
 import wfdb
+import matplotlib.pyplot as plt
 
 
 dataplot_logger = logging.getLogger("ecg.dataplot")
@@ -30,6 +31,8 @@ def make_dataplot(conv_dict, output_folder):
     )
     full_plot_path = f"{output_folder}/{w_base}__wfdb_fig_ecg_grids.png"
     _ = fig_handle_grids.savefig(full_plot_path)
+
+    plt.close("all")
 
     dataplot_dict["participantID"] = conv_dict["participantID"]
     dataplot_dict["output_files"] = [full_plot_path]
