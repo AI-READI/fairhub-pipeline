@@ -11,12 +11,16 @@ import azure.storage.filedatalake as azurelake
 import config
 
 
-def pipeline(study_id: str):
+def pipeline(study_id: str):  # sourcery skip: low-code-quality
+    """Process ecg data files for a study
+    Args:
+        study_id (str): the study id
+    """
 
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/ECG-pool"
+    input_folder = f"{study_id}/pooled-data/ECG"
     processed_data_output_folder = f"{study_id}/pooled-data/ECG-processed"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
 
@@ -50,11 +54,46 @@ def pipeline(study_id: str):
 
     paths = file_system_client.get_paths(path=input_folder)
 
-    str_paths = []
+    file_paths = []
 
     for path in paths:
         t = str(path.name)
-        str_paths.append(t)
+
+        file_name = t.split("/")[-1]
+
+        print(f"Processing {file_name}")
+
+        # Check if the item is an xml file
+        if file_name.split(".")[-1] != "xml":
+            continue
+
+        # Get the parent folder of the file.
+        # The name of this folder is in the format siteName_dataType_startDate-endDate
+        batch_folder = t.split("/")[-2]
+
+        print(f"Batch folder: {batch_folder}")
+
+        # Check if the folder name is in the format siteName_dataType_startDate-endDate
+        if len(batch_folder.split("_")) != 3:
+            continue
+
+        site_name, data_type, start_date_end_date = batch_folder.split("_")
+
+        start_date = start_date_end_date.split("-")[0]
+        end_date = start_date_end_date.split("-")[1]
+
+        file_paths.append(
+            {
+                "file_path": t,
+                "batch_folder": batch_folder,
+                "site_name": site_name,
+                "data_type": data_type,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+        )
+
+    print(f"Found {len(file_paths)} files in {input_folder}")
 
     # Create a temporary folder on the local machine
     temp_folder_path = tempfile.mkdtemp()
@@ -62,16 +101,20 @@ def pipeline(study_id: str):
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
-    for idx, path in enumerate(str_paths):
+    total_files = len(file_paths)
+
+    for idx, file in enumerate(file_paths):
         log_idx = idx + 1
 
-        file_client = file_system_client.get_file_client(path)
-        is_directory = file_client.get_file_properties().metadata.get("hdi_isfolder")
+        path = file["file_path"]
 
-        if is_directory:
-            continue
+        # file_client = file_system_client.get_file_client(path)
+        # is_directory = file_client.get_file_properties().metadata.get("hdi_isfolder")
 
-        print(f"Processing {path} - ({log_idx}/{len(str_paths)})")
+        # if is_directory:
+        #     continue
+
+        print(f"Processing {path} - ({log_idx}/{total_files})")
 
         # get the file name from the path
         file_name = path.split("/")[-1]
@@ -93,9 +136,7 @@ def pipeline(study_id: str):
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
 
-        print(
-            f"Downloaded {file_name} to {download_path} - ({log_idx}/{len(str_paths)})"
-        )
+        print(f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})")
 
         ecg_path = download_path
 
@@ -108,13 +149,13 @@ def pipeline(study_id: str):
             ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
         )
 
-        print(f"Converted {file_name} - ({log_idx}/{len(str_paths)})")
+        print(f"Converted {file_name} - ({log_idx}/{total_files})")
 
         output_files = conv_retval_dict["output_files"]
         participant_id = conv_retval_dict["participantID"]
 
         print(
-            f"Uploading {file_name} to {processed_data_output_folder} - ({log_idx}/{len(str_paths)}"
+            f"Uploading {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
         # file is in the format 1001_ecg_25aafb4b.dat
@@ -125,54 +166,58 @@ def pipeline(study_id: str):
 
                 output_blob_client = blob_service_client.get_blob_client(
                     container="stage-1-container",
-                    blob=f"{processed_data_output_folder}/{participant_id}/{file_name}",
+                    blob=f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name}",
                 )
                 output_blob_client.upload_blob(data)
 
         print(
-            f"Uploaded {file_name} to {processed_data_output_folder} - ({log_idx}/{len(str_paths)})"
+            f"Uploaded {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
         # Do the data plot
-        print(f"Data plotting {file_name} - ({log_idx}/{len(str_paths)})")
+        # print(f"Data plotting {file_name} - ({log_idx}/{total_files})")
 
-        dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
+        # dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
 
-        print(f"Data plotted {file_name} - ({log_idx}/{len(str_paths)})")
+        # print(f"Data plotted {file_name} - ({log_idx}/{total_files})")
 
-        dataplot_pngs = dataplot_retval_dict["output_files"]
+        # dataplot_pngs = dataplot_retval_dict["output_files"]
 
-        print(
-            f"Uploading {file_name} to {data_plot_output_folder} - ({log_idx}/{len(str_paths)}"
-        )
+        # print(
+        #     f"Uploading {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
+        # )
 
-        for file in dataplot_pngs:
-            with open(f"{file}", "rb") as data:
-                file_name = file.split("/")[-1]
-                output_blob_client = blob_service_client.get_blob_client(
-                    container="stage-1-container",
-                    blob=f"{data_plot_output_folder}/{file_name}",
-                )
-                output_blob_client.upload_blob(data)
+        # for file in dataplot_pngs:
+        #     with open(f"{file}", "rb") as data:
+        #         file_name = file.split("/")[-1]
+        #         output_blob_client = blob_service_client.get_blob_client(
+        #             container="stage-1-container",
+        #             blob=f"{data_plot_output_folder}/{file_name}",
+        #         )
+        #         output_blob_client.upload_blob(data)
 
-        print(
-            f"Uploaded {file_name} to {data_plot_output_folder} - ({log_idx}/{len(str_paths)}"
-        )
+        # print(
+        #     f"Uploaded {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
+        # )
 
         # Create the file metadata
 
-        print(f"Creating metadata for {file_name} - ({log_idx}/{len(str_paths)})")
+        # print(f"Creating metadata for {file_name} - ({log_idx}/{total_files})")
 
-        output_hea_file = conv_retval_dict["output_hea_file"]
+        # output_hea_file = conv_retval_dict["output_hea_file"]
 
-        hea_metadata = xecg.metadata(output_hea_file)
-        print(hea_metadata)
+        # hea_metadata = xecg.metadata(output_hea_file)
+        # print(hea_metadata)
 
-        print(f"Metadata created for {file_name} - ({log_idx}/{len(str_paths)})")
+        # print(f"Metadata created for {file_name} - ({log_idx}/{total_files})")
 
         shutil.rmtree(ecg_temp_folder_path)
         shutil.rmtree(wfdb_temp_folder_path)
         os.remove(download_path)
+
+        # dev
+        # if log_idx == 1:
+        #     break
 
 
 if __name__ == "__main__":
