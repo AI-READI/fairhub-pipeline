@@ -28,6 +28,7 @@ from publish_pipeline.generate_high_level_metadata.generate_study_description im
 )
 from publish_pipeline.register_doi.register_doi import pipeline as register_doi_pipeline
 from stage_one.ecg_pipeline import pipeline as stage_one_ecg_pipeline
+from stage_one.eidon_pipeline import pipeline as stage_one_eidon_pipeline
 from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
@@ -131,6 +132,36 @@ def process_ecg(req: func.HttpRequest) -> func.HttpResponse:
         study_id = content["study_id"]
 
         stage_one_ecg_pipeline(study_id)
+        return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return func.HttpResponse("Failed", status_code=500, mimetype="text/plain")
+
+
+@app.route(route="process-eidon", auth_level=func.AuthLevel.FUNCTION)
+def process_eidon(req: func.HttpRequest) -> func.HttpResponse:
+    """TODO: Add docstring."""
+
+    # Block all other methods
+    if req.method != "POST":
+        return func.HttpResponse(
+            "Method not allowed", status_code=405, mimetype="text/plain"
+        )
+
+    req_body_bytes = req.get_body()
+    req_body = req_body_bytes.decode("utf-8")
+
+    try:
+        content = json.loads(req_body)
+
+        if "study_id" not in content:
+            return func.HttpResponse(
+                "Missing study_id", status_code=400, mimetype="text/plain"
+            )
+
+        study_id = content["study_id"]
+
+        stage_one_eidon_pipeline(study_id)
         return func.HttpResponse("Success", status_code=200, mimetype="text/plain")
     except Exception as e:
         print(f"Exception: {e}")

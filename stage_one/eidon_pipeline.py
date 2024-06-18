@@ -6,10 +6,12 @@ import os
 import tempfile
 import shutil
 import imaging.imaging_eidon_retinal_photography_root as EIDON
+import imaging.imaging_utils as imaging_utils
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
-import pprint
+
+# import pprint
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -22,7 +24,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         raise ValueError("study_id is required")
 
     input_folder = f"{study_id}/pooled-data/Eidon"
-    processed_data_output_folder = f"{study_id}/pooled-data/Eidon-processed"
+    processed_data_output_folder = f"{study_id}/pooled-data/retinal_photography"
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -120,29 +122,75 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # process the file
 
-        output_temp_folder_path = tempfile.mkdtemp()
+        organize_temp_folder_path = tempfile.mkdtemp()
 
         eidon_instance = EIDON.Eidon()
 
         organize_result = eidon_instance.organize(
-            download_path, output_temp_folder_path
+            download_path, organize_temp_folder_path
         )
 
-        pprint.pp(organize_result)
+        # pprint.pp(organize_result)
 
-        # print content of the output folder
-        print(f"Content of {output_temp_folder_path}")
+        step2_paths = []
 
-        for root, dirs, files in os.walk(output_temp_folder_path):
+        for root, dirs, files in os.walk(organize_temp_folder_path):
             for file in files:
-                print(file)
+                step2_paths.append(os.path.join(root, file))
 
-        shutil.rmtree(output_temp_folder_path)
+        convert_temp_folder_path = tempfile.mkdtemp()
+
+        # rule = organize_result["Rule"]
+        file_name = organize_result["Filename"]
+        # file_path = organize_result["Path"]
+
+        for step2_path in step2_paths:
+            eidon_instance.convert(step2_path, convert_temp_folder_path)
+
+        filtered_file_names = imaging_utils.get_filtered_file_names(
+            convert_temp_folder_path
+        )
+
+        for file_name in filtered_file_names:
+            format_temp_folder_path = tempfile.mkdtemp()
+            #
+
+            # format_info = imaging_utils.format_file(file_name, format_temp_folder_path)
+            imaging_utils.format_file(file_name, format_temp_folder_path)
+
+            # patient_id = format_info["PatientID"]
+
+            # modality = rule.split("_")[-1]
+
+            for root, dirs, files in os.walk(format_temp_folder_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+
+                    with open(f"{file_path}", "rb") as data:
+                        file_name2 = file_path.split("/")[-5:]
+
+                        combined_file_name = "/".join(file_name2)
+
+                        print(
+                            f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
+                        )
+
+                        output_blob_client = blob_service_client.get_blob_client(
+                            container="stage-1-container",
+                            # blob=f"{processed_data_output_folder}/imaging/{modality}/icare_eidon/{patient_id}/{file_name}",
+                            blob=f"{processed_data_output_folder}/{combined_file_name}",
+                        )
+                        output_blob_client.upload_blob(data)
+
+            shutil.rmtree(format_temp_folder_path)
+
+        shutil.rmtree(convert_temp_folder_path)
+        shutil.rmtree(organize_temp_folder_path)
         os.remove(download_path)
 
         # dev
-        if log_idx == 1:
-            break
+        # if log_idx == 1:
+        #     break
 
 
 if __name__ == "__main__":
