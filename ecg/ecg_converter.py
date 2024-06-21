@@ -208,7 +208,7 @@ def convert_ecg(ecg_xml_path, temp_csv_folder, output_wfdb_folder):
     # ~/opt/anaconda3/envs/ai_readi_311/lib/python3.11/site-packages/wfdb/io/convert/csv.py # if we want to modify it
     comments_to_insert = assemble_hea_comments(f, key_meta)
 
-    print("temp_csv_file", temp_csv_file)
+    # print("temp_csv_file", temp_csv_file)
 
     # reminder that csv_to_wfdb() writes to the current dir and is not configurable
     # note that the adc_gain and the required rescaling above are likely linked; future work will

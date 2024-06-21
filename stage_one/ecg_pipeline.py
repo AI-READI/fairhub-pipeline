@@ -9,6 +9,7 @@ import ecg.ecg_root as ecg
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
+import utils.dependency as deps
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -22,6 +23,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     input_folder = f"{study_id}/pooled-data/ECG"
     processed_data_output_folder = f"{study_id}/pooled-data/ECG-processed"
+    dependency_folder = f"{study_id}/dependency/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
 
     sas_token = azureblob.generate_account_sas(
@@ -101,6 +103,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
+
     total_files = len(file_paths)
 
     for idx, file in enumerate(file_paths):
@@ -113,6 +117,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # if is_directory:
         #     continue
+
+        workflow_input_files = [path]
 
         print(f"Processing {path} - ({log_idx}/{total_files})")
 
@@ -160,18 +166,28 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # file is in the format 1001_ecg_25aafb4b.dat
 
+        workflow_output_files = []
+
         for file in output_files:
             with open(f"{file}", "rb") as data:
                 file_name = file.split("/")[-1]
 
+                output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name}"
+
                 output_blob_client = blob_service_client.get_blob_client(
                     container="stage-1-container",
-                    blob=f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name}",
+                    blob=output_file_path,
                 )
                 output_blob_client.upload_blob(data)
 
+                workflow_output_files.append(output_file_path)
+
         print(
             f"Uploaded {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+        )
+
+        workflow_file_dependencies.add_dependency(
+            workflow_input_files, workflow_output_files
         )
 
         # Do the data plot
@@ -216,8 +232,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.remove(download_path)
 
         # dev
-        # if log_idx == 1:
+        # if log_idx == 10:
         #     break
+
+    deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
+
+    json_file_path = deps_output["file_path"]
+    json_file_name = deps_output["file_name"]
+
+    with open(json_file_path, "rb") as data:
+        output_blob_client = blob_service_client.get_blob_client(
+            container="stage-1-container",
+            blob=f"{dependency_folder}/{json_file_name}",
+        )
+        output_blob_client.upload_blob(data)
 
 
 if __name__ == "__main__":

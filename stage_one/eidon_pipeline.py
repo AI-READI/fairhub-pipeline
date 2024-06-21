@@ -10,8 +10,7 @@ import imaging.imaging_utils as imaging_utils
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
-
-# import pprint
+import utils.dependency as deps
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -24,6 +23,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         raise ValueError("study_id is required")
 
     input_folder = f"{study_id}/pooled-data/Eidon"
+    dependency_folder = f"{study_id}/dependency/Eidon"
     processed_data_output_folder = f"{study_id}/pooled-data/retinal_photography"
 
     sas_token = azureblob.generate_account_sas(
@@ -96,12 +96,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
+
     total_files = len(file_paths)
 
     for idx, file in enumerate(file_paths):
         log_idx = idx + 1
 
         path = file["file_path"]
+
+        workflow_input_files = [path]
 
         print(f"Processing {path} - ({log_idx}/{total_files})")
 
@@ -162,6 +166,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             # modality = rule.split("_")[-1]
 
+            workflow_output_files = []
+
             for root, dirs, files in os.walk(format_temp_folder_path):
                 for file in files:
                     file_path = os.path.join(root, file)
@@ -175,12 +181,22 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
                         )
 
+                        output_file_path = (
+                            f"{processed_data_output_folder}/{combined_file_name}"
+                        )
+
                         output_blob_client = blob_service_client.get_blob_client(
                             container="stage-1-container",
                             # blob=f"{processed_data_output_folder}/imaging/{modality}/icare_eidon/{patient_id}/{file_name}",
-                            blob=f"{processed_data_output_folder}/{combined_file_name}",
+                            blob=output_file_path,
                         )
                         output_blob_client.upload_blob(data)
+
+                        workflow_output_files.append(output_file_path)
+
+            workflow_file_dependencies.add_dependency(
+                workflow_input_files, workflow_output_files
+            )
 
             shutil.rmtree(format_temp_folder_path)
 
@@ -189,8 +205,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.remove(download_path)
 
         # dev
-        # if log_idx == 1:
+        # if log_idx == 5:
         #     break
+
+    deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
+
+    json_file_path = deps_output["file_path"]
+    json_file_name = deps_output["file_name"]
+
+    with open(json_file_path, "rb") as data:
+        output_blob_client = blob_service_client.get_blob_client(
+            container="stage-1-container",
+            blob=f"{dependency_folder}/{json_file_name}",
+        )
+        output_blob_client.upload_blob(data)
 
 
 if __name__ == "__main__":
