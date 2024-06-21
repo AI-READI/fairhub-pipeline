@@ -232,8 +232,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.remove(download_path)
 
         # dev
-        # if log_idx == 10:
-        #     break
+        if log_idx == 10:
+            break
 
     deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
 
