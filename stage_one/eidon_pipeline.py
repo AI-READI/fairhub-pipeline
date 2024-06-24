@@ -11,8 +11,8 @@ import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
-import csv
 import time
+import csv
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -221,6 +221,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         file_item["output_files"].append(output_file_path)
                         workflow_output_files.append(output_file_path)
 
+            file_item["output_uploaded"] = True
+
             workflow_file_dependencies.add_dependency(
                 workflow_input_files, workflow_output_files
             )
@@ -232,15 +234,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.remove(download_path)
 
         # dev
-        if log_idx == 1:
-            break
+        # if log_idx == 1:
+        #     break
 
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
     file_name = f"status_report_{timestr}.csv"
     workflow_log_file_path = os.path.join(temp_folder_path, file_name)
 
-    with open(workflow_log_file_path, mode="w") as file:
+    with open(workflow_log_file_path, mode="w") as f:
         fieldnames = [
             "file_path",
             "processed",
@@ -255,38 +257,32 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "output_uploaded",
             "output_files",
         ]
-        writer = csv.DictWriter(file, fieldnames=fieldnames, delimiter=";")
+
+        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=",")
+
+        for file_item in file_paths:
+            file_item["output_files"] = ";".join(file_item["output_files"])
 
         writer.writeheader()
-        for file in file_paths:
-            writer.writerow(
-                [
-                    file["file_path"],
-                    file["processed"],
-                    file["batch_folder"],
-                    file["site_name"],
-                    file["data_type"],
-                    file["start_date"],
-                    file["end_date"],
-                    file["organize_error"],
-                    file["convert_error"],
-                    file["format_error"],
-                    file["output_uploaded"],
-                    "".join(file["output_files"]),
-                ]
-            )
+        writer.writerows(file_paths)
 
-    output_blob_client = blob_service_client.get_blob_client(
-        container="stage-1-container",
-        blob=f"{pipeline_workflow_log_folder}/{file_name}",
-    )
-    output_blob_client.upload_blob(workflow_log_file_path)
+    with open(workflow_log_file_path, mode="rb") as data:
+        print(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
+
+        output_blob_client = blob_service_client.get_blob_client(
+            container="stage-1-container",
+            blob=f"{pipeline_workflow_log_folder}/{file_name}",
+        )
+
+        output_blob_client.upload_blob(data)
 
     # Write the dependencies to a file
     deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
 
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
+
+    print(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
 
     with open(json_file_path, "rb") as data:
         output_blob_client = blob_service_client.get_blob_client(

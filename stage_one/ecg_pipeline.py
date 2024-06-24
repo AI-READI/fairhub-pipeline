@@ -10,6 +10,8 @@ import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
+import time
+import csv
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -24,6 +26,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     input_folder = f"{study_id}/pooled-data/ECG"
     processed_data_output_folder = f"{study_id}/pooled-data/ECG-processed"
     dependency_folder = f"{study_id}/dependency/ECG"
+    pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
 
     sas_token = azureblob.generate_account_sas(
@@ -87,11 +90,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_paths.append(
             {
                 "file_path": t,
+                "processed": False,
                 "batch_folder": batch_folder,
                 "site_name": site_name,
                 "data_type": data_type,
                 "start_date": start_date,
                 "end_date": end_date,
+                "convert_error": False,
+                "output_uploaded": False,
+                "output_files": [],
             }
         )
 
@@ -107,16 +114,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     total_files = len(file_paths)
 
-    for idx, file in enumerate(file_paths):
+    for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        path = file["file_path"]
-
-        # file_client = file_system_client.get_file_client(path)
-        # is_directory = file_client.get_file_properties().metadata.get("hdi_isfolder")
-
-        # if is_directory:
-        #     continue
+        path = file_item["file_path"]
 
         workflow_input_files = [path]
 
@@ -124,13 +125,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # get the file name from the path
         file_name = path.split("/")[-1]
-
-        if file_name == ".DS_Store":
-            continue
-
-        # skip if the path is a folder (check if extension is empty)
-        if not path.split(".")[-1]:
-            continue
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
@@ -151,9 +145,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         xecg = ecg.ECG()
 
-        conv_retval_dict = xecg.convert(
-            ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
-        )
+        try:
+            conv_retval_dict = xecg.convert(
+                ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
+            )
+        except Exception:
+            file_item["convert_error"] = True
+            continue
 
         print(f"Converted {file_name} - ({log_idx}/{total_files})")
 
@@ -180,7 +178,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
                 output_blob_client.upload_blob(data)
 
+                file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
+
+        file_item["output_uploaded"] = True
 
         print(
             f"Uploaded {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
@@ -232,8 +233,44 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.remove(download_path)
 
         # dev
-        if log_idx == 10:
-            break
+        # if log_idx == 10:
+        #     break
+
+    # Write the workflow log to a file
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    file_name = f"status_report_{timestr}.csv"
+    workflow_log_file_path = os.path.join(temp_folder_path, file_name)
+
+    with open(workflow_log_file_path, "w", newline="") as csvfile:
+        fieldnames = [
+            "file_path",
+            "processed",
+            "batch_folder",
+            "site_name",
+            "data_type",
+            "start_date",
+            "end_date",
+            "convert_error",
+            "output_uploaded",
+            "output_files",
+        ]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        for file_item in file_paths:
+            file_item["output_files"] = ";".join(file_item["output_files"])
+
+        writer.writeheader()
+        writer.writerows(file_paths)
+
+    with open(workflow_log_file_path, mode="rb") as data:
+        print(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
+
+        output_blob_client = blob_service_client.get_blob_client(
+            container="stage-1-container",
+            blob=f"{pipeline_workflow_log_folder}/{file_name}",
+        )
+
+        output_blob_client.upload_blob(data)
 
     deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
 
