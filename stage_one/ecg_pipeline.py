@@ -90,13 +90,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_paths.append(
             {
                 "file_path": t,
+                "status": "failed",
                 "processed": False,
                 "batch_folder": batch_folder,
                 "site_name": site_name,
                 "data_type": data_type,
                 "start_date": start_date,
                 "end_date": end_date,
-                "convert_error": False,
+                "convert_error": True,
                 "output_uploaded": False,
                 "output_files": [],
             }
@@ -113,6 +114,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
     total_files = len(file_paths)
+
+    # reverse the file paths
+    file_paths.reverse()
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
@@ -150,8 +154,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
             )
         except Exception:
-            file_item["convert_error"] = True
             continue
+
+        file_item["convert_error"] = False
+        file_item["processed"] = True
 
         print(f"Converted {file_name} - ({log_idx}/{total_files})")
 
@@ -159,33 +165,44 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         participant_id = conv_retval_dict["participantID"]
 
         print(
-            f"Uploading {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
         # file is in the format 1001_ecg_25aafb4b.dat
 
         workflow_output_files = []
 
+        outputs_uploaded = True
+
         for file in output_files:
             with open(f"{file}", "rb") as data:
-                file_name = file.split("/")[-1]
+                file_name2 = file.split("/")[-1]
 
-                output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name}"
+                output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name2}"
 
-                output_blob_client = blob_service_client.get_blob_client(
-                    container="stage-1-container",
-                    blob=output_file_path,
-                )
-                output_blob_client.upload_blob(data)
+                try:
+                    output_blob_client = blob_service_client.get_blob_client(
+                        container="stage-1-container",
+                        blob=output_file_path,
+                    )
+                    output_blob_client.upload_blob(data)
+                except Exception:
+                    outputs_uploaded = False
+                    continue
 
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
 
-        file_item["output_uploaded"] = True
-
-        print(
-            f"Uploaded {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-        )
+        if outputs_uploaded:
+            file_item["output_uploaded"] = True
+            file_item["status"] = "success"
+            print(
+                f"Uploaded outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
+        else:
+            print(
+                f"Failed to upload outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
 
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
@@ -233,7 +250,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.remove(download_path)
 
         # dev
-        # if log_idx == 10:
+        # if log_idx == 60:
         #     break
 
     # Write the workflow log to a file
@@ -244,6 +261,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with open(workflow_log_file_path, "w", newline="") as csvfile:
         fieldnames = [
             "file_path",
+            "status",
             "processed",
             "batch_folder",
             "site_name",
@@ -283,6 +301,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             blob=f"{dependency_folder}/{json_file_name}",
         )
         output_blob_client.upload_blob(data)
+
+    # dev
+    # move the workflow log file and the json file to the current directory
+    # shutil.move(workflow_log_file_path, "status.csv")
+    # shutil.move(json_file_path, "file_map.json")
 
 
 if __name__ == "__main__":

@@ -14,6 +14,8 @@ import utils.dependency as deps
 import time
 import csv
 
+# import pprint
+
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
     """Process ecg data files for a study
@@ -83,15 +85,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_paths.append(
             {
                 "file_path": t,
+                "status": "failed",
                 "processed": False,
                 "batch_folder": batch_folder,
                 "site_name": site_name,
                 "data_type": data_type,
                 "start_date": start_date,
                 "end_date": end_date,
-                "organize_error": False,
-                "convert_error": False,
-                "format_error": False,
+                "organize_error": True,
+                "convert_error": True,
+                "format_error": True,
                 "output_uploaded": False,
                 "output_files": [],
             }
@@ -119,14 +122,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         print(f"Processing {path} - ({log_idx}/{total_files})")
 
         # get the file name from the path
-        file_name = path.split("/")[-1]
+        original_file_name = path.split("/")[-1]
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
             container="stage-1-container", blob=path
         )
 
-        download_path = os.path.join(temp_folder_path, file_name)
+        download_path = os.path.join(temp_folder_path, original_file_name)
 
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
@@ -140,13 +143,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         eidon_instance = EIDON.Eidon()
 
         try:
-            organize_result = eidon_instance.organize(
-                download_path, organize_temp_folder_path
-            )
-
+            # organize_result = eidon_instance.organize(download_path, organize_temp_folder_path)
+            eidon_instance.organize(download_path, organize_temp_folder_path)
         except Exception:
-            file_item["organize_error"] = True
             continue
+
+        file_item["organize_error"] = False
 
         # pprint.pp(organize_result)
 
@@ -159,7 +161,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         convert_temp_folder_path = tempfile.mkdtemp()
 
         # rule = organize_result["Rule"]
-        file_name = organize_result["Filename"]
+        # organized_file_name = organize_result["Filename"]
         # file_path = organize_result["Path"]
 
         for step2_path in step2_paths:
@@ -168,8 +170,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 eidon_instance.convert(step2_path, convert_temp_folder_path)
 
             except Exception:
-                file_item["convert_error"] = True
                 continue
+
+        file_item["convert_error"] = False
 
         filtered_file_names = imaging_utils.get_filtered_file_names(
             convert_temp_folder_path
@@ -183,16 +186,22 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 # format_info = imaging_utils.format_file(file_name, format_temp_folder_path)
                 imaging_utils.format_file(file_name, format_temp_folder_path)
             except Exception:
-                file["format_error"] = True
                 continue
 
+            file_item["format_error"] = False
             file_item["processed"] = True
 
             # patient_id = format_info["PatientID"]
 
             # modality = rule.split("_")[-1]
 
+            print(
+                f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
+
             workflow_output_files = []
+
+            outputs_uploaded = True
 
             for root, dirs, files in os.walk(format_temp_folder_path):
                 for file in files:
@@ -211,17 +220,29 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             f"{processed_data_output_folder}/{combined_file_name}"
                         )
 
-                        output_blob_client = blob_service_client.get_blob_client(
-                            container="stage-1-container",
-                            # blob=f"{processed_data_output_folder}/imaging/{modality}/icare_eidon/{patient_id}/{file_name}",
-                            blob=output_file_path,
-                        )
-                        output_blob_client.upload_blob(data)
+                        try:
+                            output_blob_client = blob_service_client.get_blob_client(
+                                container="stage-1-container",
+                                blob=output_file_path,
+                            )
+                            output_blob_client.upload_blob(data)
+                        except Exception:
+                            outputs_uploaded = False
+                            continue
 
                         file_item["output_files"].append(output_file_path)
                         workflow_output_files.append(output_file_path)
 
-            file_item["output_uploaded"] = True
+            if outputs_uploaded:
+                file_item["output_uploaded"] = True
+                file_item["status"] = "success"
+                print(
+                    f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                )
+            else:
+                print(
+                    f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                )
 
             workflow_file_dependencies.add_dependency(
                 workflow_input_files, workflow_output_files
@@ -234,7 +255,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.remove(download_path)
 
         # dev
-        # if log_idx == 1:
+        # if log_idx == 5:
         #     break
 
     # Write the workflow log to a file
@@ -245,6 +266,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with open(workflow_log_file_path, mode="w") as f:
         fieldnames = [
             "file_path",
+            "status",
             "processed",
             "batch_folder",
             "site_name",
@@ -290,6 +312,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             blob=f"{dependency_folder}/{json_file_name}",
         )
         output_blob_client.upload_blob(data)
+
+    # dev
+    # move the workflow log file and the json file to the current directory
+    # shutil.move(workflow_log_file_path, "status.csv")
+    # shutil.move(json_file_path, "file_map.json")
 
 
 if __name__ == "__main__":
