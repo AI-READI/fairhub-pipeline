@@ -5,13 +5,24 @@ import datetime
 import os
 import tempfile
 import shutil
-import ecg.ecg_root as ecg
+import cgm.cgm as cgm
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
 import time
 import csv
+
+"""
+SCRIPT_PATH=""
+FOLDER_PATH="CGM/input/UCSD-CGM/"  # Replace with the path to your CSV files
+TIME_ZONE="pst"  # Set your desired timezone here
+for file in ${FOLDER_PATH}DEX-*.csv; do    
+   ID=$(basename "$file" .csv | cut -d '-' -f 2)    
+   echo ${ID}    
+   python3 "${SCRIPT_PATH}CGM_API.py" "DEX-${ID}.csv" "DEX-${ID}.json" effective_time_frame=1,event_type=2,source_device_id=3,blood_glucose=4,transmitter_time=5,transmitter_id=6,uuid=AIREADI-${ID},timezone=${TIME_ZONE} --o foo=7,bar=8
+done
+"""
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -23,11 +34,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/ECG"
-    processed_data_output_folder = f"{study_id}/pooled-data/ECG-processed"
-    dependency_folder = f"{study_id}/dependency/ECG"
-    pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
-    data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
+    input_folder = f"{study_id}/pooled-data/CGM"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
+    dependency_folder = f"{study_id}/dependency/CGM"
+    pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -54,9 +64,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
 
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(data_plot_output_folder)
-
     paths = file_system_client.get_paths(path=input_folder)
 
     file_paths = []
@@ -69,34 +76,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         print(f"Processing {file_name}")
 
         # Check if the item is an xml file
-        if file_name.split(".")[-1] != "xml":
+        if file_name.split(".")[-1] != "csv":
             continue
-
-        # Get the parent folder of the file.
-        # The name of this folder is in the format siteName_dataType_startDate-endDate
-        batch_folder = t.split("/")[-2]
-
-        print(f"Batch folder: {batch_folder}")
-
-        # Check if the folder name is in the format siteName_dataType_startDate-endDate
-        if len(batch_folder.split("_")) != 3:
-            continue
-
-        site_name, data_type, start_date_end_date = batch_folder.split("_")
-
-        start_date = start_date_end_date.split("-")[0]
-        end_date = start_date_end_date.split("-")[1]
 
         file_paths.append(
             {
                 "file_path": t,
                 "status": "failed",
                 "processed": False,
-                "batch_folder": batch_folder,
-                "site_name": site_name,
-                "data_type": data_type,
-                "start_date": start_date,
-                "end_date": end_date,
                 "convert_error": True,
                 "output_uploaded": False,
                 "output_files": [],
@@ -124,8 +111,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         print(f"Processing {path} - ({log_idx}/{total_files})")
 
-        # get the file name from the path
+        # get the file name from the path. It's in the format DEX-1001.csv
         file_name = path.split("/")[-1]
+
+        file_name_only = file_name.split(".")[0]
+        patient_id = file_name_only.split("-")[1]
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
@@ -139,16 +129,30 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         print(f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})")
 
-        ecg_path = download_path
+        cgm_path = download_path
 
-        ecg_temp_folder_path = tempfile.mkdtemp()
-        wfdb_temp_folder_path = tempfile.mkdtemp()
+        cgm_temp_folder_path = tempfile.mkdtemp()
+        cgm_output_file_path = os.path.join(
+            cgm_temp_folder_path, f"DEX-{patient_id}.json"
+        )
+        cgm_final_output_file_path = os.path.join(
+            cgm_temp_folder_path, f"DEX-{patient_id}/DEX-{patient_id}.json"
+        )
 
-        xecg = ecg.ECG()
+        uuid = f"AIREADI-{patient_id}"
 
         try:
-            conv_retval_dict = xecg.convert(
-                ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
+            cgm.convert(
+                input_path=cgm_path,
+                output_path=cgm_output_file_path,
+                effective_time_frame=1,
+                event_type=2,
+                source_device_id=3,
+                blood_glucose=4,
+                transmitter_time=5,
+                transmitter_id=6,
+                uuid=uuid,
+                timezone="pst",
             )
         except Exception:
             continue
@@ -156,16 +160,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_item["convert_error"] = False
         file_item["processed"] = True
 
-        print(f"Converted {file_name} - ({log_idx}/{total_files})")
-
-        output_files = conv_retval_dict["output_files"]
-        participant_id = conv_retval_dict["participantID"]
-
         print(
             f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
-        # file is in the format 1001_ecg_25aafb4b.dat
+        # file is converted successfully. Upload the output file
+
+        output_files = [cgm_final_output_file_path]
 
         workflow_output_files = []
 
@@ -174,8 +175,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         for file in output_files:
             with open(f"{file}", "rb") as data:
                 file_name2 = file.split("/")[-1]
+                print(f"Uploading {file} - ({log_idx}/{total_files})")
 
-                output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name2}"
+                output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{file_name2}"
 
                 try:
                     output_blob_client = blob_service_client.get_blob_client(
@@ -205,49 +207,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             workflow_input_files, workflow_output_files
         )
 
-        # Do the data plot
-        # print(f"Data plotting {file_name} - ({log_idx}/{total_files})")
-
-        # dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
-
-        # print(f"Data plotted {file_name} - ({log_idx}/{total_files})")
-
-        # dataplot_pngs = dataplot_retval_dict["output_files"]
-
-        # print(
-        #     f"Uploading {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
-        # )
-
-        # for file in dataplot_pngs:
-        #     with open(f"{file}", "rb") as data:
-        #         file_name = file.split("/")[-1]
-        #         output_blob_client = blob_service_client.get_blob_client(
-        #             container="stage-1-container",
-        #             blob=f"{data_plot_output_folder}/{file_name}",
-        #         )
-        #         output_blob_client.upload_blob(data)
-
-        # print(
-        #     f"Uploaded {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
-        # )
-
-        # Create the file metadata
-
-        # print(f"Creating metadata for {file_name} - ({log_idx}/{total_files})")
-
-        # output_hea_file = conv_retval_dict["output_hea_file"]
-
-        # hea_metadata = xecg.metadata(output_hea_file)
-        # print(hea_metadata)
-
-        # print(f"Metadata created for {file_name} - ({log_idx}/{total_files})")
-
-        shutil.rmtree(ecg_temp_folder_path)
-        shutil.rmtree(wfdb_temp_folder_path)
+        shutil.rmtree(cgm_temp_folder_path)
         os.remove(download_path)
 
         # dev
-        # if log_idx == 60:
+        # if log_idx == 3:
         #     break
 
     # Write the workflow log to a file
@@ -260,11 +224,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "file_path",
             "status",
             "processed",
-            "batch_folder",
-            "site_name",
-            "data_type",
-            "start_date",
-            "end_date",
             "convert_error",
             "output_uploaded",
             "output_files",
