@@ -317,88 +317,88 @@ def convert(
         writer.writerows(parsed_copy["body"])
 
     # PERFORM QUALITY CONTROL TESTS#
-    # with open(
-    #     output_path.rstrip(".json") + "/" + "QC_results.txt", "w", encoding="utf-8"
-    # ) as f:
-    #     f.write("##QC ON THE INPUT DATAFRAME VALUES##")
-    #     f.write("\n")
-    #     # print out min, max, and hist values of dataframe
-    #     f.write("effective_time_frame START_TIME: ")
-    #     f.write(QC.df_min(df["effective_time_frame"]))
-    #     f.write("\n")
-    #     f.write("effective_time_frame END_TIME: ")
-    #     f.write(QC.df_max(df["effective_time_frame"]))
-    #     f.write("\n")
-    #     df.drop(
-    #         [
-    #             "effective_time_frame",
-    #             "event_type",
-    #             "source_device_id",
-    #             "transmitter_id",
-    #         ],
-    #         axis=1,
-    #         inplace=True,
-    #     )
-    #     for column in df.columns:
-    #         f.write(column)
-    #         f.write(" MIN: ")
-    #         f.write(QC.df_min(df[column]))
-    #         f.write("\n")
-    #         f.write(column)
-    #         f.write(" MAX: ")
-    #         f.write(QC.df_max(df[column]))
-    #         f.write("\n")
-    #         QC.df_hist(
-    #             df[column],
-    #             output_path.rstrip(".json")
-    #             + "/"
-    #             + json_file.rstrip(".json")
-    #             + "_input_"
-    #             + column,
-    #         )
+    with open(
+        output_path.rstrip(".json") + "/" + "QC_results.txt", "w", encoding="utf-8"
+    ) as f:
+        f.write("##QC ON THE INPUT DATAFRAME VALUES##")
+        f.write("\n")
+        # print out min, max, and hist values of dataframe
+        f.write("effective_time_frame START_TIME: ")
+        f.write(QC.df_min(df["effective_time_frame"]))
+        f.write("\n")
+        f.write("effective_time_frame END_TIME: ")
+        f.write(QC.df_max(df["effective_time_frame"]))
+        f.write("\n")
+        df.drop(
+            [
+                "effective_time_frame",
+                "event_type",
+                "source_device_id",
+                "transmitter_id",
+            ],
+            axis=1,
+            inplace=True,
+        )
+        for column in df.columns:
+            f.write(column)
+            f.write(" MIN: ")
+            f.write(QC.df_min(df[column]))
+            f.write("\n")
+            f.write(column)
+            f.write(" MAX: ")
+            f.write(QC.df_max(df[column]))
+            f.write("\n")
+            QC.df_hist(
+                df[column],
+                output_path.rstrip(".json")
+                + "/"
+                + json_file.rstrip(".json")
+                + "_input_"
+                + column,
+            )
 
-    #     # place all values from relevant JSON dict values in to lists
-    #     effective_time_frame_list = []
-    #     blood_glucose_list = []
-    #     transmitter_time_list = []
-    #     for data in range(len(parsed["body"])):
-    #         effective_time_frame_list.append(
-    #             parsed["body"][data]["effective_time_frame"]["time_interval"][
-    #                 "start_date_time"
-    #             ]
-    #         )
-    #         blood_glucose_list.append(parsed["body"][data]["blood_glucose"]["value"])
-    #         transmitter_time_list.append(
-    #             parsed["body"][data]["transmitter_time"]["value"]
-    #         )
+        # place all values from relevant JSON dict values in to lists
+        effective_time_frame_list = []
+        blood_glucose_list = []
+        transmitter_time_list = []
+        for data in range(len(parsed["body"])):
+            effective_time_frame_list.append(
+                parsed["body"][data]["effective_time_frame"]["time_interval"][
+                    "start_date_time"
+                ]
+            )
+            blood_glucose_list.append(parsed["body"][data]["blood_glucose"]["value"])
+            transmitter_time_list.append(
+                parsed["body"][data]["transmitter_time"]["value"]
+            )
 
-    #     f.write("\n\n")
-    #     f.write("##QC ON THE STANDARD JSON DICT VALUES##\n")
-    #     # print out min, max, and hist values of relevant json dict keys
-    #     f.write("effective_time_frame START_TIME: ")
-    #     f.write(QC.list_min(effective_time_frame_list))
-    #     f.write("\n")
-    #     f.write("effective_time_frame END_TIME: ")
-    #     f.write(QC.list_max(effective_time_frame_list))
-    #     f.write("\n")
-    #     f.write("blood_glucose MIN: ")
-    #     f.write(QC.list_min(blood_glucose_list))
-    #     f.write("\n")
-    #     f.write("blood_glucose MAX: ")
-    #     f.write(QC.list_max(blood_glucose_list))
-    #     f.write("\n")
-    #     QC.list_hist(
-    #         blood_glucose_list,
-    #         "Blood Glucose",
-    #         output_path.rstrip(".json") + "/" + json_file.rstrip(".json"),
-    #     )
-    #     f.write("transmitter_time MIN: ")
-    #     f.write(QC.list_min(transmitter_time_list))
-    #     f.write("\n")
-    #     f.write("transmitter_time MAX: ")
-    #     f.write(QC.list_max(transmitter_time_list))
-    #     QC.list_hist(
-    #         transmitter_time_list,
-    #         "Transmitter Time",
-    #         output_path.rstrip(".json") + "/" + json_file.rstrip(".json"),
-    #     )
+        f.write("\n\n")
+        f.write("##QC ON THE STANDARD JSON DICT VALUES##\n")
+        # print out min, max, and hist values of relevant json dict keys
+        f.write("effective_time_frame START_TIME: ")
+        f.write(QC.list_min(effective_time_frame_list))
+        f.write("\n")
+        f.write("effective_time_frame END_TIME: ")
+        f.write(QC.list_max(effective_time_frame_list))
+        f.write("\n")
+        f.write("blood_glucose MIN: ")
+        f.write(QC.list_min(blood_glucose_list))
+        f.write("\n")
+        f.write("blood_glucose MAX: ")
+        f.write(QC.list_max(blood_glucose_list))
+        f.write("\n")
+        QC.list_hist(
+            blood_glucose_list,
+            "Blood Glucose",
+            output_path.rstrip(".json") + "/" + json_file.rstrip(".json"),
+        )
+        f.write("transmitter_time MIN: ")
+        f.write(QC.list_min(transmitter_time_list))
+        f.write("\n")
+        f.write("transmitter_time MAX: ")
+        f.write(QC.list_max(transmitter_time_list))
+        QC.list_hist(
+            transmitter_time_list,
+            "Transmitter Time",
+            output_path.rstrip(".json") + "/" + json_file.rstrip(".json"),
+        )

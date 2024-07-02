@@ -36,6 +36,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     input_folder = f"{study_id}/pooled-data/CGM"
     processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
+    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
     dependency_folder = f"{study_id}/dependency/CGM"
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
 
@@ -64,6 +65,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
 
+    # Delete the qc folder if it exists
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_qc_folder)
+
     paths = file_system_client.get_paths(path=input_folder)
 
     file_paths = []
@@ -86,6 +91,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "processed": False,
                 "convert_error": True,
                 "output_uploaded": False,
+                "qc_uploaded": True,
                 "output_files": [],
             }
         )
@@ -138,6 +144,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         cgm_final_output_file_path = os.path.join(
             cgm_temp_folder_path, f"DEX-{patient_id}/DEX-{patient_id}.json"
         )
+        cgm_final_output_qc_file_path = os.path.join(
+            cgm_temp_folder_path, f"DEX-{patient_id}/QC_results.txt"
+        )
 
         uuid = f"AIREADI-{patient_id}"
 
@@ -163,6 +172,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         print(
             f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
+
+        # print contents of the cgm_temp_folder_path
+        for root, dirs, files in os.walk(cgm_temp_folder_path):
+            for file in files:
+                print(os.path.join(root, file))
 
         # file is converted successfully. Upload the output file
 
@@ -191,6 +205,23 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
+
+        # upload the QC file
+        print(f"Uploading QC file for {file_name} - ({log_idx}/{total_files})")
+        output_qc_file_path = f"{processed_data_qc_folder}/{patient_id}/QC_results.txt"
+
+        try:
+            with open(cgm_final_output_qc_file_path, "rb") as data:
+                output_blob_client = blob_service_client.get_blob_client(
+                    container="stage-1-container",
+                    blob=output_qc_file_path,
+                )
+                output_blob_client.upload_blob(data)
+        except Exception:
+            file_item["qc_uploaded"] = False
+            continue
+
+        print(f"Uploaded QC file for {file_name} - ({log_idx}/{total_files})")
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
@@ -226,6 +257,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "processed",
             "convert_error",
             "output_uploaded",
+            "qc_uploaded",
             "output_files",
         ]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
