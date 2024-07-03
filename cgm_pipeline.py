@@ -80,7 +80,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         print(f"Processing {file_name}")
 
-        # Check if the item is an xml file
+        # Check if the item is an csv file
         if file_name.split(".")[-1] != "csv":
             continue
 
@@ -117,18 +117,19 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         print(f"Processing {path} - ({log_idx}/{total_files})")
 
-        # get the file name from the path. It's in the format DEX-1001.csv
+        # get the file name from the path. It's in the format Clarity_Export_AIREADI_{id}_*.csv
         file_name = path.split("/")[-1]
 
         file_name_only = file_name.split(".")[0]
-        patient_id = file_name_only.split("-")[1]
+        patient_id = file_name_only.split("_")[3]
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
             container="stage-1-container", blob=path
         )
 
-        download_path = os.path.join(temp_folder_path, file_name)
+        # File should be downloaded as DEX_{patient_id}.csv
+        download_path = os.path.join(temp_folder_path, f"DEX-{patient_id}.csv")
 
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
@@ -172,11 +173,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         print(
             f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
-
-        # print contents of the cgm_temp_folder_path
-        for root, dirs, files in os.walk(cgm_temp_folder_path):
-            for file in files:
-                print(os.path.join(root, file))
 
         # file is converted successfully. Upload the output file
 
