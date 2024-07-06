@@ -255,8 +255,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.remove(download_path)
 
         # dev
-        # if log_idx == 5:
-        #     break
+        if log_idx == 5:
+            break
 
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")

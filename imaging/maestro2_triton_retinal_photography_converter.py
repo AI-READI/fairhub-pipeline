@@ -1,6 +1,6 @@
 import os
 import pydicom
-import imaging.imaging_classifying_rules as imaging_classifying_rules
+
 
 KEEP = 0
 BLANK = 1
@@ -34,14 +34,29 @@ class ConversionRule:
         self.sequences = sequences
 
     def header_tags(self):
+        """
+        Extracts unique tags from header elements.
+
+        :return: List of unique header element tags.
+        """
         headertags = {header_element.tag for header_element in self.header_elements}
         return list(headertags)
 
     def tags(self):
+        """
+        Extracts unique tags from individual elements.
+
+        :return: List of unique element tags.
+        """
         tags = {element.tag for element in self.elements}
         return list(tags)
 
     def sequence_tags(self):
+        """
+        Generates a dictionary of sequence tags and associated element tags.
+
+        :return: Dictionary with sequence tags as keys and lists of lists of element tags as values.
+        """
         tags_dict = {}
         for sequence in self.sequences:
             element_tags = [element.tag for element in sequence.elements]
@@ -94,8 +109,8 @@ class ElementList:
         self.elements = elements if elements is not None else []
 
 
-eidon = ConversionRule(
-    "eidon",
+maestro = ConversionRule(
+    "maestro",
     # DICOM header elements
     headers=[
         Element("FileMetaInformationGroupLength", "00020000", "UL"),
@@ -162,7 +177,6 @@ eidon = ConversionRule(
         Element("SOPClassUID", "00080016", "UI"),
         Element("SOPInstanceUID", "00080018", "UI"),
         Element("SpecificCharacterSet", "00080005", "CS"),
-        Element("PupilSize", "00460044", "FD"),
     ],
     # DICOM sequences
     sequences=[
@@ -185,15 +199,9 @@ eidon = ConversionRule(
             "00220016",
             "SQ",
             [
-                Element("CodeValue", "00080100", "SH", HARMONIZE, "410462008"),
-                Element("CodingSchemeDesignator", "00080102", "SH", HARMONIZE, "SCT"),
-                Element(
-                    "CodeMeaning",
-                    "00080104",
-                    "LO",
-                    HARMONIZE,
-                    "Fine slit beam direct illumination",
-                ),
+                Element("CodeValue", "00080100", "SH"),
+                Element("CodingSchemeDesignator", "00080102", "SH"),
+                Element("CodeMeaning", "00080104", "LO"),
             ],
         ),
         ElementList(
@@ -233,8 +241,8 @@ def process_tags(tags, dicom):
 
     Returns:
         dict: Dictionary where keys are DICOM tags and values are DicomEntry instances.
-
     """
+
     output = {}
     for tag in tags:
         if tag in dicom:
@@ -279,6 +287,12 @@ class DicomEntry:
         self.value = value
 
     def is_empty(self):
+        """
+        Check if the value of the metadata entry is empty.
+
+        Returns:
+            bool: True if the value is empty, False otherwise.
+        """
         return len(self.value) == 0
 
 
@@ -302,23 +316,24 @@ def extract_dicom_dict(file, tags):
 
     Raises:
         FileNotFoundError: If the specified DICOM file does not exist.
-
     """
     if not os.path.exists(file):
         raise FileNotFoundError(f"File {file} not found.")
 
     output = {"filepath": file}
     dataset = pydicom.dcmread(file)
-    dataset.PatientOrientation = ["L", "F"]
 
-    if "visible" in file:
-        dataset.ImageType = ["ORIGINAL", "PRIMARY", "", "COLOR"]
-
-    elif "ir" in file:
+    if "maestro2_mac_6x6_octa" in file:
         dataset.ImageType = ["ORIGINAL", "PRIMARY", "", "INFRARED"]
 
-    elif "faf" in file:
-        dataset.ImageType = ["ORIGINAL", "PRIMARY", "", "AUTOFLUORESCENCE"]
+        dataset.PixelSpacing = [0.006868132, 0.006868132]
+
+    else:
+        dataset.ImageType = ["ORIGINAL", "PRIMARY", "", "COLOR"]
+
+        dataset.PixelSpacing = dataset.PixelSpacing
+
+    dataset.PatientOrientation = ["L", "F"]
 
     header_elements = {
         "00020000": {
@@ -347,6 +362,7 @@ def extract_dicom_dict(file, tags):
             "Value": [dataset.file_meta.ImplementationVersionName],
         },
     }
+
     json_dict = dict(header_elements)
     info = dataset.to_json_dict()
 
@@ -355,23 +371,12 @@ def extract_dicom_dict(file, tags):
     physician_name = dataset.ReferringPhysicianName
     info["00080090"]["Value"] = [physician_name]
 
-    acquisitiondatetime = dataset.AcquisitionDateTime
-    acquisitiondatetime = "".join(
-        char for char in acquisitiondatetime if char.isdigit()
-    )
-    info["0008002A"]["Value"] = [acquisitiondatetime]
-
-    seriesinstanceuid = str(dataset.SeriesInstanceUID)
-
-    last_dot_index = seriesinstanceuid.rfind(".")
-    modified_uid = (
-        seriesinstanceuid[:last_dot_index] + seriesinstanceuid[last_dot_index + 1 :]
-    )
-
-    info["0020000E"]["Value"] = str(modified_uid)
     json_dict |= info
+
     dicom = json_dict
+
     output = process_tags(tags, dicom)
+
     transfersyntax = [dataset.is_little_endian, dataset.is_implicit_VR]
     pixeldata = dataset.PixelData
 
@@ -390,7 +395,6 @@ def write_dicom(protocol, dicom_dict_list, file_path):
         protocol (ConversionRule): The ConversionRule instance containing processing instructions.
         dicom_dict_list (list): List containing DICOM dictionaries and related information.
         file_path (str): The path to the new DICOM file to be created.
-
     """
     headertags = protocol.header_tags()
     tags = protocol.tags()
@@ -502,27 +506,15 @@ def convert_dicom(input, output):
     Args:
         input (str): The path to the input DICOM file.
         output (str): The path to the output DICOM file to be created.
-
     """
-    conversion_rule = eidon
+    conversion_rule = maestro
     tags = (
         conversion_rule.header_tags()
         + conversion_rule.tags()
         + list(conversion_rule.sequence_tags().keys())
     )
     x = extract_dicom_dict(input, tags)
+
     filename = input.split("/")[-1]
 
     write_dicom(conversion_rule, x, f"{output}/converted_{filename}")
-
-    b = imaging_classifying_rules.extract_dicom_entry(input)
-    rule = imaging_classifying_rules.find_rule(input)
-    dic = {
-        "Rule": rule,
-        "PatientID": b.patientid,
-        "Laterality": b.laterality,
-        "Rows": b.rows,
-        "Columns": b.columns,
-    }
-    print(dic)
-    return dic

@@ -1,8 +1,96 @@
 import os
 import imaging.imaging_classifying_rules as imaging_classifying_rules
-import pandas as pd
 import shutil
 import pydicom
+import zipfile
+import importlib.util
+
+
+def extract_numeric_part(uid):
+    """
+    Extract numerical parts of the UID.
+
+    Args:
+        uid (str): A unique identifier (UID) that may contain numeric and non-numeric parts separated by periods.
+
+    Returns:
+        list: A list containing the numeric parts as integers and the non-numeric parts as strings.
+    """
+    parts = uid.split(".")
+    return [int(part) if part.isdigit() else part for part in parts]
+
+
+def list_zip_files(directory):
+    """
+    List all zip files in a given directory.
+
+    Args:
+        directory (str): The path to the directory to search for zip files.
+
+    Returns:
+        list: A list of file paths for each zip file found in the directory.
+    """
+    zip_files = [
+        os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".zip")
+    ]
+    return zip_files
+
+
+def unzip_fda_file(input_zip_path, output_folder_path):
+    """
+    Unzips the contents of a zip file into the specified output folder based on specific criteria.
+
+    The function will only unzip files if they contain 'fda' in their name. It also categorizes the files into
+    'Maestro2' or 'Triton' folders based on their names. If the file does not meet these criteria, it will be skipped.
+
+    Parameters:
+    input_zip_path (str): Path to the input zip file.
+    output_folder_path (str): Path to the output folder where files will be extracted.
+
+    Returns:
+    dict: A dictionary containing the input zip path and the unzipping status.
+    """
+    input_name = input_zip_path.split("/")[-1].replace(".", "_")
+    input_name = input_name[:-4] if input_name.endswith("_zip") else input_name
+
+    if "fda" not in input_zip_path.lower():
+        dic = {
+            "Foldername": f"{input_zip_path}",
+            "unzipping": "no fda file will be skipped",
+        }
+        print(dic)
+        return dic
+
+    elif "maestro2" in input_zip_path.lower():
+        # Create the output folder if it doesn't exist
+        maestro2 = f"{output_folder_path}/Maestro2/{input_name}"
+        os.makedirs(maestro2, exist_ok=True)
+
+        # Unzip the contents of the zip file into the output folder
+        with zipfile.ZipFile(input_zip_path, "r") as zip_ref:
+            zip_ref.extractall(maestro2)
+
+        dic = {"Foldername": f"{input_zip_path}", "unzipping": "correct"}
+        print(dic)
+        return dic
+
+    elif "triton" in input_zip_path.lower():
+        # Create the output folder if it doesn't exist
+        triton = f"{output_folder_path}/Triton/{input_name}"
+        os.makedirs(triton, exist_ok=True)
+
+        # Unzip the contents of the zip file into the output folder
+        with zipfile.ZipFile(input_zip_path, "r") as zip_ref:
+            zip_ref.extractall(triton)
+        dic = {"Foldername": f"{input_zip_path}", "unzipping": "correct"}
+        print(dic)
+        return dic
+
+    else:
+        print("unknown")
+        dic = {"Foldername": f"{input_zip_path}", "unzipping": "unknown"}
+        print(dic)
+        return dic
 
 
 def get_filtered_file_names(folder_path):
@@ -52,17 +140,6 @@ def spectralis_get_filtered_file_names(folder_path):
             if full_path.split("/")[-1] and full_path.split("/")[-1].startswith("0"):
                 filtered_files.append(full_path)
     return filtered_files
-
-
-# def create_record(dataframe, folder_path, sheetname):
-#     if not os.path.exists(folder_path):
-#         os.makedirs(folder_path)
-
-#     rule_sorted = dataframe.sort_values(by=["Rule", "PatientID"])
-#     rule_sorted.to_excel(os.path.join(folder_path, f"{sheetname}_rulebased.xlsx"), index=False)
-
-#     patientid_sorted = dataframe.sort_values(by=["PatientID", "Rule"])
-#     patientid_sorted.to_excel(os.path.join(folder_path, f"{sheetname}_ptidbased.xlsx"), index=False)
 
 
 def list_subfolders(folder_path):
@@ -138,13 +215,14 @@ def topcon_check_files_expected(folder_path):
                 files_count_9 += 1
 
     # Check if files match expected patterns
+
     if (files_count_9 == 2) or (files_count_9 == 9):
         return "Expected"
     else:
         return "Unknown"
 
 
-def topcon_process_folder(folder_path, outputpath, rule, empty_df):
+def topcon_process_folder(folder_path, outputpath, rule):
     """
     Process a folder of Topcon device files and copy them to an output directory based on rules.
 
@@ -161,17 +239,37 @@ def topcon_process_folder(folder_path, outputpath, rule, empty_df):
         for file in files:
             if file.endswith("1.1.dcm") and file.startswith("2"):
                 file_path = os.path.join(root, file)
-                directory_one_level_up = os.path.basename(os.path.dirname(file_path))
-                info = image_classifying_rules.extract_dicom_entry(file_path)
+                original_folder_basename = os.path.basename(os.path.dirname(file_path))
+                info = imaging_classifying_rules.extract_dicom_entry(file_path)
                 laterality = info.laterality
                 patientid = info.patientid
                 error = info.error
                 if rule.endswith("_oct"):
-                    output = f"{outputpath}/{rule[:-4]}/{rule[:-4]}_{patientid}_{laterality}_{directory_one_level_up}"
+                    output = f"{outputpath}/{rule[:-4]}/{rule[:-4]}_{patientid}_{laterality}_{original_folder_basename}"
                 else:
-                    output = f"{outputpath}/{rule}/{rule}_{patientid}_{laterality}_{directory_one_level_up}"
-                os.makedirs(os.path.dirname(output), exist_ok=True)
-                shutil.copytree(os.path.dirname(file_path), output)
+                    output = f"{outputpath}/{rule}/{rule}_{patientid}_{laterality}_{original_folder_basename}"
+
+                os.makedirs(output, exist_ok=True)
+
+                for item in os.listdir(os.path.dirname(file_path)):
+                    source_path = os.path.join(os.path.dirname(file_path), item)
+                    dest_path = os.path.join(output, item)
+
+                    if os.path.isdir(source_path):
+                        if os.path.exists(dest_path):
+                            shutil.rmtree(dest_path)
+                        shutil.copytree(source_path, dest_path)
+                    else:
+                        shutil.copy2(source_path, dest_path)
+
+    for root, dirs, files in os.walk(outputpath):
+        for file in files:
+            file_path = os.path.join(root, file)
+            if os.path.isfile(file_path):
+                if file[0].isdigit():
+                    parent_folder = os.path.basename(os.path.normpath(root))
+                    new_name = os.path.join(root, f"{parent_folder}_{file}")
+                    os.rename(file_path, new_name)
 
                 if rule in [
                     "maestro2_mac_6x6_octa_oct",
@@ -184,15 +282,12 @@ def topcon_process_folder(folder_path, outputpath, rule, empty_df):
                     row_to_append = {
                         "Rule": rule[:-4],
                         "PatientID": patientid,
-                        "Folder": directory_one_level_up,
+                        "Folder": original_folder_basename,
                         "Laterality": laterality,
                         "Error": error,
                     }
 
-                    empty_df = pd.concat(
-                        [empty_df, pd.DataFrame([row_to_append])], ignore_index=True
-                    )
-    return empty_df
+    return None
 
 
 def filter_eidon_files(file, outputfolder):
@@ -436,7 +531,8 @@ def find_id(patientid, patientname):
         or not isinstance(patientname, str)
         else patientname
     )
-    if check_format(patientid) == True:
+
+    if check_format(patientid):
         return patientid[len("AIREADI-") : len("AIREADI-") + 4]
 
     else:
@@ -474,7 +570,7 @@ def format_file(file, output):
         full_file_path = os.path.join(full_dir_path, filename)
         dataset.save_as(full_file_path)
     else:
-        id = find_id(dataset.PatientID, dataset.PatientName)
+        id = find_id(str(dataset.PatientID), str(dataset.PatientName))
 
         if id == "noid":
             full_dir_path = output + "/missing_critical_info/no_id/"
@@ -548,6 +644,123 @@ def format_file(file, output):
                 "Laterality": dataset.ImageLaterality,
             }
 
-            print(dic)
-
             return dic
+
+
+def update_pydicom_dicom_dictionary(file_path):
+    """
+    Update the DICOM dictionary with new elements if they don't already exist.
+
+    Args:
+        file_path (str): The path to the Python file containing the DICOM dictionary.
+
+    This function imports the existing DICOM dictionary from the specified file,
+    adds new elements to the dictionary if they are not already present, and writes
+    the updated dictionary back to the file.
+
+    The new elements added are:
+        - 0x0022EEE0: En Face Volume Descriptor Sequence
+        - 0x0022EEE1: En Face Volume Descriptor Scope
+        - 0x0022EEE2: Referenced Segmentation Sequence
+        - 0x0022EEE3: Surface Offset
+
+    Returns:
+        None
+    """
+
+    new_elements = {
+        0x0022EEE0: (
+            "SQ",
+            "1",
+            "En Face Volume Descriptor Sequence",
+            "",
+            "EnFaceVolumeDescriptorSequence",
+        ),
+        0x0022EEE1: (
+            "CS",
+            "1",
+            "En Face Volume Descriptor Scope",
+            "",
+            "EnFaceVolumeDescriptorScope",
+        ),
+        0x0022EEE2: (
+            "SQ",
+            "1",
+            "Referenced Segmentation Sequence",
+            "",
+            "ReferencedSegmentationSequence",
+        ),
+        0x0022EEE3: ("FL", "1", "Surface Offset", "", "SurfaceOffset"),
+    }
+
+    # Step 1: Import the dictionary from the .py file
+    spec = importlib.util.spec_from_file_location("dictionaries", file_path)
+    dicom_dict_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(dicom_dict_module)
+
+    # Get the DicomDictionary and RepeatersDictionary from the module
+    DicomDictionary = dicom_dict_module.DicomDictionary
+    RepeatersDictionary = dicom_dict_module.RepeatersDictionary
+
+    # Step 2: Add new elements only if they don't exist
+    for key, value in new_elements.items():
+        if key not in DicomDictionary:
+            DicomDictionary[key] = value
+
+    # Step 3: Write the updated dictionary back to the .py file
+    with open(file_path, "w") as file:
+        file.write("DicomDictionary = {\n")
+        for key, value in DicomDictionary.items():
+            if isinstance(key, int):
+                key_str = f"0x{key:08X}"
+            else:
+                key_str = str(key)
+            file.write(f"    {key_str}: {value},\n")
+        file.write("}\n\n")
+
+        file.write("RepeatersDictionary = {\n")
+        for key, value in RepeatersDictionary.items():
+            if isinstance(key, int):
+                key_str = f"0x{key:08X}"
+            else:
+                key_str = f"'{key}'"
+            file.write(f"    {key_str}: {value},\n")
+        file.write("}\n")
+
+    print(f"DicomDictionary has been updated successfully in {file_path}.")
+
+
+def check_critical_info_from_files_in_folder(folder):
+    """
+    Check for critical information in DICOM files within a folder.
+
+    Args:
+        folder (str): The path to the folder containing DICOM files.
+
+    This function reads the first DICOM file in the specified folder and checks
+    for the presence of critical information, including the SOPInstanceUID and
+    PatientID. If the information is missing or invalid, it returns "critical_info_missing".
+    Otherwise, it returns "pass".
+
+    Returns:
+        str: "critical_info_missing" if critical information is missing, "pass" otherwise.
+    """
+
+    files = get_filtered_file_names(folder)
+    if not files:
+        raise ValueError(f"No files found in folder: {folder}")
+
+    file = files[0]
+
+    dataset = pydicom.dcmread(file)
+    try:
+        uid = dataset.SOPInstanceUID
+    except AttributeError:
+        return "critical_info_missing"
+
+    id = find_id(str(dataset.PatientID), str(dataset.PatientName))
+    if id == "noid":
+        return "critical_info_missing"
+
+    else:
+        return "pass"

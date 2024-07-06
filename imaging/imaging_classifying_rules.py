@@ -24,11 +24,7 @@ class ClassifyingRule:
         self.conditions = conditions
 
     def apply(self, dicom_entry):
-        # Apply all conditions to the DICOM entry
-        for condition in self.conditions:
-            if not condition(dicom_entry):
-                return False
-        return True
+        return all(condition(dicom_entry) for condition in self.conditions)
 
 
 # List of classification rules
@@ -625,7 +621,7 @@ def extract_dicom_entry(file):
     return output
 
 
-## Domain, Modality, Protocol, Patient ID, Laterlity, sopinstanceuid, referencedsopinstance
+# Domain, Modality, Protocol, Patient ID, Laterlity, sopinstanceuid, referencedsopinstance
 def extract_dicom_summary(file):
     """
     Extract a summary from a DICOM file.
@@ -657,7 +653,7 @@ def extract_dicom_summary(file):
     performedprotocol = dicomentry.performedprotocol
     description = find_rule(file)
 
-    output = DicomSummary(
+    return DicomSummary(
         filename,
         patientid,
         laterality,
@@ -665,8 +661,6 @@ def extract_dicom_summary(file):
         acquisitiondatetime,
         sopinstanceuid,
     )
-    # output = DicomSummaryDetail(domain, modality, patientid, laterality, description,sopinstanceuid,referencedsopinstance)
-    return output
 
 
 def get_summary(file):
