@@ -3,7 +3,9 @@ import imaging.imaging_classifying_rules as imaging_classifying_rules
 import shutil
 import pydicom
 import zipfile
-import importlib.util
+from pydicom.datadict import DicomDictionary, keyword_dict
+
+# from pydicom.dataset import Dataset
 
 
 def extract_numeric_part(uid):
@@ -30,10 +32,9 @@ def list_zip_files(directory):
     Returns:
         list: A list of file paths for each zip file found in the directory.
     """
-    zip_files = [
+    return [
         os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".zip")
     ]
-    return zip_files
 
 
 def unzip_fda_file(input_zip_path, output_folder_path):
@@ -647,7 +648,8 @@ def format_file(file, output):
             return dic
 
 
-def update_pydicom_dicom_dictionary(file_path):
+# def update_pydicom_dicom_dictionary(file_path):
+def update_pydicom_dicom_dictionary():
     """
     Update the DICOM dictionary with new elements if they don't already exist.
 
@@ -668,7 +670,70 @@ def update_pydicom_dicom_dictionary(file_path):
         None
     """
 
-    new_elements = {
+    # new_elements = {
+    #     0x0022EEE0: (
+    #         "SQ",
+    #         "1",
+    #         "En Face Volume Descriptor Sequence",
+    #         "",
+    #         "EnFaceVolumeDescriptorSequence",
+    #     ),
+    #     0x0022EEE1: (
+    #         "CS",
+    #         "1",
+    #         "En Face Volume Descriptor Scope",
+    #         "",
+    #         "EnFaceVolumeDescriptorScope",
+    #     ),
+    #     0x0022EEE2: (
+    #         "SQ",
+    #         "1",
+    #         "Referenced Segmentation Sequence",
+    #         "",
+    #         "ReferencedSegmentationSequence",
+    #     ),
+    #     0x0022EEE3: ("FL", "1", "Surface Offset", "", "SurfaceOffset"),
+    # }
+
+    # # Step 1: Import the dictionary from the .py file
+    # spec = importlib.util.spec_from_file_location("dictionaries", file_path)
+    # dicom_dict_module = importlib.util.module_from_spec(spec)
+    # spec.loader.exec_module(dicom_dict_module)
+
+    # # Get the DicomDictionary and RepeatersDictionary from the module
+    # DicomDictionary = dicom_dict_module.DicomDictionary
+    # RepeatersDictionary = dicom_dict_module.RepeatersDictionary
+
+    # # Step 2: Add new elements only if they don't exist
+    # for key, value in new_elements.items():
+    #     if key not in DicomDictionary:
+    #         DicomDictionary[key] = value
+
+    # # Step 3: Write the updated dictionary back to the .py file
+    # with open(file_path, "w") as file:
+    #     file.write("DicomDictionary = {\n")
+    #     for key, value in DicomDictionary.items():
+    #         if isinstance(key, int):
+    #             key_str = f"0x{key:08X}"
+    #         else:
+    #             key_str = str(key)
+    #         file.write(f"    {key_str}: {value},\n")
+    #     file.write("}\n\n")
+
+    #     file.write("RepeatersDictionary = {\n")
+    #     for key, value in RepeatersDictionary.items():
+    #         if isinstance(key, int):
+    #             key_str = f"0x{key:08X}"
+    #         else:
+    #             key_str = f"'{key}'"
+    #         file.write(f"    {key_str}: {value},\n")
+    #     file.write("}\n")
+
+    # print(f"DicomDictionary has been updated successfully in {file_path}.")
+
+    # Define items as (VR, VM, description, is_retired flag, keyword)
+    #   Leave is_retired flag blank.
+    new_dict_items = {
         0x0022EEE0: (
             "SQ",
             "1",
@@ -693,41 +758,12 @@ def update_pydicom_dicom_dictionary(file_path):
         0x0022EEE3: ("FL", "1", "Surface Offset", "", "SurfaceOffset"),
     }
 
-    # Step 1: Import the dictionary from the .py file
-    spec = importlib.util.spec_from_file_location("dictionaries", file_path)
-    dicom_dict_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(dicom_dict_module)
+    # Update the dictionary itself
+    DicomDictionary.update(new_dict_items)
 
-    # Get the DicomDictionary and RepeatersDictionary from the module
-    DicomDictionary = dicom_dict_module.DicomDictionary
-    RepeatersDictionary = dicom_dict_module.RepeatersDictionary
-
-    # Step 2: Add new elements only if they don't exist
-    for key, value in new_elements.items():
-        if key not in DicomDictionary:
-            DicomDictionary[key] = value
-
-    # Step 3: Write the updated dictionary back to the .py file
-    with open(file_path, "w") as file:
-        file.write("DicomDictionary = {\n")
-        for key, value in DicomDictionary.items():
-            if isinstance(key, int):
-                key_str = f"0x{key:08X}"
-            else:
-                key_str = str(key)
-            file.write(f"    {key_str}: {value},\n")
-        file.write("}\n\n")
-
-        file.write("RepeatersDictionary = {\n")
-        for key, value in RepeatersDictionary.items():
-            if isinstance(key, int):
-                key_str = f"0x{key:08X}"
-            else:
-                key_str = f"'{key}'"
-            file.write(f"    {key_str}: {value},\n")
-        file.write("}\n")
-
-    print(f"DicomDictionary has been updated successfully in {file_path}.")
+    # Update the reverse mapping from name to tag
+    new_names_dict = dict([(val[4], tag) for tag, val in new_dict_items.items()])
+    keyword_dict.update(new_names_dict)
 
 
 def check_critical_info_from_files_in_folder(folder):
@@ -758,9 +794,5 @@ def check_critical_info_from_files_in_folder(folder):
     except AttributeError:
         return "critical_info_missing"
 
-    id = find_id(str(dataset.PatientID), str(dataset.PatientName))
-    if id == "noid":
-        return "critical_info_missing"
-
-    else:
-        return "pass"
+    pid = find_id(str(dataset.PatientID), str(dataset.PatientName))
+    return "critical_info_missing" if pid == "noid" else "pass"
