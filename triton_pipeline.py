@@ -26,10 +26,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/Maestro2"
-    dependency_folder = f"{study_id}/dependency/Maestro2"
-    pipeline_workflow_log_folder = f"{study_id}/logs/Maestro2"
-    processed_data_output_folder = f"{study_id}/pooled-data/Maestro2-processed"
+    input_folder = f"{study_id}/pooled-data/Triton"
+    dependency_folder = f"{study_id}/dependency/Triton"
+    pipeline_workflow_log_folder = f"{study_id}/logs/Triton"
+    processed_data_output_folder = f"{study_id}/pooled-data/Triton-processed"
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -37,7 +37,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         resource_types=azureblob.ResourceTypes(container=True, object=True),
         permission=azureblob.AccountSasPermissions(read=True, write=True, list=True),
         expiry=datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=1),
+        + datetime.timedelta(hours=24),
     )
 
     # Get the blob service client
@@ -114,7 +114,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     total_files = len(file_paths)
 
-    device = "Maestro2"
+    device = "Triton"
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
@@ -172,15 +172,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # process the files
-        maestro2_instance = Maestro2_Triton.Maestro2_Triton()
+        triton_instance = Maestro2_Triton.Maestro2_Triton()
 
         try:
             for step2_data_folder in step2_data_folders:
                 print(step2_data_folder)
-                # organize_result = maestro2_instance.organize(
+                # organize_result = triton_instance.organize(
                 #     step2_data_folder, step3_folder
                 # )
-                maestro2_instance.organize(
+                triton_instance.organize(
                     step2_data_folder, os.path.join(step3_folder, device)
                 )
         except Exception:
@@ -194,9 +194,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             os.makedirs(step4_folder)
 
         protocols = [
-            "maestro2_3d_macula_oct",
-            "maestro2_3d_wide_oct",
-            "maestro2_mac_6x6_octa",
+            "triton_3d_radial_oct",
+            "triton_macula_6x6_octa",
+            "triton_macula_12x12_octa",
         ]
 
         try:
@@ -211,7 +211,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 for folder in folders:
-                    maestro2_instance.convert(folder, output_folder_path)
+                    triton_instance.convert(folder, output_folder_path)
 
         except Exception:
             continue
@@ -288,8 +288,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         shutil.rmtree(temp_folder_path)
 
-        # if log_idx == 10:
-        #     break
+        if log_idx == 10:
+            break
 
     temp_folder_path = tempfile.mkdtemp()
 
