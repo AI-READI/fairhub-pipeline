@@ -13,6 +13,7 @@ import config
 import utils.dependency as deps
 import time
 import csv
+import utils.logwatch as logging
 
 import pprint
 
@@ -30,6 +31,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/Triton"
     pipeline_workflow_log_folder = f"{study_id}/logs/Triton"
     processed_data_output_folder = f"{study_id}/pooled-data/Triton-processed"
+
+    logger = logging.Logwatch("triton")
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -105,7 +108,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             }
         )
 
-    print(f"Found {len(file_paths)} files in {input_folder}")
+    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
 
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
@@ -126,7 +129,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         workflow_input_files = [path]
 
-        print(f"Processing {path} - ({log_idx}/{total_files})")
+        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
 
         # get the file name from the path
         original_file_name = path.split("/")[-1]
@@ -146,12 +149,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
 
-        print(f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})")
+        logger.info(
+            f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})"
+        )
 
         zip_files = imaging_utils.list_zip_files(step1_folder)
 
         if len(zip_files) == 0:
-            print(f"No zip files found in {step1_folder}")
+            logger.warn(f"No zip files found in {step1_folder}")
             continue
 
         step2_folder = os.path.join(temp_folder_path, "step2")
@@ -159,11 +164,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         if not os.path.exists(step2_folder):
             os.makedirs(step2_folder)
 
-        print(f"Unzipping {file_name} to {step2_folder} - ({log_idx}/{total_files})")
+        logger.debug(
+            f"Unzipping {file_name} to {step2_folder} - ({log_idx}/{total_files})"
+        )
 
         imaging_utils.unzip_fda_file(download_path, step2_folder)
 
-        print(f"Unzipped {file_name} to {step2_folder} - ({log_idx}/{total_files})")
+        logger.info(
+            f"Unzipped {file_name} to {step2_folder} - ({log_idx}/{total_files})"
+        )
 
         step3_folder = os.path.join(temp_folder_path, "step3")
 
@@ -176,7 +185,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         try:
             for step2_data_folder in step2_data_folders:
-                print(step2_data_folder)
+                logger.debug(step2_data_folder)
                 # organize_result = triton_instance.organize(
                 #     step2_data_folder, step3_folder
                 # )
@@ -184,6 +193,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     step2_data_folder, os.path.join(step3_folder, device)
                 )
         except Exception:
+            logger.error(f"Failed to organize {file_name} - ({log_idx}/{total_files})")
             continue
 
         file_item["organize_error"] = False
@@ -214,6 +224,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     triton_instance.convert(folder, output_folder_path)
 
         except Exception:
+            logger.error(f"Failed to convert {file_name} - ({log_idx}/{total_files})")
             continue
 
         file_item["convert_error"] = False
@@ -231,11 +242,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     imaging_utils.format_file(file_name, destination_folder)
                 except Exception:
                     file_item["format_error"] = True
+                    logger.error(
+                        f"Failed to format {file_name} - ({log_idx}/{total_files})"
+                    )
                     continue
 
         file_item["processed"] = True
 
-        print(
+        logger.debug(
             f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
@@ -252,7 +266,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     combined_file_name = "/".join(file_name2)
 
-                    print(f"Uploading {combined_file_name} - ({log_idx}/{total_files})")
+                    logger.debug(
+                        f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
+                    )
 
                     output_file_path = (
                         f"{processed_data_output_folder}/{combined_file_name}"
@@ -266,6 +282,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         output_blob_client.upload_blob(data)
                     except Exception:
                         outputs_uploaded = False
+                        logger.error(
+                            f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
+                        )
                         continue
 
                     file_item["output_files"].append(output_file_path)
@@ -274,11 +293,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         if outputs_uploaded:
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
-            print(
+            logger.info(
                 f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
         else:
-            print(
+            logger.error(
                 f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
 
@@ -324,7 +343,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         writer.writerows(file_paths)
 
     with open(workflow_log_file_path, mode="rb") as data:
-        print(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
+        logger.debug(
+            f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
 
         output_blob_client = blob_service_client.get_blob_client(
             container="stage-1-container",
@@ -333,13 +354,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         output_blob_client.upload_blob(data)
 
+        logger.info(
+            f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
+
     # Write the dependencies to a file
     deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
 
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
 
-    print(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
+    logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
 
     with open(json_file_path, "rb") as data:
         output_blob_client = blob_service_client.get_blob_client(
@@ -347,6 +372,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             blob=f"{dependency_folder}/{json_file_name}",
         )
         output_blob_client.upload_blob(data)
+
+        logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
     shutil.rmtree(temp_folder_path)
 
