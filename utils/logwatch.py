@@ -10,16 +10,9 @@ class Logwatch:
         self.triton_drain = config.FAIRHUB_TRITON_LOG_ENDPOINT
         self.maestro2_drain = config.FAIRHUB_MAESTRO2_LOG_ENDPOINT
 
-        if (channel == "triton") and (self.triton_drain is None):
-            # use the catch all drain if the triton drain is not set
-            self.drain = self.drain
-        else:
+        if (channel == "triton") and (self.triton_drain is not None):
             self.drain = self.triton_drain
-
-        if (channel == "maestro2") and (self.maestro2_drain is None):
-            # use the catch all drain if the maestro2 drain is not set
-            self.drain = self.drain
-        else:
+        if (channel == "maestro2") and (self.maestro2_drain is not None):
             self.drain = self.maestro2_drain
 
     def info(self, message: str):

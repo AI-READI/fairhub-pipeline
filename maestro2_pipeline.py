@@ -32,7 +32,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/Maestro2"
     processed_data_output_folder = f"{study_id}/pooled-data/Maestro2-processed"
 
-    logger = logging.Logwatch("triton")
+    logger = logging.Logwatch("maestro2")
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -223,6 +223,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     maestro2_instance.convert(folder, output_folder_path)
 
         except Exception:
+            logger.error(f"Failed to convert {file_name} - ({log_idx}/{total_files})")
             continue
 
         file_item["convert_error"] = False
