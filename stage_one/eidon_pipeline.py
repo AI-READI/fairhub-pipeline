@@ -273,8 +273,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         shutil.rmtree(temp_folder_path)
 
         # dev
-        if log_idx == 5:
-            break
+        # if log_idx == 5:
+        #     break
 
     temp_folder_path = tempfile.mkdtemp()
 
