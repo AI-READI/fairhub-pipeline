@@ -9,11 +9,20 @@ class Logwatch:
         self.drain = config.FAIRHUB_CATCH_ALL_LOG_ENDPOINT
         self.triton_drain = config.FAIRHUB_TRITON_LOG_ENDPOINT
         self.maestro2_drain = config.FAIRHUB_MAESTRO2_LOG_ENDPOINT
+        self.eidon_drain = config.FAIRHUB_EIDON_LOG_ENDPOINT
+        self.ecg_drain = config.FAIRHUB_ECG_LOG_ENDPOINT
+        self.cgm_drain = config.FAIRHUB_CGM_LOG_ENDPOINT
 
         if (channel == "triton") and (self.triton_drain is not None):
             self.drain = self.triton_drain
         if (channel == "maestro2") and (self.maestro2_drain is not None):
             self.drain = self.maestro2_drain
+        if (channel == "eidon") and (self.eidon_drain is not None):
+            self.drain = self.eidon_drain
+        if (channel == "ecg") and (self.ecg_drain is not None):
+            self.drain = self.ecg_drain
+        if (channel == "cgm") and (self.cgm_drain is not None):
+            self.drain = self.cgm_dr
 
     def info(self, message: str):
         """Send an info message to the logwatch server"""

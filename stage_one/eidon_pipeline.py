@@ -13,6 +13,7 @@ import config
 import utils.dependency as deps
 import time
 import csv
+import utils.logwatch as logging
 
 # import pprint
 
@@ -29,7 +30,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     input_folder = f"{study_id}/pooled-data/Eidon"
     dependency_folder = f"{study_id}/dependency/Eidon"
     pipeline_workflow_log_folder = f"{study_id}/logs/Eidon"
-    processed_data_output_folder = f"{study_id}/pooled-data/retinal_photography"
+    processed_data_output_folder = f"{study_id}/pooled-data/Eidon-processed"
+
+    logger = logging.Logwatch("eidon")
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -100,10 +103,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             }
         )
 
-    print(f"Found {len(file_paths)} files in {input_folder}")
-
-    # Create a temporary folder on the local machine
-    temp_folder_path = tempfile.mkdtemp()
+    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
 
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
@@ -115,11 +115,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
+        # Create a temporary folder on the local machine
+        temp_folder_path = tempfile.mkdtemp()
+
         path = file_item["file_path"]
 
         workflow_input_files = [path]
 
-        print(f"Processing {path} - ({log_idx}/{total_files})")
+        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
 
         # get the file name from the path
         original_file_name = path.split("/")[-1]
@@ -129,134 +132,151 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             container="stage-1-container", blob=path
         )
 
-        download_path = os.path.join(temp_folder_path, original_file_name)
+        step1_folder = os.path.join(temp_folder_path, "step1")
+
+        if not os.path.exists(step1_folder):
+            os.makedirs(step1_folder)
+
+        download_path = os.path.join(step1_folder, original_file_name)
 
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
 
-        print(f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})")
+        logger.info(
+            f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})"
+        )
 
-        # process the file
+        filtered_file_names = imaging_utils.get_filtered_file_names(step1_folder)
 
-        organize_temp_folder_path = tempfile.mkdtemp()
+        step2_folder = os.path.join(temp_folder_path, "step2")
 
         eidon_instance = EIDON.Eidon()
 
         try:
-            # organize_result = eidon_instance.organize(download_path, organize_temp_folder_path)
-            eidon_instance.organize(download_path, organize_temp_folder_path)
+            for file in filtered_file_names:
+                # organize_result = eidon_instance.organize(download_path, organize_temp_folder_path)
+                eidon_instance.organize(file, step2_folder)
         except Exception:
+            logger.error(
+                f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
+            )
             continue
 
         file_item["organize_error"] = False
 
-        # pprint.pp(organize_result)
+        step3_folder = os.path.join(temp_folder_path, "step3")
 
-        step2_paths = []
+        protocols = [
+            "eidon_mosaic_cfp",
+            "eidon_uwf_central_cfp",
+            "eidon_uwf_central_faf",
+            "eidon_uwf_central_ir",
+            "eidon_uwf_nasal_cfp",
+            "eidon_uwf_temporal_cfp",
+        ]
 
-        for root, dirs, files in os.walk(organize_temp_folder_path):
-            for file in files:
-                step2_paths.append(os.path.join(root, file))
+        try:
+            for protocol in protocols:
+                output = os.path.join(step3_folder, protocol)
 
-        convert_temp_folder_path = tempfile.mkdtemp()
+                if not os.path.exists(output):
+                    os.makedirs(output)
 
-        # rule = organize_result["Rule"]
-        # organized_file_name = organize_result["Filename"]
-        # file_path = organize_result["Path"]
+                files = imaging_utils.get_filtered_file_names(
+                    os.path.join(step2_folder, protocol)
+                )
 
-        for step2_path in step2_paths:
-
-            try:
-                eidon_instance.convert(step2_path, convert_temp_folder_path)
-
-            except Exception:
-                continue
+                for file in files:
+                    eidon_instance.convert(file, output)
+        except Exception:
+            logger.error(
+                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+            )
+            continue
 
         file_item["convert_error"] = False
 
-        filtered_file_names = imaging_utils.get_filtered_file_names(
-            convert_temp_folder_path
+        device_list = [step3_folder]
+
+        destination_folder = os.path.join(temp_folder_path, "step4")
+
+        try:
+            for folder in device_list:
+                filelist = imaging_utils.get_filtered_file_names(folder)
+
+                for file in filelist:
+                    imaging_utils.format_file(file, destination_folder)
+        except Exception:
+            logger.error(
+                f"Failed to format {original_file_name} - ({log_idx}/{total_files})"
+            )
+            continue
+
+        file_item["format_error"] = False
+        file_item["processed"] = True
+
+        logger.debug(
+            f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
-        for file_name in filtered_file_names:
-            format_temp_folder_path = tempfile.mkdtemp()
-            #
+        workflow_output_files = []
 
-            try:
-                # format_info = imaging_utils.format_file(file_name, format_temp_folder_path)
-                imaging_utils.format_file(file_name, format_temp_folder_path)
-            except Exception:
-                continue
+        outputs_uploaded = True
 
-            file_item["format_error"] = False
-            file_item["processed"] = True
+        for root, dirs, files in os.walk(destination_folder):
+            for file in files:
+                file_path = os.path.join(root, file)
 
-            # patient_id = format_info["PatientID"]
+                with open(f"{file_path}", "rb") as data:
+                    file_name2 = file_path.split("/")[-5:]
 
-            # modality = rule.split("_")[-1]
+                    combined_file_name = "/".join(file_name2)
 
-            print(
-                f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                    logger.debug(
+                        f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
+                    )
+
+                    output_file_path = (
+                        f"{processed_data_output_folder}/{combined_file_name}"
+                    )
+
+                    try:
+                        output_blob_client = blob_service_client.get_blob_client(
+                            container="stage-1-container", blob=output_file_path
+                        )
+                        output_blob_client.upload_blob(data)
+                    except Exception:
+                        outputs_uploaded = False
+                        logger.error(
+                            f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
+                        )
+                        continue
+
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
+
+        if outputs_uploaded:
+            file_item["output_uploaded"] = True
+            file_item["status"] = "success"
+            logger.info(
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
+        else:
+            logger.error(
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
 
-            workflow_output_files = []
+        workflow_file_dependencies.add_dependency(
+            workflow_input_files, workflow_output_files
+        )
 
-            outputs_uploaded = True
-
-            for root, dirs, files in os.walk(format_temp_folder_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-
-                    with open(f"{file_path}", "rb") as data:
-                        file_name2 = file_path.split("/")[-5:]
-
-                        combined_file_name = "/".join(file_name2)
-
-                        print(
-                            f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
-                        )
-
-                        output_file_path = (
-                            f"{processed_data_output_folder}/{combined_file_name}"
-                        )
-
-                        try:
-                            output_blob_client = blob_service_client.get_blob_client(
-                                container="stage-1-container",
-                                blob=output_file_path,
-                            )
-                            output_blob_client.upload_blob(data)
-                        except Exception:
-                            outputs_uploaded = False
-                            continue
-
-                        file_item["output_files"].append(output_file_path)
-                        workflow_output_files.append(output_file_path)
-
-            if outputs_uploaded:
-                file_item["output_uploaded"] = True
-                file_item["status"] = "success"
-                print(
-                    f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-                )
-            else:
-                print(
-                    f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-                )
-
-            workflow_file_dependencies.add_dependency(
-                workflow_input_files, workflow_output_files
-            )
-
-            shutil.rmtree(format_temp_folder_path)
-
-        shutil.rmtree(convert_temp_folder_path)
-        shutil.rmtree(organize_temp_folder_path)
-        os.remove(download_path)
+        shutil.rmtree(temp_folder_path)
 
         # dev
         if log_idx == 5:
             break
+
+    temp_folder_path = tempfile.mkdtemp()
 
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -289,7 +309,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         writer.writerows(file_paths)
 
     with open(workflow_log_file_path, mode="rb") as data:
-        print(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
+        logger.debug(
+            f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
 
         output_blob_client = blob_service_client.get_blob_client(
             container="stage-1-container",
@@ -298,13 +320,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         output_blob_client.upload_blob(data)
 
+        logger.info(
+            f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
+
     # Write the dependencies to a file
     deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
 
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
 
-    print(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
+    logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
 
     with open(json_file_path, "rb") as data:
         output_blob_client = blob_service_client.get_blob_client(
@@ -312,6 +338,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             blob=f"{dependency_folder}/{json_file_name}",
         )
         output_blob_client.upload_blob(data)
+
+        logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
+
+    shutil.rmtree(temp_folder_path)
 
     # dev
     # move the workflow log file and the json file to the current directory
