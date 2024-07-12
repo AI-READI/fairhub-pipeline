@@ -40,7 +40,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         resource_types=azureblob.ResourceTypes(container=True, object=True),
         permission=azureblob.AccountSasPermissions(read=True, write=True, list=True),
         expiry=datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=1),
+        + datetime.timedelta(hours=24),
     )
 
     # Get the blob service client
