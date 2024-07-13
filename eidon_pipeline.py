@@ -14,6 +14,7 @@ import utils.dependency as deps
 import time
 import csv
 import utils.logwatch as logging
+import json
 
 # import pprint
 
@@ -32,13 +33,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/Eidon"
     processed_data_output_folder = f"{study_id}/pooled-data/Eidon-processed"
 
-    logger = logging.Logwatch("eidon")
+    logger = logging.Logwatch("eidon", print=True)
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
         account_key=config.AZURE_STORAGE_ACCESS_KEY,
         resource_types=azureblob.ResourceTypes(container=True, object=True),
-        permission=azureblob.AccountSasPermissions(read=True, write=True, list=True),
+        permission=azureblob.AccountSasPermissions(
+            read=True, write=True, list=True, delete=True
+        ),
         expiry=datetime.datetime.now(datetime.timezone.utc)
         + datetime.timedelta(hours=24),
     )
@@ -56,8 +59,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     )
 
     # Delete the output folder if it exists
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_output_folder)
+    # with contextlib.suppress(Exception):
+    #     file_system_client.delete_directory(processed_data_output_folder)
 
     paths = file_system_client.get_paths(path=input_folder)
 
@@ -108,6 +111,30 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp()
+
+    # Download the meta file for the pipeline
+    file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
+
+    file_map = []
+
+    meta_blob_client = blob_service_client.get_blob_client(
+        container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
+    )
+
+    with contextlib.suppress(Exception):
+        with open(file_map_download_path, "wb") as data:
+            meta_blob_client.download_blob().readinto(data)
+
+        # Load the meta file
+        with open(file_map_download_path, "r") as f:
+            file_map = json.load(f)
+
+    for entry in file_map:
+        # This is to delete the output files of files that are no longer in the input folder
+        entry["seen"] = False
+
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
     total_files = len(file_paths)
@@ -115,22 +142,62 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
+        # dev
+        # if log_idx == 6:
+        #     break
+
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
 
         path = file_item["file_path"]
 
+        input_path = path
         workflow_input_files = [path]
-
-        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
-
-        # get the file name from the path
-        original_file_name = path.split("/")[-1]
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
             container="stage-1-container", blob=path
         )
+
+        should_process = True
+        input_last_modified = blob_client.get_blob_properties().last_modified
+
+        # Check if the input file is in the file map
+        for entry in file_map:
+            if entry["input_file"] == path:
+                entry["seen"] = True
+
+                t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
+
+                # Check if the file has been modified since the last time it was processed
+                if t == entry["input_last_modified"]:
+                    logger.debug(
+                        f"The file {path} has not been modified since the last time it was processed",
+                    )
+                    should_process = False
+
+                break
+
+        if not should_process:
+            logger.debug(
+                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
+            )
+
+            continue
+
+        file_map.append(
+            {
+                "input_file": path,
+                "output_files": [],
+                "input_last_modified": input_last_modified,
+                "seen": True,
+            }
+        )
+
+        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
+
+        # get the file name from the path
+        original_file_name = path.split("/")[-1]
 
         step1_folder = os.path.join(temp_folder_path, "step1")
 
@@ -223,6 +290,19 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         outputs_uploaded = True
 
+        # Delete the output files associated with the input file
+        # We are doing a file level replacement
+        for entry in file_map:
+            if entry["input_file"] == input_path:
+                for output_file in entry["output_files"]:
+                    with contextlib.suppress(Exception):
+                        output_blob_client = blob_service_client.get_blob_client(
+                            container="stage-1-container", blob=output_file
+                        )
+                        output_blob_client.delete_blob()
+
+                break
+
         for root, dirs, files in os.walk(destination_folder):
             for file in files:
                 file_path = os.path.join(root, file)
@@ -240,6 +320,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         f"{processed_data_output_folder}/{combined_file_name}"
                     )
 
+                    with contextlib.suppress(Exception):
+                        output_blob_client = blob_service_client.get_blob_client(
+                            container="stage-1-container", blob=output_file_path
+                        )
+                        output_blob_client.delete_blob()
+
                     try:
                         output_blob_client = blob_service_client.get_blob_client(
                             container="stage-1-container", blob=output_file_path
@@ -254,6 +340,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     file_item["output_files"].append(output_file_path)
                     workflow_output_files.append(output_file_path)
+
+        # Add the new output files to the file map
+        for entry in file_map:
+            if entry["input_file"] == input_path:
+                entry["output_files"] = workflow_output_files
+                entry["input_last_modified"] = input_last_modified
+                break
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
@@ -272,16 +365,49 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         shutil.rmtree(temp_folder_path)
 
-        # dev
-        # if log_idx == 5:
-        #     break
+    # Delete the output files of files that are no longer in the input folder
+    for entry in file_map:
+        if not entry["seen"]:
+            for output_file in entry["output_files"]:
+                with contextlib.suppress(Exception):
+                    output_blob_client = blob_service_client.get_blob_client(
+                        container="stage-1-container", blob=output_file
+                    )
+                    output_blob_client.delete_blob()
 
-    temp_folder_path = tempfile.mkdtemp()
+    # Remove the entries that are no longer in the input folder
+    file_map = [entry for entry in file_map if entry["seen"]]
+
+    # Remove the seen flag from the file map
+    for entry in file_map:
+        del entry["seen"]
+
+    # Write the file map to a file
+    file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
+
+    with open(file_map_file_path, "w") as f:
+        json.dump(file_map, f, indent=4, sort_keys=True, default=str)
+
+    with open(file_map_file_path, "rb") as data:
+        logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+
+        output_blob_client = blob_service_client.get_blob_client(
+            container="stage-1-container",
+            blob=f"{dependency_folder}/file_map.json",
+        )
+
+        # delete the existing file map
+        with contextlib.suppress(Exception):
+            output_blob_client.delete_blob()
+
+        output_blob_client.upload_blob(data)
+
+        logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
 
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
     file_name = f"status_report_{timestr}.csv"
-    workflow_log_file_path = os.path.join(temp_folder_path, file_name)
+    workflow_log_file_path = os.path.join(meta_temp_folder_path, file_name)
 
     with open(workflow_log_file_path, mode="w") as f:
         fieldnames = [
@@ -325,7 +451,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
     # Write the dependencies to a file
-    deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
+    deps_output = workflow_file_dependencies.write_to_file(meta_temp_folder_path)
 
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
@@ -341,7 +467,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
-    shutil.rmtree(temp_folder_path)
+    shutil.rmtree(meta_temp_folder_path)
 
     # dev
     # move the workflow log file and the json file to the current directory
