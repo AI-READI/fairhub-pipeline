@@ -15,7 +15,7 @@ import time
 import csv
 import utils.logwatch as logging
 import json
-from file_map import FileProcessor
+from utils.file_map import FileMapProcessor
 
 # import pprint
 
@@ -366,7 +366,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         shutil.rmtree(temp_folder_path)
 
-    file_processor = FileProcessor(study_id)
+    file_processor = FileMapProcessor(study_id)
     file_processor.__init__(study_id)
 
     # Write the workflow log to a file

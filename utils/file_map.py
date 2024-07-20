@@ -9,7 +9,7 @@ import utils.logwatch as logging
 import json
 
 
-class FileProcessor:
+class FileMapProcessor:
     def __init__(self, study_id):
         if study_id is None or not study_id:
             raise ValueError("study_id is required")
@@ -34,6 +34,8 @@ class FileProcessor:
         meta_temp_folder_path = tempfile.mkdtemp()
         logger = logging.Logwatch("eidon", print=True)
 
+        def remove_files():
+            pass
         # Delete the output files that are no longer in the input folder
         for entry in file_map:
             if not entry["seen"]:
