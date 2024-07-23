@@ -1,42 +1,52 @@
+
 import contextlib
 import datetime
 import os
 import tempfile
 import azure.storage.blob as azureblob
-import config
+from .. import config
 
-import utils.logwatch as logging
 import json
 
 
 class FileMapProcessor:
-    def __init__(self, study_id):
-        if study_id is None or not study_id:
-            raise ValueError("study_id is required")
+    """ Class for processing files """
 
-        sas_token = azureblob.generate_account_sas(
-            account_name="b2aistaging",
-            account_key=config.AZURE_STORAGE_ACCESS_KEY,
-            resource_types=azureblob.ResourceTypes(container=True, object=True),
-            permission=azureblob.AccountSasPermissions(
-                read=True, write=True, list=True, delete=True
-            ),
-            expiry=datetime.datetime.now(datetime.timezone.utc)
-                   + datetime.timedelta(hours=24),
-        )
-        blob_service_client = azureblob.BlobServiceClient(
-            account_url="https://b2aistaging.blob.core.windows.net/",
-            credential=sas_token,
-        )
-        dependency_folder = f"{study_id}/dependency/Eidon"
+    def __init__(self, study_id: str, logger, blob_service_client):
 
+        self.study_id = study_id
+        self.logger = logger
+        self.blob_service_client = blob_service_client
+
+    sas_token = azureblob.generate_account_sas(
+        account_name="b2aistaging",
+        account_key=config.AZURE_STORAGE_ACCESS_KEY,
+        resource_types=azureblob.ResourceTypes(container=True, object=True),
+        permission=azureblob.AccountSasPermissions(
+            read=True, write=True, list=True, delete=True
+        ),
+        expiry=datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(hours=24),
+    )
+
+    # Get the blob service client
+    blob_service_client = azureblob.BlobServiceClient(
+        account_url="https://b2aistaging.blob.core.windows.net/",
+        credential=sas_token,
+    )
+
+    file_map = []
+    for entry in file_map:
+        if not entry["seen"]:
+            for output_file in entry["output_files"]:
+                with contextlib.suppress(Exception):
+                    output_blob_client = blob_service_client.get_blob_client(
+                        container="stage-1-container", blob=output_file
+                    )
+                    output_blob_client.delete_blob()
+
+    def adding_files(self, blob_service_client):
         file_map = []
-        meta_temp_folder_path = tempfile.mkdtemp()
-        logger = logging.Logwatch("eidon", print=True)
-
-        def remove_files():
-            pass
-        # Delete the output files that are no longer in the input folder
         for entry in file_map:
             if not entry["seen"]:
                 for output_file in entry["output_files"]:
@@ -46,14 +56,20 @@ class FileMapProcessor:
                         )
                         output_blob_client.delete_blob()
 
-            # Remove the entries that are no longer in the input folder
+        file_map = []
+
         file_map = [entry for entry in file_map if entry["seen"]]
 
         # Remove the seen flag from the file map
         for entry in file_map:
             del entry["seen"]
 
+    def render_json(self, study_id, logger, blob_service_client):
+
         # Write the file map to a file
+        dependency_folder = f"{study_id}/dependency/Eidon"
+        file_map = []
+        meta_temp_folder_path = tempfile.mkdtemp()
         file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
         with open(file_map_file_path, "w") as f:
@@ -74,3 +90,4 @@ class FileMapProcessor:
             output_blob_client.upload_blob(data)
 
             logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+

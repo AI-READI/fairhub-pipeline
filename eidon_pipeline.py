@@ -366,8 +366,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         shutil.rmtree(temp_folder_path)
 
-    file_processor = FileMapProcessor(study_id)
-    file_processor.__init__(study_id)
+    file_processor = FileMapProcessor(study_id, logger, blob_service_client)
+    file_processor.adding_files(blob_service_client)
 
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
