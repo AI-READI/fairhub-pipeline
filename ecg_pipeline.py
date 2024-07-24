@@ -199,6 +199,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_output_files = []
 
         outputs_uploaded = True
+        upload_exception = "False"
 
         for file in output_files:
             with open(f"{file}", "rb") as data:
@@ -213,6 +214,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
                     output_blob_client.upload_blob(data)
                 except Exception:
+                    upload_exception = str(Exception)
                     outputs_uploaded = False
                     continue
 
@@ -220,7 +222,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 workflow_output_files.append(output_file_path)
 
         if outputs_uploaded:
-            file_item["output_uploaded"] = True
+            file_item["output_uploaded"] = upload_exception
             file_item["status"] = "success"
             print(
                 f"Uploaded outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
