@@ -224,8 +224,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     upload_exception = format_exc()
                     print("upload_exception:", upload_exception)
                     print_exc()
-                    upload_exception = str(Exception)
-                    print("📢 [ecg_pipeline.py:227]", upload_exception)
+                    # upload_exception = str(Exception)
+                    # print("📢 [ecg_pipeline.py:227]", upload_exception)
                     outputs_uploaded = False
                     continue
 
