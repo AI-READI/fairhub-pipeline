@@ -207,17 +207,22 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name2}"
 
-                try:
-                    output_blob_client = blob_service_client.get_blob_client(
-                        container="stage-1-container",
-                        blob=output_file_path,
-                    )
-                    output_blob_client.upload_blob(data)
-                except Exception:
-                    print(Exception)
-                    upload_exception = str(Exception)
-                    outputs_uploaded = False
-                    continue
+                output_blob_client = blob_service_client.get_blob_client(
+                    container="stage-1-container",
+                    blob=output_file_path,
+                )
+                output_blob_client.upload_blob(data)
+                # try:
+                #     output_blob_client = blob_service_client.get_blob_client(
+                #         container="stage-1-container",
+                #         blob=output_file_path,
+                #     )
+                #     output_blob_client.upload_blob(data)
+                # except Exception:
+                #     print(Exception)
+                #     upload_exception = str(Exception)
+                #     outputs_uploaded = False
+                #     continue
 
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
