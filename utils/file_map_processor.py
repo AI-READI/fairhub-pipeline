@@ -61,42 +61,9 @@ class FileMapProcessor:
             entry["seen"] = False
 
     def add_entry(self, file_item):
-        path = file_item["file_path"]
+        pass
 
-        blob_client = self.blob_service_client.get_blob_client(
-            container="stage-1-container", blob=path
-        )
-        should_process = True
-        input_last_modified = blob_client.get_blob_properties().last_modified
-
-        # Check if the input file is in the file map
-        for entry in self.file_map:
-            if entry["input_file"] == path:
-                entry["seen"] = True
-
-                t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
-
-                # Check if the file has been modified since the last time it was processed
-                if t == entry["input_last_modified"]:
-                    self.logger.debug(
-                        f"The file {path} has not been modified since the last time it was processed",
-                    )
-                    should_process = False
-
-                break
-
-            return
-
-        self.file_map.append(
-            {
-                "input_file": path,
-                "output_files": [],
-                "input_last_modified": input_last_modified,
-                "seen": True,
-            }
-        )
-
-    def delete_entry(self, ):
+    def delete_entry(self ):
         # Delete the output files that are no longer in the input folder
         for entry in self.file_map:
             if not entry["seen"]:
@@ -115,7 +82,14 @@ class FileMapProcessor:
             del entry["seen"]
 
     def delete_output_file(self):
+        pass
 
+    def add_output_file(self, input_path, workflow_output_files, input_last_modified):
+        for entry in self.file_map:
+            if entry["input_file"] == input_path:
+                entry["output_files"] = workflow_output_files
+                entry["input_last_modified"] = input_last_modified
+                break
 
     def mark_items_seen(self, path):
         pass

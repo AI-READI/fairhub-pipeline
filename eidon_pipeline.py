@@ -15,7 +15,7 @@ import time
 import csv
 import utils.logwatch as logging
 import json
-from utils.file_map import FileMapProcessor
+from utils.file_map_processor import FileMapProcessor
 
 # import pprint
 
