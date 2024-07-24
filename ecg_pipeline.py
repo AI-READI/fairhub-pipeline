@@ -214,6 +214,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
                     output_blob_client.upload_blob(data)
                 except Exception:
+                    print(Exception)
                     upload_exception = str(Exception)
                     outputs_uploaded = False
                     continue
