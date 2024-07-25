@@ -367,8 +367,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         shutil.rmtree(temp_folder_path)
 
 
-    file_processor = FileMapProcessor(study_id, logger, blob_service_client)
-    file_processor.adding_files(blob_service_client)
+    # file_processor = FileMapProcessor(study_id, logger, blob_service_client)
+    # file_processor.adding_files(blob_service_client)
     for entry in file_map:
         if not entry["seen"]:
             for output_file in entry["output_files"]:
