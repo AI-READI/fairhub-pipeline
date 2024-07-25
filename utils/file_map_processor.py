@@ -12,10 +12,9 @@ import json
 class FileMapProcessor:
     """ Class for handling file processing """
 
-    def __init__(self, study_id: str, logger, dependency_folder: str):
+    def __init__(self, study_id: str, dependency_folder: str):
 
         self.study_id = study_id
-        self.logger = logger
 
         # Initiate an empty file map
         self.file_map = []
@@ -61,7 +60,51 @@ class FileMapProcessor:
             entry["seen"] = False
 
     def add_entry(self, file_item):
-        pass
+        path = file_item["file_path"]
+        blob_client = self.blob_service_client.get_blob_client(
+            container="stage-1-container", blob=path
+        )
+        input_last_modified = blob_client.get_blob_properties().last_modified
+
+        # download the file to the temp folder
+        blob_client = self.blob_service_client.get_blob_client(
+            container="stage-1-container", blob=path
+        )
+        self.file_map.append(
+            {
+                "input_file": path,
+                "output_files": [],
+                "input_last_modified": input_last_modified,
+                "seen": True,
+            }
+        )
+
+    def mark_items_seen(self, file_item):
+        # Check if the input file is in the file map
+        path = file_item["file_path"]
+
+        # download the file to the temp folder
+        blob_client = self.blob_service_client.get_blob_client(
+            container="stage-1-container", blob=path
+        )
+
+        should_process = True
+        input_last_modified = blob_client.get_blob_properties().last_modified
+
+        for entry in self.file_map:
+            if entry["input_file"] == path:
+                entry["seen"] = True
+
+                t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
+
+                # Check if the file has been modified since the last time it was processed
+                if t == entry["input_last_modified"]:
+                    should_process = False
+
+                break
+
+        if not should_process:
+            continue
 
     def delete_entry(self ):
         # Delete the output files that are no longer in the input folder
@@ -91,9 +134,6 @@ class FileMapProcessor:
                 entry["input_last_modified"] = input_last_modified
                 break
 
-    def mark_items_seen(self, path):
-        pass
-
     def write_json(self):
 
         # Write the file map to a file
@@ -105,7 +145,7 @@ class FileMapProcessor:
             json.dump(self.file_map, f, indent=4, sort_keys=True, default=str)
 
         with open(file_map_file_path, "rb") as data:
-            self.logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+            # logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
             output_blob_client = self.blob_service_client.get_blob_client(
                 container="stage-1-container",
@@ -116,7 +156,7 @@ class FileMapProcessor:
             with contextlib.suppress(Exception):
                 output_blob_client.delete_blob()
 
-            output_blob_client.upload_blob(data)
-
-            self.logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+            # output_blob_client.upload_blob(data)
+            #
+            # logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
 
