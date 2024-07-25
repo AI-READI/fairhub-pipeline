@@ -5,6 +5,7 @@ import os
 import tempfile
 import azure.storage.blob as azureblob
 import config
+import shutil
 
 import json
 
@@ -12,13 +13,11 @@ import json
 class FileMapProcessor:
     """ Class for handling file processing """
 
-    def __init__(self, study_id: str, dependency_folder: str):
+    def __init__(self, dependency_folder: str):
 
-        self.study_id = study_id
-
-        # Initiate an empty file map
         self.file_map = []
         self.dependency_folder = dependency_folder
+
         # Establish azure connection
         sas_token = azureblob.generate_account_sas(
             account_name="b2aistaging",
@@ -59,17 +58,9 @@ class FileMapProcessor:
             # This is to delete the output files of files that are no longer in the input folder
             entry["seen"] = False
 
-    def add_entry(self, file_item):
+    def add_entry(self, file_item, input_last_modified):
         path = file_item["file_path"]
-        blob_client = self.blob_service_client.get_blob_client(
-            container="stage-1-container", blob=path
-        )
-        input_last_modified = blob_client.get_blob_properties().last_modified
 
-        # download the file to the temp folder
-        blob_client = self.blob_service_client.get_blob_client(
-            container="stage-1-container", blob=path
-        )
         self.file_map.append(
             {
                 "input_file": path,
@@ -79,17 +70,8 @@ class FileMapProcessor:
             }
         )
 
-    def mark_items_seen(self, file_item):
-        # Check if the input file is in the file map
+    def mark_items_seen(self, file_item, input_last_modified, should_process):
         path = file_item["file_path"]
-
-        # download the file to the temp folder
-        blob_client = self.blob_service_client.get_blob_client(
-            container="stage-1-container", blob=path
-        )
-
-        should_process = True
-        input_last_modified = blob_client.get_blob_properties().last_modified
 
         for entry in self.file_map:
             if entry["input_file"] == path:
@@ -100,13 +82,39 @@ class FileMapProcessor:
                 # Check if the file has been modified since the last time it was processed
                 if t == entry["input_last_modified"]:
                     should_process = False
-
                 break
 
-        if not should_process:
-            continue
+    def update_output_file(self, input_path, input_last_modified,
+                           workflow_file_dependencies, workflow_input_files, workflow_output_files):
+        # Add the new output files to the file map
+        for entry in self.file_map:
+            if entry["input_file"] == input_path:
+                entry["output_files"] = input_path
+                entry["input_last_modified"] = input_last_modified
+                break
+        workflow_file_dependencies.add_dependency(
+            workflow_input_files, workflow_output_files
+        )
 
-    def delete_entry(self ):
+    def delete_preexisting_output_files(self, file_item):
+
+        path = file_item["file_path"]
+
+        input_path = path
+
+        # Delete the output files associated with the input file
+        # We are doing a file level replacement
+        for entry in self.file_map:
+            if entry["input_file"] == input_path:
+                for output_file in entry["output_files"]:
+                    with contextlib.suppress(Exception):
+                        output_blob_client = self.blob_service_client.get_blob_client(
+                            container="stage-1-container", blob=output_file
+                        )
+                        output_blob_client.delete_blob()
+                break
+
+    def delete_out_of_date_output_files(self):
         # Delete the output files that are no longer in the input folder
         for entry in self.file_map:
             if not entry["seen"]:
@@ -117,27 +125,16 @@ class FileMapProcessor:
                         )
                         output_blob_client.delete_blob()
 
-            # Remove the entries that are no longer in the input folder
+    def remove_seen_flag_from_map(self):
+        # Remove the entries that are no longer in the input folder
         file_map = [entry for entry in self.file_map if entry["seen"]]
 
         # Remove the seen flag from the file map
         for entry in file_map:
             del entry["seen"]
 
-    def delete_output_file(self):
-        pass
-
-    def add_output_file(self, input_path, workflow_output_files, input_last_modified):
-        for entry in self.file_map:
-            if entry["input_file"] == input_path:
-                entry["output_files"] = workflow_output_files
-                entry["input_last_modified"] = input_last_modified
-                break
-
-    def write_json(self):
-
+    def write_json(self, dependency_folder):
         # Write the file map to a file
-        dependency_folder = f"{self.study_id}/dependency/Eidon"
         meta_temp_folder_path = tempfile.mkdtemp()
         file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
@@ -145,8 +142,6 @@ class FileMapProcessor:
             json.dump(self.file_map, f, indent=4, sort_keys=True, default=str)
 
         with open(file_map_file_path, "rb") as data:
-            # logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
-
             output_blob_client = self.blob_service_client.get_blob_client(
                 container="stage-1-container",
                 blob=f"{dependency_folder}/file_map.json",
@@ -155,8 +150,3 @@ class FileMapProcessor:
             # delete the existing file map
             with contextlib.suppress(Exception):
                 output_blob_client.delete_blob()
-
-            # output_blob_client.upload_blob(data)
-            #
-            # logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
-
