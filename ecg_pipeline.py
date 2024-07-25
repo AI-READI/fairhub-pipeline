@@ -12,6 +12,7 @@ import config
 import utils.dependency as deps
 import time
 import csv
+from traceback import print_exc, format_exc
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -28,6 +29,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/ECG"
     pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
+    ignore_folder = f"{study_id}/ignore"
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -111,6 +113,26 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp()
+
+    # Download the ignore file
+    ignore_file_download_path = os.path.join(meta_temp_folder_path, "ecg.ignore")
+
+    meta_blob_client = blob_service_client.get_blob_client(
+        container="stage-1-container", blob=f"{ignore_folder}/ecg.ignore"
+    )
+
+    with contextlib.suppress(Exception):
+        with open(ignore_file_download_path, "wb") as data:
+            meta_blob_client.download_blob().readinto(data)
+
+        # Read the ignore file
+        with open(ignore_file_download_path, "r") as f:
+            ignore_files = f.readlines()
+
+    ignore_files = [x.strip() for x in ignore_files]
+
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
     total_files = len(file_paths)
@@ -126,6 +148,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # get the file name from the path
         file_name = path.split("/")[-1]
+
+        # check if the file is in the ignore list
+        if file_name in ignore_files or path in ignore_files:
+            file_item["status"] = "ignored"
+            file_item["convert_error"] = False
+
+            print(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            continue
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
@@ -170,6 +200,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_output_files = []
 
         outputs_uploaded = True
+        upload_exception = ""
 
         for file in output_files:
             with open(f"{file}", "rb") as data:
@@ -177,13 +208,25 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name2}"
 
+                # output_blob_client = blob_service_client.get_blob_client(
+                #     container="stage-1-container",
+                #     blob=output_file_path,
+                # )
+                # output_blob_client.upload_blob(data)
                 try:
                     output_blob_client = blob_service_client.get_blob_client(
                         container="stage-1-container",
                         blob=output_file_path,
                     )
                     output_blob_client.upload_blob(data)
-                except Exception:
+                except Exception as e:
+                    print("type is:", e.__class__.__name__)
+                    upload_exception = format_exc()
+                    print("upload_exception:", "".join(upload_exception.splitlines()))
+                    upload_exception = "".join(upload_exception.splitlines())
+                    print_exc()
+                    # upload_exception = str(Exception)
+                    # print("📢 [ecg_pipeline.py:227]", upload_exception)
                     outputs_uploaded = False
                     continue
 
@@ -197,6 +240,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 f"Uploaded outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
         else:
+            file_item["output_uploaded"] = upload_exception
             print(
                 f"Failed to upload outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
@@ -298,6 +342,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             blob=f"{dependency_folder}/{json_file_name}",
         )
         output_blob_client.upload_blob(data)
+
+    shutil.rmtree(meta_temp_folder_path)
 
     # dev
     # move the workflow log file and the json file to the current directory
