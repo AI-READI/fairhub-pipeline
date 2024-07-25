@@ -6,6 +6,7 @@ import os
 import tempfile
 import shutil
 import cgm.cgm as cgm
+import cgm.cgm_manifest as cgm_manifest
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
@@ -38,13 +39,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
     dependency_folder = f"{study_id}/dependency/CGM"
+    manifest_folder = f"{study_id}/manifest/CGM"
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
         account_key=config.AZURE_STORAGE_ACCESS_KEY,
         resource_types=azureblob.ResourceTypes(container=True, object=True),
-        permission=azureblob.AccountSasPermissions(read=True, write=True, list=True),
+        permission=azureblob.AccountSasPermissions(
+            read=True, write=True, list=True, delete=True
+        ),
         expiry=datetime.datetime.now(datetime.timezone.utc)
         + datetime.timedelta(hours=1),
     )
@@ -108,6 +112,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     total_files = len(file_paths)
 
+    manifest = cgm_manifest.CGMManifest()
+
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
@@ -139,14 +145,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         cgm_path = download_path
 
         cgm_temp_folder_path = tempfile.mkdtemp()
+
         cgm_output_file_path = os.path.join(
             cgm_temp_folder_path, f"DEX-{patient_id}.json"
         )
         cgm_final_output_file_path = os.path.join(
-            cgm_temp_folder_path, f"DEX-{patient_id}/DEX-{patient_id}.json"
+            cgm_temp_folder_path,
+            f"DEX-{patient_id}/DEX-{patient_id}.json",
         )
         cgm_final_output_qc_file_path = os.path.join(
-            cgm_temp_folder_path, f"DEX-{patient_id}/QC_results.txt"
+            cgm_temp_folder_path,
+            f"DEX-{patient_id}/QC_results.txt",
         )
 
         uuid = f"AIREADI-{patient_id}"
@@ -202,6 +211,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
 
+                manifest_glucose_file_path = f"wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{file_name2}"
+
+                # Generate the manifest entry
+                manifest.calculate_file_sampling_extent(
+                    cgm_final_output_file_path, manifest_glucose_file_path
+                )
+
         # upload the QC file
         print(f"Uploading QC file for {file_name} - ({log_idx}/{total_files})")
         output_qc_file_path = f"{processed_data_qc_folder}/{patient_id}/QC_results.txt"
@@ -238,8 +254,26 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.remove(download_path)
 
         # dev
-        # if log_idx == 3:
+        # if log_idx == 2:
         #     break
+
+    # Write the manifest to a file
+    manifest_file_path = os.path.join(temp_folder_path, "manifest_cgm_v2.tsv")
+
+    manifest.write_tsv(manifest_file_path)
+
+    # Upload the manifest file
+    with open(manifest_file_path, "rb") as data:
+        output_blob_client = blob_service_client.get_blob_client(
+            container="stage-1-container",
+            blob=f"{manifest_folder}/manifest_cgm_v2.tsv",
+        )
+
+        # Delete the manifest file if it exists
+        # with contextlib.suppress(Exception):
+        output_blob_client.delete_blob()
+
+        output_blob_client.upload_blob(data)
 
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -285,6 +319,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             blob=f"{dependency_folder}/{json_file_name}",
         )
         output_blob_client.upload_blob(data)
+
+    shutil.rmtree(temp_folder_path)
 
     # dev
     # move the workflow log file and the json file to the current directory
