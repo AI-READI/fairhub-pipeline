@@ -58,8 +58,9 @@ class FileMapProcessor:
             # This is to delete the output files of files that are no longer in the input folder
             entry["seen"] = False
 
-    def add_entry(self, file_item, input_last_modified):
-        path = file_item["file_path"]
+        shutil.rmtree(meta_temp_folder_path)
+
+    def add_entry(self, path, input_last_modified):
 
         self.file_map.append(
             {
@@ -70,34 +71,27 @@ class FileMapProcessor:
             }
         )
 
-    def mark_items_seen(self, file_item, input_last_modified, should_process):
-        path = file_item["file_path"]
-
+    def mark_items_seen(self, path):
         for entry in self.file_map:
             if entry["input_file"] == path:
                 entry["seen"] = True
 
-                t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
+    def file_last_modification_time(self, input_last_modified):
+        for entry in self.file_map:
+            t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
 
-                # Check if the file has been modified since the last time it was processed
-                if t == entry["input_last_modified"]:
-                    should_process = False
-                break
+            # Check if the file has been modified since the last time it was processed
+            return t == entry["input_last_modified"]
 
-    def update_output_file(self, input_path, input_last_modified,
-                           workflow_file_dependencies, workflow_input_files, workflow_output_files):
+    def update_output_files(self, input_path, input_last_modified):
         # Add the new output files to the file map
         for entry in self.file_map:
             if entry["input_file"] == input_path:
                 entry["output_files"] = input_path
                 entry["input_last_modified"] = input_last_modified
                 break
-        workflow_file_dependencies.add_dependency(
-            workflow_input_files, workflow_output_files
-        )
 
     def delete_preexisting_output_files(self, file_item):
-
         path = file_item["file_path"]
 
         input_path = path
@@ -127,13 +121,13 @@ class FileMapProcessor:
 
     def remove_seen_flag_from_map(self):
         # Remove the entries that are no longer in the input folder
-        file_map = [entry for entry in self.file_map if entry["seen"]]
+        self.file_map = [entry for entry in self.file_map if entry["seen"]]
 
         # Remove the seen flag from the file map
-        for entry in file_map:
+        for entry in self.file_map:
             del entry["seen"]
 
-    def write_json(self, dependency_folder):
+    def upload_json(self, dependency_folder):
         # Write the file map to a file
         meta_temp_folder_path = tempfile.mkdtemp()
         file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
@@ -141,12 +135,12 @@ class FileMapProcessor:
         with open(file_map_file_path, "w") as f:
             json.dump(self.file_map, f, indent=4, sort_keys=True, default=str)
 
-        with open(file_map_file_path, "rb") as data:
+        with open(file_map_file_path, "rb"):
             output_blob_client = self.blob_service_client.get_blob_client(
                 container="stage-1-container",
                 blob=f"{dependency_folder}/file_map.json",
             )
-
             # delete the existing file map
             with contextlib.suppress(Exception):
                 output_blob_client.delete_blob()
+        shutil.rmtree(meta_temp_folder_path)
