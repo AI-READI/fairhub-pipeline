@@ -13,9 +13,9 @@ import json
 class FileMapProcessor:
     """ Class for handling file processing """
 
-    def __init__(self, dependency_folder: str):
+    def __init__(self, dependency_folder: str, file_map):
 
-        self.file_map = []
+        self.file_map = file_map
         self.dependency_folder = dependency_folder
 
         # Establish azure connection
@@ -71,17 +71,18 @@ class FileMapProcessor:
             }
         )
 
-    def mark_items_seen(self, path):
+    def mark_items_seen(self, entry,  path):
+        if entry["input_file"] == path:
+            entry["seen"] = True
+
+    def file_last_modification_time(self, path, input_last_modified):
         for entry in self.file_map:
             if entry["input_file"] == path:
                 entry["seen"] = True
+                t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
 
-    def file_last_modification_time(self, input_last_modified):
-        for entry in self.file_map:
-            t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
-
-            # Check if the file has been modified since the last time it was processed
-            return t == entry["input_last_modified"]
+                # Check if the file has been modified since the last time it was processed
+                return t == entry["input_last_modified"]
 
     def update_output_files(self, input_path, input_last_modified):
         # Add the new output files to the file map
@@ -91,11 +92,8 @@ class FileMapProcessor:
                 entry["input_last_modified"] = input_last_modified
                 break
 
-    def delete_preexisting_output_files(self, file_item):
-        path = file_item["file_path"]
-
+    def delete_preexisting_output_files(self, path):
         input_path = path
-
         # Delete the output files associated with the input file
         # We are doing a file level replacement
         for entry in self.file_map:
@@ -134,8 +132,7 @@ class FileMapProcessor:
 
         with open(file_map_file_path, "w") as f:
             json.dump(self.file_map, f, indent=4, sort_keys=True, default=str)
-
-        with open(file_map_file_path, "rb"):
+        with open(file_map_file_path, "rb") as data:
             output_blob_client = self.blob_service_client.get_blob_client(
                 container="stage-1-container",
                 blob=f"{dependency_folder}/file_map.json",
@@ -143,4 +140,5 @@ class FileMapProcessor:
             # delete the existing file map
             with contextlib.suppress(Exception):
                 output_blob_client.delete_blob()
+            output_blob_client.upload_blob(data)
         shutil.rmtree(meta_temp_folder_path)
