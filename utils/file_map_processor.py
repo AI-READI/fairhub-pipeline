@@ -19,7 +19,7 @@ class FileMapProcessor:
         self.dependency_folder = dependency_folder
 
         # Establish azure connection
-        sas_token = azureblob.generate_account_sas(
+        self.sas_token = azureblob.generate_account_sas(
             account_name="b2aistaging",
             account_key=config.AZURE_STORAGE_ACCESS_KEY,
             resource_types=azureblob.ResourceTypes(container=True, object=True),
@@ -33,7 +33,7 @@ class FileMapProcessor:
         # Get the blob service client
         blob_service_client = azureblob.BlobServiceClient(
             account_url="https://b2aistaging.blob.core.windows.net/",
-            credential=sas_token,
+            credential=self.sas_token,
         )
 
         # Create a temporary folder on the local machine
@@ -95,20 +95,10 @@ class FileMapProcessor:
         input_path = path
         # Delete the output files associated with the input file
         # We are doing a file level replacement
-        sas_token = azureblob.generate_account_sas(
-            account_name="b2aistaging",
-            account_key=config.AZURE_STORAGE_ACCESS_KEY,
-            resource_types=azureblob.ResourceTypes(container=True, object=True),
-            permission=azureblob.AccountSasPermissions(
-                read=True, write=True, list=True, delete=True
-            ),
-            expiry=datetime.datetime.now(datetime.timezone.utc)
-                   + datetime.timedelta(hours=24),
-        )
 
         blob_service_client = azureblob.BlobServiceClient(
             account_url="https://b2aistaging.blob.core.windows.net/",
-            credential=sas_token,
+            credential=self.sas_token,
         )
 
         for entry in self.file_map:
@@ -123,20 +113,10 @@ class FileMapProcessor:
 
     def delete_out_of_date_output_files(self):
         # Delete the output files that are no longer in the input folder
-        sas_token = azureblob.generate_account_sas(
-            account_name="b2aistaging",
-            account_key=config.AZURE_STORAGE_ACCESS_KEY,
-            resource_types=azureblob.ResourceTypes(container=True, object=True),
-            permission=azureblob.AccountSasPermissions(
-                read=True, write=True, list=True, delete=True
-            ),
-            expiry=datetime.datetime.now(datetime.timezone.utc)
-                   + datetime.timedelta(hours=24),
-        )
 
         blob_service_client = azureblob.BlobServiceClient(
             account_url="https://b2aistaging.blob.core.windows.net/",
-            credential=sas_token,
+            credential=self.sas_token,
         )
 
         for entry in self.file_map:
@@ -161,20 +141,9 @@ class FileMapProcessor:
         meta_temp_folder_path = tempfile.mkdtemp()
         file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
-        sas_token = azureblob.generate_account_sas(
-            account_name="b2aistaging",
-            account_key=config.AZURE_STORAGE_ACCESS_KEY,
-            resource_types=azureblob.ResourceTypes(container=True, object=True),
-            permission=azureblob.AccountSasPermissions(
-                read=True, write=True, list=True, delete=True
-            ),
-            expiry=datetime.datetime.now(datetime.timezone.utc)
-            + datetime.timedelta(hours=24),
-        )
-
         blob_service_client = azureblob.BlobServiceClient(
             account_url="https://b2aistaging.blob.core.windows.net/",
-            credential=sas_token,
+            credential=self.sas_token,
         )
 
         with open(file_map_file_path, "w") as f:
