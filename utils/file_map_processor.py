@@ -75,20 +75,19 @@ class FileMapProcessor:
         if entry["input_file"] == path:
             entry["seen"] = True
 
-    def file_last_modification_time(self, path, input_last_modified):
-        for entry in self.file_map:
-            if entry["input_file"] == path:
-                entry["seen"] = True
-                t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
+    def file_last_modification_time(self, entry, path, input_last_modified):
+        if entry["input_file"] == path:
+            entry["seen"] = True
+            t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
 
-                # Check if the file has been modified since the last time it was processed
-                return t == entry["input_last_modified"]
+            # Check if the file has been modified since the last time it was processed
+            return t == entry["input_last_modified"]
 
-    def update_output_files(self, input_path, input_last_modified):
+    def update_output_files(self, input_path, workflow_output_files, input_last_modified):
         # Add the new output files to the file map
         for entry in self.file_map:
             if entry["input_file"] == input_path:
-                entry["output_files"] = input_path
+                entry["output_files"] = workflow_output_files
                 entry["input_last_modified"] = input_last_modified
                 break
 

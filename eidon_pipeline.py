@@ -165,13 +165,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         input_last_modified = blob_client.get_blob_properties().last_modified
 
         # Check if the input file is in the file map
-        file_processor.add_entry(path, input_last_modified)
-
         for entry in file_map:
             # if entry["input_file"] == path:
             #     entry["seen"] = True
             file_processor.mark_items_seen(entry, path)
-            last_modification_time = file_processor.file_last_modification_time(path, input_last_modified)
+
+            last_modification_time = file_processor.file_last_modification_time(entry, path, input_last_modified)
             if last_modification_time:
                 logger.debug(
                     f"The file {path} has not been modified since the last time it was processed",
@@ -344,12 +343,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     file_item["output_files"].append(output_file_path)
                     workflow_output_files.append(output_file_path)
 
+        file_processor.update_output_files(input_path, workflow_output_files, input_last_modified)
         # Add the new output files to the file map
-        for entry in file_map:
-            if entry["input_file"] == input_path:
-                entry["output_files"] = workflow_output_files
-                entry["input_last_modified"] = input_last_modified
-                break
+        # for entry in file_map:
+        #     if entry["input_file"] == input_path:
+        #         entry["output_files"] = workflow_output_files
+        #         entry["input_last_modified"] = input_last_modified
+        #         break
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
