@@ -54,8 +54,9 @@ class FileMapProcessor:
             with open(file_map_download_path, "r") as f:
                 self.file_map = json.load(f)
 
-        # This is to delete the output files of files that are no longer in the input folder
-        self.mark_items_as_seen(False)
+        for entry in file_map:
+            # This is to delete the output files of files that are no longer in the input folder
+            entry["seen"] = False
 
         shutil.rmtree(meta_temp_folder_path)
 
@@ -73,28 +74,13 @@ class FileMapProcessor:
     def file_should_process(self, path, input_last_modified) -> bool:
         for entry in self.file_map:
             if entry["input_file"] == path:
-                self.mark_item_seen(entry)
+                entry["seen"] = True
 
                 t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
 
                 # Check if the file has been modified since the last time it was processed
                 return t != entry["input_last_modified"]
         return True
-
-    def mark_item_seen(self, entry):
-        entry["seen"] = True
-
-    def mark_items_as_seen(self, seen: bool):
-        for entry in self.file_map:
-            entry["seen"] = seen
-
-    def file_last_modification_time(self, entry, path, input_last_modified) -> bool:
-        if entry["input_file"] == path:
-            entry["seen"] = True
-            t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
-
-            # Check if the file has been modified since the last time it was processed
-            return t == entry["input_last_modified"]
 
     def update_output_files(self, input_path, workflow_output_files, input_last_modified):
         # Add the new output files to the file map
