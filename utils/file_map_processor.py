@@ -13,9 +13,9 @@ import json
 class FileMapProcessor:
     """ Class for handling file processing """
 
-    def __init__(self, dependency_folder: str, file_map):
+    def __init__(self, dependency_folder: str):
 
-        self.file_map = file_map
+        self.file_map = []
         self.dependency_folder = dependency_folder
 
         # Establish azure connection
@@ -37,10 +37,10 @@ class FileMapProcessor:
         )
 
         # Create a temporary folder on the local machine
-        meta_temp_folder_path = tempfile.mkdtemp()
+        self.meta_temp_folder_path = tempfile.mkdtemp()
 
         # Download the meta file for the pipeline
-        file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
+        file_map_download_path = os.path.join(self.meta_temp_folder_path, "file_map.json")
 
         meta_blob_client = self.blob_service_client.get_blob_client(
             container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
@@ -54,11 +54,9 @@ class FileMapProcessor:
             with open(file_map_download_path, "r") as f:
                 self.file_map = json.load(f)
 
-        for entry in file_map:
+        for entry in self.file_map:
             # This is to delete the output files of files that are no longer in the input folder
             entry["seen"] = False
-
-        shutil.rmtree(meta_temp_folder_path)
 
     def add_entry(self, path, input_last_modified):
 
@@ -125,8 +123,7 @@ class FileMapProcessor:
 
     def upload_json(self, dependency_folder):
         # Write the file map to a file
-        meta_temp_folder_path = tempfile.mkdtemp()
-        file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
+        file_map_file_path = os.path.join(self.meta_temp_folder_path, "file_map.json")
 
         with open(file_map_file_path, "w") as f:
             json.dump(self.file_map, f, indent=4, sort_keys=True, default=str)
@@ -138,5 +135,6 @@ class FileMapProcessor:
             # delete the existing file map
             with contextlib.suppress(Exception):
                 output_blob_client.delete_blob()
+
             output_blob_client.upload_blob(data)
-        shutil.rmtree(meta_temp_folder_path)
+        shutil.rmtree(self.meta_temp_folder_path)

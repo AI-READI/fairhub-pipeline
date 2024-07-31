@@ -6,6 +6,8 @@ import os
 import tempfile
 import shutil
 
+from six import print_
+
 import imaging.imaging_eidon_retinal_photography_root as EIDON
 import imaging.imaging_utils as imaging_utils
 import azure.storage.blob as azureblob
@@ -119,8 +121,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Download the meta file for the pipeline
     file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
-    file_map = []
-    file_processor = FileMapProcessor(dependency_folder, file_map)
+    # file_map = []
+    file_processor = FileMapProcessor(dependency_folder)
 
     # meta_blob_client = blob_service_client.get_blob_client(
     #     container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
@@ -146,8 +148,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         log_idx = idx + 1
 
         # dev
-        # if log_idx == 6:
-        #     break
+        if log_idx == 6:
+            break
 
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
@@ -173,7 +175,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.debug(
                 f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
             )
-
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -378,7 +379,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         #     del entry["seen"]
 
         # Write the file map to a file
-        file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
+        # file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
         logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
