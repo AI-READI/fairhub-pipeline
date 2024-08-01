@@ -37,9 +37,11 @@ class FileMapProcessor:
         )
 
         # Create a temporary folder on the local machine
+        meta_temp_folder_path = tempfile.mkdtemp()
         self.meta_temp_folder_path = tempfile.mkdtemp()
 
         # Download the meta file for the pipeline
+        file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
         file_map_download_path = os.path.join(self.meta_temp_folder_path, "file_map.json")
 
         meta_blob_client = self.blob_service_client.get_blob_client(
@@ -139,4 +141,4 @@ class FileMapProcessor:
                 output_blob_client.delete_blob()
 
             output_blob_client.upload_blob(data)
-        # shutil.rmtree(self.meta_temp_folder_path)
+        shutil.rmtree(meta_temp_folder_path)
