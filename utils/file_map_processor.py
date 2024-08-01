@@ -141,4 +141,4 @@ class FileMapProcessor:
                 output_blob_client.delete_blob()
 
             output_blob_client.upload_blob(data)
-        shutil.rmtree(meta_temp_folder_path)
+        shutil.rmtree(self.meta_temp_folder_path)
