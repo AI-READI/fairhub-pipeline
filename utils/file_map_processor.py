@@ -13,9 +13,9 @@ import json
 class FileMapProcessor:
     """ Class for handling file processing """
 
-    def __init__(self, dependency_folder: str):
+    def __init__(self, dependency_folder: str, file_map):
 
-        self.file_map = []
+        self.file_map = file_map
         self.dependency_folder = dependency_folder
 
         # Establish azure connection
@@ -70,6 +70,7 @@ class FileMapProcessor:
                 "output_files": [],
                 "input_last_modified": input_last_modified,
                 "seen": True,
+
             }
         )
 
@@ -125,7 +126,7 @@ class FileMapProcessor:
         for entry in self.file_map:
             del entry["seen"]
 
-    def upload_json(self, dependency_folder):
+    def upload_json(self):
         # Write the file map to a file
         file_map_file_path = os.path.join(self.meta_temp_folder_path, "file_map.json")
 
@@ -134,7 +135,7 @@ class FileMapProcessor:
         with open(file_map_file_path, "rb") as data:
             output_blob_client = self.blob_service_client.get_blob_client(
                 container="stage-1-container",
-                blob=f"{dependency_folder}/file_map.json",
+                blob=f"{self.dependency_folder}/file_map.json",
             )
             # delete the existing file map
             with contextlib.suppress(Exception):
