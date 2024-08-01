@@ -70,6 +70,7 @@ class FileMapProcessor:
                 "output_files": [],
                 "input_last_modified": input_last_modified,
                 "seen": True,
+                "error": ""
 
             }
         )
