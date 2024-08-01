@@ -58,6 +58,8 @@ class FileMapProcessor:
             # This is to delete the output files of files that are no longer in the input folder
             entry["seen"] = False
 
+        # shutil.rmtree(meta_temp_folder_path)
+
     def add_entry(self, path, input_last_modified):
 
         self.file_map.append(
@@ -137,4 +139,4 @@ class FileMapProcessor:
                 output_blob_client.delete_blob()
 
             output_blob_client.upload_blob(data)
-        shutil.rmtree(self.meta_temp_folder_path)
+        # shutil.rmtree(self.meta_temp_folder_path)

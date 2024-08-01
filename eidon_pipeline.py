@@ -6,8 +6,6 @@ import os
 import tempfile
 import shutil
 
-from six import print_
-
 import imaging.imaging_eidon_retinal_photography_root as EIDON
 import imaging.imaging_utils as imaging_utils
 import azure.storage.blob as azureblob
@@ -175,6 +173,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.debug(
                 f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
             )
+
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -379,7 +378,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         #     del entry["seen"]
 
         # Write the file map to a file
-        # file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
+        file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
         logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
