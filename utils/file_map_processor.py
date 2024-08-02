@@ -6,6 +6,7 @@ import tempfile
 import azure.storage.blob as azureblob
 import config
 import shutil
+from traceback import print_exc, format_exc
 
 import json
 
@@ -70,7 +71,7 @@ class FileMapProcessor:
                 "output_files": [],
                 "input_last_modified": input_last_modified,
                 "seen": True,
-                "error": ""
+                "error": []
 
             }
         )
@@ -118,6 +119,11 @@ class FileMapProcessor:
                             container="stage-1-container", blob=output_file
                         )
                         output_blob_client.delete_blob()
+
+    def upload_errors(self, upload_exception):
+        # This function adds errors to the json
+        for entry in self.file_map:
+            entry["error"] = upload_exception
 
     def remove_seen_flag_from_map(self):
         # Remove the entries that are no longer in the input folder

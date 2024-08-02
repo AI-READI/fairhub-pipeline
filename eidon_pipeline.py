@@ -17,9 +17,9 @@ import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 import json
+from traceback import format_exc
 
 # import pprint
-
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -232,10 +232,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             for file in filtered_file_names:
                 # organize_result = eidon_instance.organize(download_path, organize_temp_folder_path)
                 eidon_instance.organize(file, step2_folder)
-        except Exception:
+        except Exception as e:
             logger.error(
                 f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
             )
+            upload_exception = format_exc()
+            print("upload_exception:", "".join(upload_exception.splitlines()))
+            upload_exception = "".join(upload_exception.splitlines())
+
+            file_processor.upload_errors(upload_exception)
             continue
 
         file_item["organize_error"] = False
@@ -268,6 +273,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.error(
                 f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
             )
+            upload_exception = format_exc()
+            print("upload_exception:", "".join(upload_exception.splitlines()))
+            upload_exception = "".join(upload_exception.splitlines())
+
+            file_processor.upload_errors(upload_exception)
             continue
 
         file_item["convert_error"] = False
@@ -286,6 +296,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.error(
                 f"Failed to format {original_file_name} - ({log_idx}/{total_files})"
             )
+            upload_exception = format_exc()
+            print("upload_exception:", "".join(upload_exception.splitlines()))
+            upload_exception = "".join(upload_exception.splitlines())
+
+            file_processor.upload_errors(upload_exception)
             continue
 
         file_item["format_error"] = False
@@ -346,6 +361,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         logger.error(
                             f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
                         )
+                        upload_exception = format_exc()
+                        print("upload_exception:", "".join(upload_exception.splitlines()))
+                        upload_exception = "".join(upload_exception.splitlines())
+
+                        file_processor.upload_errors(upload_exception)
                         continue
 
                     file_item["output_files"].append(output_file_path)
