@@ -13,9 +13,9 @@ import json
 class FileMapProcessor:
     """ Class for handling file processing """
 
-    def __init__(self, dependency_folder: str, file_map):
+    def __init__(self, dependency_folder: str):
 
-        self.file_map = file_map
+        self.file_map = []
         self.dependency_folder = dependency_folder
 
         # Establish azure connection

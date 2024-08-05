@@ -119,8 +119,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Download the meta file for the pipeline
     file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
-    file_map = []
-    file_processor = FileMapProcessor(dependency_folder, file_map)
+    # file_map = []
+    file_processor = FileMapProcessor(dependency_folder)
 
     # meta_blob_client = blob_service_client.get_blob_client(
     #     container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
