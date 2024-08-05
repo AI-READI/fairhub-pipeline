@@ -147,7 +147,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         log_idx = idx + 1
 
         # dev
-        if log_idx == 9:
+        if log_idx == 10:
             break
 
         # Create a temporary folder on the local machine
@@ -162,7 +162,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         blob_client = blob_service_client.get_blob_client(
             container="stage-1-container", blob=path
         )
-
 
         # should_process = True
         input_last_modified = blob_client.get_blob_properties().last_modified
@@ -187,12 +186,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         if not should_process:
             logger.debug(
+                f"The file {path} has not been modified since the last time it was processed",
+            )
+            logger.debug(
                 f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
             )
 
             continue
 
         file_processor.add_entry(path, input_last_modified)
+
+        file_processor.clear_errors(path)
 
         # file_map.append(
         #     {
@@ -229,6 +233,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         eidon_instance = EIDON.Eidon()
 
         try:
+            # raise Exception("error line1")
             for file in filtered_file_names:
                 # organize_result = eidon_instance.organize(download_path, organize_temp_folder_path)
                 eidon_instance.organize(file, step2_folder)
@@ -236,11 +241,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.error(
                 f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
             )
-            upload_exception = format_exc()
-            print("upload_exception:", "".join(upload_exception.splitlines()))
-            upload_exception = "".join(upload_exception.splitlines())
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
 
-            file_processor.upload_errors(upload_exception)
+            file_processor.append_errors(error_exception, path)
             continue
 
         file_item["organize_error"] = False
@@ -273,11 +277,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.error(
                 f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
             )
-            upload_exception = format_exc()
-            print("upload_exception:", "".join(upload_exception.splitlines()))
-            upload_exception = "".join(upload_exception.splitlines())
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
 
-            file_processor.upload_errors(upload_exception)
+            file_processor.append_errors(error_exception, path)
             continue
 
         file_item["convert_error"] = False
@@ -296,11 +299,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.error(
                 f"Failed to format {original_file_name} - ({log_idx}/{total_files})"
             )
-            upload_exception = format_exc()
-            print("upload_exception:", "".join(upload_exception.splitlines()))
-            upload_exception = "".join(upload_exception.splitlines())
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
 
-            file_processor.upload_errors(upload_exception)
+            file_processor.append_errors(error_exception, path)
             continue
 
         file_item["format_error"] = False
@@ -356,16 +358,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             container="stage-1-container", blob=output_file_path
                         )
                         output_blob_client.upload_blob(data)
+                        #
+                        # raise Exception()
                     except Exception:
                         outputs_uploaded = False
                         logger.error(
                             f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
                         )
-                        upload_exception = format_exc()
-                        print("upload_exception:", "".join(upload_exception.splitlines()))
-                        upload_exception = "".join(upload_exception.splitlines())
+                        error_exception = format_exc()
+                        error_exception = "".join(error_exception.splitlines())
 
-                        file_processor.upload_errors(upload_exception)
+                        file_processor.append_errors(error_exception, path)
                         continue
 
                     file_item["output_files"].append(output_file_path)

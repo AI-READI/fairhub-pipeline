@@ -6,7 +6,6 @@ import tempfile
 import azure.storage.blob as azureblob
 import config
 import shutil
-from traceback import print_exc, format_exc
 
 import json
 
@@ -28,7 +27,7 @@ class FileMapProcessor:
                 read=True, write=True, list=True, delete=True
             ),
             expiry=datetime.datetime.now(datetime.timezone.utc)
-            + datetime.timedelta(hours=24),
+                   + datetime.timedelta(hours=24),
         )
 
         # Get the blob service client
@@ -120,10 +119,15 @@ class FileMapProcessor:
                         )
                         output_blob_client.delete_blob()
 
-    def upload_errors(self, upload_exception):
+    def append_errors(self, error_exception, path):
         # This function adds errors to the json
-        for entry in self.file_map:
-            entry["error"] = upload_exception
+        entry = [entry for entry in self.file_map if entry["input_file"] == path][0]
+        entry["error"].append(error_exception)
+
+    def clear_errors(self, path):
+        # This function adds errors to the json
+        entry = [entry for entry in self.file_map if entry["input_file"] == path][0]
+        entry["error"] = []
 
     def remove_seen_flag_from_map(self):
         # Remove the entries that are no longer in the input folder
