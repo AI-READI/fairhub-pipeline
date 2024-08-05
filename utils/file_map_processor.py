@@ -41,7 +41,6 @@ class FileMapProcessor:
         self.meta_temp_folder_path = tempfile.mkdtemp()
 
         # Download the meta file for the pipeline
-        file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
         file_map_download_path = os.path.join(self.meta_temp_folder_path, "file_map.json")
 
         meta_blob_client = self.blob_service_client.get_blob_client(
@@ -120,12 +119,12 @@ class FileMapProcessor:
                         output_blob_client.delete_blob()
 
     def append_errors(self, error_exception, path):
-        # This function adds errors to the json
+        # This function appends errors to the json
         entry = [entry for entry in self.file_map if entry["input_file"] == path][0]
         entry["error"].append(error_exception)
 
     def clear_errors(self, path):
-        # This function adds errors to the json
+        # This function clear errors to the json
         entry = [entry for entry in self.file_map if entry["input_file"] == path][0]
         entry["error"] = []
 

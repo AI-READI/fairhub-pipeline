@@ -16,7 +16,6 @@ import time
 import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
-import json
 from traceback import format_exc
 
 # import pprint
