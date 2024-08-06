@@ -129,8 +129,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         log_idx = idx + 1
 
         # dev
-        if log_idx == 10:
-            break
+        # if log_idx == 10:
+        #     break
 
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
