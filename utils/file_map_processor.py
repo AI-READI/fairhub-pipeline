@@ -62,17 +62,18 @@ class FileMapProcessor:
         # shutil.rmtree(meta_temp_folder_path)
 
     def add_entry(self, path, input_last_modified):
+        entry = [entry for entry in self.file_map if entry["input_file"] == path]
+        if len(entry) == 0:
+            self.file_map.append(
+                {
+                    "input_file": path,
+                    "output_files": [],
+                    "input_last_modified": input_last_modified,
+                    "seen": True,
+                    "error": []
 
-        self.file_map.append(
-            {
-                "input_file": path,
-                "output_files": [],
-                "input_last_modified": input_last_modified,
-                "seen": True,
-                "error": []
-
-            }
-        )
+                }
+            )
 
     def file_should_process(self, path, input_last_modified) -> bool:
         for entry in self.file_map:
@@ -85,7 +86,7 @@ class FileMapProcessor:
                 return t != entry["input_last_modified"]
         return True
 
-    def update_output_files(self, input_path, workflow_output_files, input_last_modified):
+    def confirm_output_files(self, input_path, workflow_output_files, input_last_modified):
         # Add the new output files to the file map
         for entry in self.file_map:
             if entry["input_file"] == input_path:

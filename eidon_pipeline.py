@@ -146,8 +146,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         log_idx = idx + 1
 
         # dev
-        # if log_idx == 10:
-        #     break
+        if log_idx == 10:
+            break
 
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
@@ -374,7 +374,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     workflow_output_files.append(output_file_path)
 
         # Add the new output files to the file map
-        file_processor.update_output_files(input_path, workflow_output_files, input_last_modified)
+        file_processor.confirm_output_files(input_path, workflow_output_files, input_last_modified)
         #
         # for entry in file_map:
         #     if entry["input_file"] == input_path:
@@ -427,6 +427,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_processor.upload_json()
         logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
     except Exception as e:
+        logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
         raise e
     #
     # with open(file_map_file_path, "w") as f:
