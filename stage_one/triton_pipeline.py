@@ -15,7 +15,7 @@ import time
 import csv
 import utils.logwatch as logging
 
-import pprint
+# import pprint
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
