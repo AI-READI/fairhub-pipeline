@@ -157,6 +157,19 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         uuid = f"AIREADI-{patient_id}"
 
+        # cgm.convert(
+        #     input_path=cgm_path,
+        #     output_path=cgm_output_file_path,
+        #     effective_time_frame=1,
+        #     event_type=2,
+        #     source_device_id=3,
+        #     blood_glucose=4,
+        #     transmitter_time=5,
+        #     transmitter_id=6,
+        #     uuid=uuid,
+        #     timezone="pst",
+        # )
+
         try:
             cgm.convert(
                 input_path=cgm_path,
@@ -171,6 +184,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 timezone="pst",
             )
         except Exception:
+            print(f"Failed to convert {file_name} - ({log_idx}/{total_files})")
             continue
 
         file_item["convert_error"] = False

@@ -315,7 +315,7 @@ def convert(
     ) as json_convert:
         writer = csv.DictWriter(json_convert, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(parsed_copy["body"])
+        writer.writerows(parsed_copy["body"]["cgm"])
 
     # PERFORM QUALITY CONTROL TESTS#
     with open(
