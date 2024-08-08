@@ -32,7 +32,6 @@ def convert_to_utc(df, column_name, timezone):
     def localize_and_convert(dt_str):
         try:
             # Parse the datetime string into a datetime object
-            # dt = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')  # Adjust the format if needed
             dt = datetime.strptime(
                 dt_str, "%Y-%m-%dT%H:%M:%S"
             )  # Adjusted to match the ISO 8601 format
@@ -74,7 +73,7 @@ def convert(
     # )
     # parser.add_argument(
     #     "required",
-    #     help="All of the required properties that need to be converted. Required arguments are 'effective_time_frame', 'event_type', 'source_device', 'blood_glucose', 'transmitter_time', 'transmitter_id', 'uuid', and'timezone'. In this argument, each property must have an equals sign next to it and an integer on the other side of it that represents in what order the property will be placed in each data point in the data series. After each property there must be a comma which is what separates all of the properties. No integer can be repeated. For 'uuid', instead of an integer, the user can put in any valid input. For 'timezone', the user must put in one of the following (case-insensitive): 'pst' (for Pacific Standard Time), 'mst' (for Mountain Standard Time), 'cst' (for Central Standard Time), and 'est' (for Eastern Standard Time). An example of a valid argument string looks like this: 'effective_time_frame=1,event_type=2,source_device=3,blood_glucose=4,transmitter_time=5,transmitter_id=6,uuid=123e4567-e89b-12d3-a456-426655440000,timezone=cst'",
+    #     help="All of the required properties that need to be converted. Required arguments are 'effective_time_frame', 'event_type', 'source_device', 'blood_glucose', 'transmitter_time', 'transmitter_id', 'uuid', and 'timezone'. In this argument, each property must have an equals sign next to it and an integer on the other side of it that represents in what order the property will be placed in each data point in the data series. After each property there must be a comma which is what separates all of the properties. No integer can be repeated. For 'uuid', instead of an integer, the user can put in any valid input. For 'timezone', the user must put in one of the following (case-insensitive): 'pst' (for Pacific Standard Time), 'mst' (for Mountain Standard Time), 'cst' (for Central Standard Time), and 'est' (for Eastern Standard Time). An example of a valid argument string looks like this: 'effective_time_frame=1,event_type=2,source_device=3,blood_glucose=4,transmitter_time=5,transmitter_id=6,uuid=123e4567-e89b-12d3-a456-426655440000,timezone=cst'",
     # )
     # parser.add_argument(
     #     "-o",
@@ -241,9 +240,9 @@ def convert(
         + f'"patient_id":"{patient}"'
         + ',"schema_id":{"namespace":"omh","name":"blood-glucose","version":3.0},"modality":"sensed","acquistion_rate":{"number_of_times":1, "time_window":{"value":5, "unit":"min"}},"external_datasheets":{"datasheet_type":"source_device","datasheet_reference":"iri-of-cgm-device"}'
         + f',"timezone": "{props_dict["timezone"]}"'
-        + '}, "body":'
+        + '}, "body": {"cgm":'
         + df.to_json(orient="records", date_format="iso", date_unit="s")
-        + "}"
+        + "}}"
     )
 
     # JSON STRING TO DICT, PROPERTY NESTING, AND JSON OUTPUT FILE#
@@ -252,28 +251,29 @@ def convert(
     parsed_copy = copy.deepcopy(parsed)
     # convert data point properties to nested properties if needed
     # parsed_copy values not assigned nested properties because we will be converting it to csv later which does not have nested properties
-    for data in range(len(parsed["body"])):
+    for data in range(len(parsed["body"]["cgm"])):
         # copies exist so value can be embedded in nested property
-        copy_effective_time_frame = parsed["body"][data]["effective_time_frame"]
-        parsed["body"][data]["effective_time_frame"] = {
+        # copies exist so value can be embedded in nested property
+        copy_effective_time_frame = parsed["body"]["cgm"][data]["effective_time_frame"]
+        parsed["body"]["cgm"][data]["effective_time_frame"] = {
             "time_interval": {
                 "start_date_time": copy_effective_time_frame,
                 "end_date_time": copy_effective_time_frame,
             }
         }
-        copy_blood_glucose = parsed["body"][data]["blood_glucose"]
+        copy_blood_glucose = parsed["body"]["cgm"][data]["blood_glucose"]
         if copy_blood_glucose != "Low" and copy_blood_glucose != "High":
-            parsed["body"][data]["blood_glucose"] = {
+            parsed["body"]["cgm"][data]["blood_glucose"] = {
                 "unit": "mg/dL",
                 "value": int(copy_blood_glucose),
             }
         else:
-            parsed["body"][data]["blood_glucose"] = {
+            parsed["body"]["cgm"][data]["blood_glucose"] = {
                 "unit": "mg/dL",
                 "value": copy_blood_glucose,
             }
-        copy_transmitter_time = parsed["body"][data]["transmitter_time"]
-        parsed["body"][data]["transmitter_time"] = {
+        copy_transmitter_time = parsed["body"]["cgm"][data]["transmitter_time"]
+        parsed["body"]["cgm"][data]["transmitter_time"] = {
             "unit": "long integer",
             "value": int(copy_transmitter_time),
         }
@@ -293,18 +293,19 @@ def convert(
     )
     # convert json output file to csv and create output file
     # change all float values to int
-    for data in range(len(parsed_copy["body"])):
-        parsed_copy["body"][data]["transmitter_time"] = int(
-            parsed_copy["body"][data]["transmitter_time"]
+    for data in range(len(parsed_copy["body"]["cgm"])):
+        parsed_copy["body"]["cgm"][data]["transmitter_time"] = int(
+            parsed_copy["body"]["cgm"][data]["transmitter_time"]
         )
         if (
-            parsed_copy["body"][data]["blood_glucose"] != "High"
-            and parsed_copy["body"][data]["blood_glucose"] != "Low"
+            parsed_copy["body"]["cgm"][data]["blood_glucose"] != "High"
+            and parsed_copy["body"]["cgm"][data]["blood_glucose"] != "Low"
         ):
-            parsed_copy["body"][data]["blood_glucose"] = int(
-                parsed_copy["body"][data]["blood_glucose"]
+            parsed_copy["body"]["cgm"][data]["blood_glucose"] = int(
+                parsed_copy["body"]["cgm"][data]["blood_glucose"]
             )
-    fieldnames = parsed_copy["body"][0].keys()
+    fieldnames = parsed_copy["body"]["cgm"][0].keys()
+
     with open(
         output_path.rstrip(".json")
         + "/"
@@ -314,7 +315,7 @@ def convert(
     ) as json_convert:
         writer = csv.DictWriter(json_convert, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(parsed_copy["body"])
+        writer.writerows(parsed_copy["body"]["cgm"])
 
     # PERFORM QUALITY CONTROL TESTS#
     with open(
@@ -361,15 +362,18 @@ def convert(
         effective_time_frame_list = []
         blood_glucose_list = []
         transmitter_time_list = []
-        for data in range(len(parsed["body"])):
+
+        for data in range(len(parsed["body"]["cgm"])):
             effective_time_frame_list.append(
-                parsed["body"][data]["effective_time_frame"]["time_interval"][
+                parsed["body"]["cgm"][data]["effective_time_frame"]["time_interval"][
                     "start_date_time"
                 ]
             )
-            blood_glucose_list.append(parsed["body"][data]["blood_glucose"]["value"])
+            blood_glucose_list.append(
+                parsed["body"]["cgm"][data]["blood_glucose"]["value"]
+            )
             transmitter_time_list.append(
-                parsed["body"][data]["transmitter_time"]["value"]
+                parsed["body"]["cgm"][data]["transmitter_time"]["value"]
             )
 
         f.write("\n\n")
