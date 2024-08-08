@@ -128,7 +128,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         log_idx = idx + 1
 
         # dev
-        if log_idx == 4:
+        if log_idx == 17:
             break
 
         # Create a temporary folder on the local machine
@@ -146,11 +146,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             container="stage-1-container", blob=path
         )
 
-        should_process = True
+        # should_process = True
         input_last_modified = blob_client.get_blob_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
-
         if not should_process:
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
@@ -300,7 +299,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         outputs_uploaded = True
 
-        # file_processor.delete_preexisting_output_files(path)
+        file_processor.delete_preexisting_output_files(path)
 
         for root, dirs, files in os.walk(destination_folder):
             for file in files:
@@ -359,7 +358,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         shutil.rmtree(temp_folder_path)
 
-    # file_processor.delete_out_of_date_output_files()
+    file_processor.delete_out_of_date_output_files()
 
     file_processor.remove_seen_flag_from_map()
 
