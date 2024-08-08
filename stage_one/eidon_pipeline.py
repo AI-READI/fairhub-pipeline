@@ -117,7 +117,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     meta_temp_folder_path = tempfile.mkdtemp()
 
     # Download the meta file for the pipeline
-    file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
+    # file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
     file_processor = FileMapProcessor(dependency_folder)
 
@@ -194,7 +194,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             for file in filtered_file_names:
                 # organize_result = eidon_instance.organize(download_path, organize_temp_folder_path)
                 eidon_instance.organize(file, step2_folder)
-        except Exception as e:
+        except Exception:
             logger.error(
                 f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
             )

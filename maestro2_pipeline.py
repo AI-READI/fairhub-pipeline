@@ -35,7 +35,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/Maestro2"
     processed_data_output_folder = f"{study_id}/pooled-data/Maestro2-processed"
 
-    logger = logging.Logwatch("maestro2")
+    logger = logging.Logwatch("maestro2", print=True)
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -128,8 +128,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         log_idx = idx + 1
 
         # dev
-        if log_idx == 17:
-            break
+        # if log_idx == 17:
+        #     break
 
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
