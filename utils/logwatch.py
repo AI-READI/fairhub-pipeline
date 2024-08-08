@@ -24,7 +24,7 @@ class Logwatch:
         if (channel == "ecg") and (self.ecg_drain is not None):
             self.drain = self.ecg_drain
         if (channel == "cgm") and (self.cgm_drain is not None):
-            self.drain = self.cgm_dr
+            self.drain = self.cgm_drain
 
     def info(self, message: str):
         """Send an info message to the logwatch server"""

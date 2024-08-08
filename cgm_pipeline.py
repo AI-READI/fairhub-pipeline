@@ -18,10 +18,7 @@ import csv
 SCRIPT_PATH=""
 FOLDER_PATH="CGM/input/UCSD-CGM/"  # Replace with the path to your CSV files
 TIME_ZONE="pst"  # Set your desired timezone here
-for file in ${FOLDER_PATH}DEX-*.csv; do    
-   ID=$(basename "$file" .csv | cut -d '-' -f 2)    
-   echo ${ID}    
-   python3 "${SCRIPT_PATH}CGM_API.py" "DEX-${ID}.csv" "DEX-${ID}.json" effective_time_frame=1,event_type=2,source_device_id=3,blood_glucose=4,transmitter_time=5,transmitter_id=6,uuid=AIREADI-${ID},timezone=${TIME_ZONE} --o foo=7,bar=8
+for file in ${FOLDER_PATH}DEX-*.csv; do ID=$(basename "$file" .csv | cut -d '-' -f 2) echo ${ID} python3 "${SCRIPT_PATH}CGM_API.py" "DEX-${ID}.csv" "DEX-${ID}.json" effective_time_frame=1,event_type=2,source_device_id=3,blood_glucose=4,transmitter_time=5,transmitter_id=6,uuid=AIREADI-${ID},timezone=${TIME_ZONE} --o foo=7,bar=8
 done
 """
 
