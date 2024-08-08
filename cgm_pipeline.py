@@ -327,7 +327,3 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
 if __name__ == "__main__":
     pipeline("AI-READI")
-
-    # delete the ecg.log file
-    if os.path.exists("ecg.log"):
-        os.remove("ecg.log")

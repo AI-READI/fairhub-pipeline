@@ -28,13 +28,15 @@ class CGMManifest:
                     with open(file_path, "r") as json_file:
                         try:
                             data = json.load(json_file)
-                            if data["body"]:
+                            if "cgm" in data["body"]:  # Access 'cgm' within 'body'
                                 # Initialize variables for glucose calculation
                                 total_glucose = 0
                                 num_records = 0
                                 unique_days = set()
 
-                                for record in data["body"]:
+                                for record in data["body"][
+                                    "cgm"
+                                ]:  # Iterate over 'cgm' records
                                     if (
                                         "blood_glucose" in record
                                         and "value" in record["blood_glucose"]
@@ -66,7 +68,9 @@ class CGMManifest:
                                 participant_id = data["header"]["patient_id"].split(
                                     "-"
                                 )[-1]
-                                glucose_sensor_id = data["body"][0]["source_device_id"]
+                                glucose_sensor_id = data["body"]["cgm"][0][
+                                    "source_device_id"
+                                ]
                                 manufacturer = "Dexcom"  # As an example
                                 manufacturer_model_name = "G6"  # As an example
 
@@ -91,13 +95,13 @@ class CGMManifest:
             with open(file_path, "r") as json_file:
                 try:
                     data = json.load(json_file)
-                    if data["body"]:
+                    if "cgm" in data["body"]:  # Access 'cgm' within 'body'
                         # Initialize variables for glucose calculation
                         total_glucose = 0
                         num_records = 0
                         unique_days = set()
 
-                        for record in data["body"]:
+                        for record in data["body"]["cgm"]:  # Iterate over 'cgm' records
                             if (
                                 "blood_glucose" in record
                                 and "value" in record["blood_glucose"]
@@ -127,7 +131,7 @@ class CGMManifest:
 
                         # Extract additional metadata
                         participant_id = data["header"]["patient_id"].split("-")[-1]
-                        glucose_sensor_id = data["body"][0]["source_device_id"]
+                        glucose_sensor_id = data["body"]["cgm"][0]["source_device_id"]
                         manufacturer = "Dexcom"  # As an example
                         manufacturer_model_name = "G6"  # As an example
 
