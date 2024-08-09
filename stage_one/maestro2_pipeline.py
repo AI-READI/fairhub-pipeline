@@ -249,7 +249,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 if not os.path.exists(output_folder_path):
                     os.makedirs(output_folder_path)
 
-
                 folders = imaging_utils.list_subfolders(
                     os.path.join(step3_folder, device, protocol)
                 )
@@ -370,7 +369,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     except Exception as e:
         logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
         raise e
-
 
     temp_folder_path = tempfile.mkdtemp()
 
