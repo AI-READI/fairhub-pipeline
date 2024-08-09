@@ -5,6 +5,8 @@ import datetime
 import os
 import tempfile
 import shutil
+from traceback import format_exc
+
 import imaging.imaging_maestro2_triton_root as Maestro2_Triton
 import imaging.imaging_utils as imaging_utils
 import azure.storage.blob as azureblob
@@ -14,6 +16,7 @@ import utils.dependency as deps
 import time
 import csv
 import utils.logwatch as logging
+from utils.file_map_processor import FileMapProcessor
 
 # import pprint
 
@@ -27,12 +30,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/Triton"
-    dependency_folder = f"{study_id}/dependency/Triton"
-    pipeline_workflow_log_folder = f"{study_id}/logs/Triton"
-    processed_data_output_folder = f"{study_id}/pooled-data/Triton-processed"
+    input_folder = f"{study_id}/pooled-data/Maestro2"
+    dependency_folder = f"{study_id}/dependency/Maestro2"
+    pipeline_workflow_log_folder = f"{study_id}/logs/Maestro2"
+    processed_data_output_folder = f"{study_id}/pooled-data/Maestro2-processed"
 
-    logger = logging.Logwatch("triton")
+    logger = logging.Logwatch("maestro2", print=True)
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -115,12 +118,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
+    file_processor = FileMapProcessor(dependency_folder)
+
     total_files = len(file_paths)
 
-    device = "Triton"
+    device = "Maestro2"
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
+
+        # dev
+        # if log_idx == 17:
+        #     break
 
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
@@ -131,13 +140,33 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
 
-        # get the file name from the path
-        original_file_name = path.split("/")[-1]
-
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
             container="stage-1-container", blob=path
         )
+
+        # should_process = True
+        input_last_modified = blob_client.get_blob_properties().last_modified
+
+        should_process = file_processor.file_should_process(path, input_last_modified)
+        if not should_process:
+            logger.debug(
+                f"The file {path} has not been modified since the last time it was processed",
+            )
+            logger.debug(
+                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
+            )
+
+            continue
+
+        file_processor.add_entry(path, input_last_modified)
+
+        file_processor.clear_errors(path)
+
+        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
+
+        # get the file name from the path
+        original_file_name = path.split("/")[-1]
 
         step1_folder = os.path.join(temp_folder_path, "step1")
 
@@ -170,7 +199,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         imaging_utils.unzip_fda_file(download_path, step2_folder)
 
-        logger.info(
+        logger.debug(
             f"Unzipped {file_name} to {step2_folder} - ({log_idx}/{total_files})"
         )
 
@@ -181,19 +210,22 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # process the files
-        triton_instance = Maestro2_Triton.Maestro2_Triton()
+        maestro2_instance = Maestro2_Triton.Maestro2_Triton()
 
         try:
             for step2_data_folder in step2_data_folders:
-                logger.debug(step2_data_folder)
-                # organize_result = triton_instance.organize(
+                # organize_result = maestro2_instance.organize(
                 #     step2_data_folder, step3_folder
                 # )
-                triton_instance.organize(
+                maestro2_instance.organize(
                     step2_data_folder, os.path.join(step3_folder, device)
                 )
         except Exception:
             logger.error(f"Failed to organize {file_name} - ({log_idx}/{total_files})")
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            file_processor.append_errors(error_exception, path)
             continue
 
         file_item["organize_error"] = False
@@ -204,9 +236,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             os.makedirs(step4_folder)
 
         protocols = [
-            "triton_3d_radial_oct",
-            "triton_macula_6x6_octa",
-            "triton_macula_12x12_octa",
+            "maestro2_3d_macula_oct",
+            "maestro2_3d_wide_oct",
+            "maestro2_mac_6x6_octa",
         ]
 
         try:
@@ -221,10 +253,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 for folder in folders:
-                    triton_instance.convert(folder, output_folder_path)
+                    maestro2_instance.convert(folder, output_folder_path)
 
         except Exception:
             logger.error(f"Failed to convert {file_name} - ({log_idx}/{total_files})")
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            file_processor.append_errors(error_exception, path)
             continue
 
         file_item["convert_error"] = False
@@ -245,6 +281,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     logger.error(
                         f"Failed to format {file_name} - ({log_idx}/{total_files})"
                     )
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
+
+                    file_processor.append_errors(error_exception, path)
                     continue
 
         file_item["processed"] = True
@@ -256,6 +296,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_output_files = []
 
         outputs_uploaded = True
+
+        file_processor.delete_preexisting_output_files(path)
 
         for root, dirs, files in os.walk(destination_folder):
             for file in files:
@@ -285,10 +327,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         logger.error(
                             f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
                         )
+                        error_exception = format_exc()
+                        error_exception = "".join(error_exception.splitlines())
+
+                        file_processor.append_errors(error_exception, path)
                         continue
 
                     file_item["output_files"].append(output_file_path)
                     workflow_output_files.append(output_file_path)
+
+        # Add the new output files to the file map
+        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
@@ -307,8 +356,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         shutil.rmtree(temp_folder_path)
 
-        if log_idx == 10:
-            break
+    file_processor.delete_out_of_date_output_files()
+
+    file_processor.remove_seen_flag_from_map()
+
+    logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+
+    try:
+        file_processor.upload_json()
+        logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+    except Exception as e:
+        logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
+        raise e
 
     temp_folder_path = tempfile.mkdtemp()
 

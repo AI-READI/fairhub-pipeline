@@ -137,7 +137,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         path = file_item["file_path"]
 
-        input_path = path
         workflow_input_files = [path]
 
         # download the file to the temp folder
@@ -320,7 +319,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     workflow_output_files.append(output_file_path)
 
         # Add the new output files to the file map
-        file_processor.confirm_output_files(input_path, workflow_output_files, input_last_modified)
+        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
