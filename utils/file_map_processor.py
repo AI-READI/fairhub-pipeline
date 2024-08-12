@@ -86,10 +86,10 @@ class FileMapProcessor:
                 return t != entry["input_last_modified"]
         return True
 
-    def confirm_output_files(self, input_path, workflow_output_files, input_last_modified):
+    def confirm_output_files(self, path, workflow_output_files, input_last_modified):
         # Add the new output files to the file map
         for entry in self.file_map:
-            if entry["input_file"] == input_path:
+            if entry["input_file"] == path:
                 entry["output_files"] = workflow_output_files
                 entry["input_last_modified"] = input_last_modified
                 break
