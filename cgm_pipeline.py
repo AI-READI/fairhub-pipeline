@@ -5,6 +5,8 @@ import datetime
 import os
 import tempfile
 import shutil
+from traceback import format_exc
+
 import cgm.cgm as cgm
 import cgm.cgm_manifest as cgm_manifest
 import azure.storage.blob as azureblob
@@ -13,6 +15,8 @@ import config
 import utils.dependency as deps
 import time
 import csv
+from utils.file_map_processor import FileMapProcessor
+import utils.logwatch as logging
 
 """
 SCRIPT_PATH=""
@@ -38,6 +42,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/CGM"
     manifest_folder = f"{study_id}/manifest/CGM"
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
+
+    logger = logging.Logwatch("cgm", print=True)
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -79,9 +85,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_name = t.split("/")[-1]
 
-        print(f"Processing {file_name}")
 
-        # Check if the item is an csv file
+        # Check if the item is a csv file
         if file_name.split(".")[-1] != "csv":
             continue
 
@@ -97,7 +102,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             }
         )
 
-    print(f"Found {len(file_paths)} files in {input_folder}")
+    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
 
     # Create a temporary folder on the local machine
     temp_folder_path = tempfile.mkdtemp()
@@ -107,6 +112,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
+    file_processor = FileMapProcessor(dependency_folder)
+
     total_files = len(file_paths)
 
     manifest = cgm_manifest.CGMManifest()
@@ -114,11 +121,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
+        # if log_idx == 3:
+        #     break
+
         path = file_item["file_path"]
 
         workflow_input_files = [path]
-
-        print(f"Processing {path} - ({log_idx}/{total_files})")
 
         # get the file name from the path. It's in the format Clarity_Export_AIREADI_{id}_*.csv
         file_name = path.split("/")[-1]
@@ -131,14 +139,37 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             container="stage-1-container", blob=path
         )
 
+        # should_process = True
+        input_last_modified = blob_client.get_blob_properties().last_modified
+
+        should_process = file_processor.file_should_process(path, input_last_modified)
+
+        if not should_process:
+            logger.debug(
+                f"The file {path} has not been modified since the last time it was processed",
+            )
+            logger.debug(
+                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
+            )
+
+            continue
+
+        file_processor.add_entry(path, input_last_modified)
+
+        file_processor.clear_errors(path)
+
+        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
+        
         # File should be downloaded as DEX_{patient_id}.csv
         download_path = os.path.join(temp_folder_path, f"DEX-{patient_id}.csv")
 
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
 
-        print(f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})")
-
+        logger.info(
+            f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})"
+        )
+        
         cgm_path = download_path
 
         cgm_temp_folder_path = tempfile.mkdtemp()
@@ -184,13 +215,19 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 timezone="pst",
             )
         except Exception:
-            print(f"Failed to convert {file_name} - ({log_idx}/{total_files})")
+            logger.error(
+                f"Failed to convert {file_name} - ({log_idx}/{total_files})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            file_processor.append_errors(error_exception, path)
             continue
 
         file_item["convert_error"] = False
         file_item["processed"] = True
 
-        print(
+        logger.debug(
             f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
@@ -202,10 +239,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         outputs_uploaded = True
 
+        file_processor.delete_preexisting_output_files(path)
+
         for file in output_files:
+
             with open(f"{file}", "rb") as data:
+
                 file_name2 = file.split("/")[-1]
-                print(f"Uploading {file} - ({log_idx}/{total_files})")
+
+                logger.debug(f"Uploading {file} - ({log_idx}/{total_files})")
 
                 output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{file_name2}"
 
@@ -217,6 +259,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     output_blob_client.upload_blob(data)
                 except Exception:
                     outputs_uploaded = False
+                    logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
+
+                    file_processor.append_errors(error_exception, path)
                     continue
 
                 file_item["output_files"].append(output_file_path)
@@ -229,8 +276,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     cgm_final_output_file_path, manifest_glucose_file_path
                 )
 
+        # Add the new output files to the file map
+        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
+
         # upload the QC file
-        print(f"Uploading QC file for {file_name} - ({log_idx}/{total_files})")
+        logger.debug(f"Uploading QC file for {file_name} - ({log_idx}/{total_files})")
         output_qc_file_path = f"{processed_data_qc_folder}/{patient_id}/QC_results.txt"
 
         try:
@@ -242,18 +292,24 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 output_blob_client.upload_blob(data)
         except Exception:
             file_item["qc_uploaded"] = False
+            logger.error(f"Failed to format {file_name} - ({log_idx}/{total_files})")
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            file_processor.append_errors(error_exception, path)
+
             continue
 
-        print(f"Uploaded QC file for {file_name} - ({log_idx}/{total_files})")
+        logger.debug(f"Uploaded QC file for {file_name} - ({log_idx}/{total_files})")
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
-            print(
+            logger.info(
                 f"Uploaded outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
         else:
-            print(
+            logger.error(
                 f"Failed to upload outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
 
@@ -262,16 +318,26 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         shutil.rmtree(cgm_temp_folder_path)
+
         os.remove(download_path)
 
-        # dev
-        # if log_idx == 2:
-        #     break
+    file_processor.delete_out_of_date_output_files()
+
+    file_processor.remove_seen_flag_from_map()
 
     # Write the manifest to a file
     manifest_file_path = os.path.join(temp_folder_path, "manifest_cgm_v2.tsv")
 
     manifest.write_tsv(manifest_file_path)
+
+    logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+
+    try:
+        file_processor.upload_json()
+        logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+    except Exception as e:
+        logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
+        raise e
 
     # Upload the manifest file
     with open(manifest_file_path, "rb") as data:
@@ -310,7 +376,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         writer.writerows(file_paths)
 
     with open(workflow_log_file_path, mode="rb") as data:
-        print(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
+        logger.debug(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
 
         output_blob_client = blob_service_client.get_blob_client(
             container="stage-1-container",
