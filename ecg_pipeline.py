@@ -13,6 +13,8 @@ import utils.dependency as deps
 import time
 import csv
 from traceback import print_exc, format_exc
+import utils.logwatch as logging
+from utils.file_map_processor import FileMapProcessor
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -30,6 +32,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
     ignore_folder = f"{study_id}/ignore"
+
+    logger = logging.Logwatch("ecg", print=True)
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -105,13 +109,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             }
         )
 
-    print(f"Found {len(file_paths)} files in {input_folder}")
+    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
 
     # Create a temporary folder on the local machine
     temp_folder_path = tempfile.mkdtemp()
 
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
+
+    file_processor = FileMapProcessor(dependency_folder)
 
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp()
@@ -140,11 +146,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
+        if log_idx == 6:
+            break
+
         path = file_item["file_path"]
 
         workflow_input_files = [path]
 
-        print(f"Processing {path} - ({log_idx}/{total_files})")
+        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
 
         # get the file name from the path
         file_name = path.split("/")[-1]
@@ -162,12 +171,33 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             container="stage-1-container", blob=path
         )
 
+        # should_process = True
+        input_last_modified = blob_client.get_blob_properties().last_modified
+
+        should_process = file_processor.file_should_process(path, input_last_modified)
+
+        if not should_process:
+            logger.debug(
+                f"The file {path} has not been modified since the last time it was processed",
+            )
+            logger.debug(
+                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
+            )
+
+            continue
+
+        file_processor.add_entry(path, input_last_modified)
+
+        file_processor.clear_errors(path)
+
+        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
+
         download_path = os.path.join(temp_folder_path, file_name)
 
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
 
-        print(f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})")
+        logger.info(f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})")
 
         ecg_path = download_path
 
@@ -181,6 +211,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
             )
         except Exception:
+            logger.error(
+                f"Failed to convert {file_name} - ({log_idx}/{total_files})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            file_processor.append_errors(error_exception, path)
             continue
 
         file_item["convert_error"] = False
@@ -202,8 +239,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         outputs_uploaded = True
         upload_exception = ""
 
+        file_processor.delete_preexisting_output_files(path)
+
         for file in output_files:
+
             with open(f"{file}", "rb") as data:
+
                 file_name2 = file.split("/")[-1]
 
                 output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name2}"
@@ -220,28 +261,29 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
                     output_blob_client.upload_blob(data)
                 except Exception as e:
-                    print("type is:", e.__class__.__name__)
-                    upload_exception = format_exc()
-                    print("upload_exception:", "".join(upload_exception.splitlines()))
-                    upload_exception = "".join(upload_exception.splitlines())
-                    print_exc()
-                    # upload_exception = str(Exception)
-                    # print("📢 [ecg_pipeline.py:227]", upload_exception)
-                    outputs_uploaded = False
+                    logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
+
+                    file_processor.append_errors(error_exception, path)
+
                     continue
 
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
 
+        # Add the new output files to the file map
+        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
+
         if outputs_uploaded:
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
-            print(
+            logger.info(
                 f"Uploaded outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
         else:
             file_item["output_uploaded"] = upload_exception
-            print(
+            logger.error(
                 f"Failed to upload outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
 
@@ -254,11 +296,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
 
-        # print(f"Data plotted {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Data plotted {file_name} - ({log_idx}/{total_files})")
 
         # dataplot_pngs = dataplot_retval_dict["output_files"]
 
-        # print(
+        # logger.debug(
         #     f"Uploading {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
         # )
 
@@ -271,28 +313,37 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         #         )
         #         output_blob_client.upload_blob(data)
 
-        # print(
+        # logger.debug(
         #     f"Uploaded {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
         # )
 
         # Create the file metadata
 
-        # print(f"Creating metadata for {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Creating metadata for {file_name} - ({log_idx}/{total_files})")
 
         # output_hea_file = conv_retval_dict["output_hea_file"]
 
         # hea_metadata = xecg.metadata(output_hea_file)
-        # print(hea_metadata)
+        # logger.debug(hea_metadata)
 
-        # print(f"Metadata created for {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Metadata created for {file_name} - ({log_idx}/{total_files})")
 
         shutil.rmtree(ecg_temp_folder_path)
         shutil.rmtree(wfdb_temp_folder_path)
         os.remove(download_path)
 
-        # dev
-        # if log_idx == 60:
-        #     break
+    file_processor.delete_out_of_date_output_files()
+
+    file_processor.remove_seen_flag_from_map()
+
+    logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+
+    try:
+        file_processor.upload_json()
+        logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+    except Exception as e:
+        logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
+        raise e
 
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
