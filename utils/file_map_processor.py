@@ -100,9 +100,11 @@ class FileMapProcessor:
                 entry["seen"] = True
 
                 t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
-
+                count_error = len(self.file_map[0]["error"])
+                
                 # Check if the file has been modified since the last time it was processed
-                return t != entry["input_last_modified"]
+                if t != entry["input_last_modified"] and count_error != 0:
+                    return False
         return True
 
     def confirm_output_files(self, path, workflow_output_files, input_last_modified):
@@ -174,5 +176,5 @@ class FileMapProcessor:
             output_blob_client.upload_blob(data)
         shutil.rmtree(self.meta_temp_folder_path)
 
-    def is_files_ignored(self, file_name, path) -> bool:
+    def is_file_ignored(self, file_name, path) -> bool:
         return file_name in self.ignore_files or path in self.ignore_files

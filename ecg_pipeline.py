@@ -123,7 +123,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        if log_idx == 6:
+        if log_idx == 60:
             break
 
         path = file_item["file_path"]
@@ -135,7 +135,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # get the file name from the path
         file_name = path.split("/")[-1]
 
-        should_files_ignored = file_processor.is_files_ignored(file_item, path)
+        should_files_ignored = file_processor.is_file_ignored(file_item, path)
 
         if should_files_ignored:
             logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
