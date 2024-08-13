@@ -1,4 +1,3 @@
-
 import contextlib
 import datetime
 import os
@@ -13,9 +12,9 @@ import json
 
 
 class FileMapProcessor:
-    """ Class for handling file processing """
+    """Class for handling file processing"""
 
-    def __init__(self, dependency_folder: str, ignore_file: Union[str, None]):
+    def __init__(self, dependency_folder: str, ignore_file=None):
 
         self.file_map = []
         # where actually ignored files stored in the array
@@ -33,7 +32,7 @@ class FileMapProcessor:
                 read=True, write=True, list=True, delete=True
             ),
             expiry=datetime.datetime.now(datetime.timezone.utc)
-                   + datetime.timedelta(hours=24),
+            + datetime.timedelta(hours=24),
         )
 
         # Get the blob service client
@@ -46,14 +45,18 @@ class FileMapProcessor:
         self.meta_temp_folder_path = tempfile.mkdtemp()
 
         # Download the meta file for the pipeline
-        file_map_download_path = os.path.join(self.meta_temp_folder_path, "file_map.json")
+        file_map_download_path = os.path.join(
+            self.meta_temp_folder_path, "file_map.json"
+        )
 
         meta_blob_client = self.blob_service_client.get_blob_client(
             container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
         )
 
         if self.ignore_file:
-            ignore_file_download_path = os.path.join(self.meta_temp_folder_path, f"{ignore_file.split('/')[-1]}.ignore")
+            ignore_file_download_path = os.path.join(
+                self.meta_temp_folder_path, f"{ignore_file.split('/')[-1]}.ignore"
+            )
             ignore_meta_blob_client = self.blob_service_client.get_blob_client(
                 container="stage-1-container", blob=f"{ignore_file}.ignore"
             )
@@ -89,8 +92,7 @@ class FileMapProcessor:
                     "output_files": [],
                     "input_last_modified": input_last_modified,
                     "seen": True,
-                    "error": []
-
+                    "error": [],
                 }
             )
 
@@ -100,10 +102,13 @@ class FileMapProcessor:
                 entry["seen"] = True
 
                 t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
-                count_error = len(self.file_map[0]["error"])
-                
+                count_error = len(entry["error"])
+
+                if count_error > 0:
+                    return False
+
                 # Check if the file has been modified since the last time it was processed
-                if t != entry["input_last_modified"] and count_error != 0:
+                if t == entry["input_last_modified"]:
                     return False
         return True
 
