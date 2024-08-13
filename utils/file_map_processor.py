@@ -3,6 +3,8 @@ import contextlib
 import datetime
 import os
 import tempfile
+from typing import Union
+
 import azure.storage.blob as azureblob
 import config
 import shutil
@@ -13,12 +15,13 @@ import json
 class FileMapProcessor:
     """ Class for handling file processing """
 
-    def __init__(self, dependency_folder: str, ignore_file_download_path):
+    def __init__(self, dependency_folder: str, ignore_folder: Union[str, None], channel: str):
 
         self.file_map = []
         self.ignore_files = []
         self.dependency_folder = dependency_folder
-        self.ignore_file_download_path = ignore_file_download_path
+        self.ignore_folder = ignore_folder
+
         # Establish azure connection
         sas_token = azureblob.generate_account_sas(
             account_name="b2aistaging",
@@ -47,20 +50,22 @@ class FileMapProcessor:
             container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
         )
 
-        # Download the ignore file
-        # ignore_file_download_path = os.path.join(self.meta_temp_folder_path, "ecg.ignore")
-
-        if self.ignore_file_download_path:
+        if self.ignore_folder:
+            ignore_file_download_path = os.path.join(self.meta_temp_folder_path, f"{channel}.ignore")
+            ignore_meta_blob_client = self.blob_service_client.get_blob_client(
+                container="stage-1-container", blob=f"{ignore_folder}/{channel}.ignore"
+            )
             with contextlib.suppress(Exception):
-                with open(self.ignore_file_download_path, "wb") as data:
-                    meta_blob_client.download_blob().readinto(data)
+                with open(ignore_file_download_path, "wb") as data:
+                    ignore_meta_blob_client.download_blob().readinto(data)
 
                 # Read the ignore file
-                with open(self.ignore_file_download_path, "r") as f:
-                    ignore_files = f.readlines()
+                with open(ignore_file_download_path, "r") as f:
+                    self.ignore_files = f.readlines()
 
-            self.ignore_files = [x.strip() for x in ignore_files]
+            self.ignore_files = [x.strip() for x in self.ignore_files]
 
+        # downloading file map
         with contextlib.suppress(Exception):
             with open(file_map_download_path, "wb") as data:
                 meta_blob_client.download_blob().readinto(data)
@@ -72,8 +77,6 @@ class FileMapProcessor:
         for entry in self.file_map:
             # This is to delete the output files of files that are no longer in the input folder
             entry["seen"] = False
-
-        # shutil.rmtree(meta_temp_folder_path)
 
     def add_entry(self, path, input_last_modified):
         entry = [entry for entry in self.file_map if entry["input_file"] == path]
@@ -169,12 +172,5 @@ class FileMapProcessor:
             output_blob_client.upload_blob(data)
         shutil.rmtree(self.meta_temp_folder_path)
 
-    def ecg_ignore_items(self, file_item, path):
-        file_name = path.split("/")[-1]
-
-        # Ignores files in the ecg pipeline
-        if file_name in self.ignore_files or path in self.ignore_files:
-            file_item["status"] = "ignored"
-            file_item["convert_error"] = False
-            return True
-        return False
+    def is_files_ignored(self, file_name, path) -> bool:
+        return file_name in self.ignore_files or path in self.ignore_files
