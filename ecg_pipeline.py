@@ -31,7 +31,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/ECG"
     pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
-    ignore_file = f"{study_id}/ignore/ecg"
+    ignore_file = f"{study_id}/ignore/ecg.ignore"
 
     logger = logging.Logwatch("ecg", print=True)
 
@@ -123,7 +123,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        if log_idx == 60:
+        if log_idx == 15:
             break
 
         path = file_item["file_path"]
@@ -135,9 +135,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # get the file name from the path
         file_name = path.split("/")[-1]
 
-        should_files_ignored = file_processor.is_file_ignored(file_item, path)
+        should_file_ignored = file_processor.is_file_ignored(file_item, path)
 
-        if should_files_ignored:
+        if should_file_ignored:
             logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
             continue
 

@@ -21,7 +21,6 @@ class FileMapProcessor:
         self.ignore_files = []
         self.dependency_folder = dependency_folder
         # ignored file path in the azure
-        self.ignore_file = ignore_file
 
         # Establish azure connection
         sas_token = azureblob.generate_account_sas(
@@ -52,13 +51,13 @@ class FileMapProcessor:
         meta_blob_client = self.blob_service_client.get_blob_client(
             container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
         )
-
-        if self.ignore_file:
+        ignored_file_name = {ignore_file.split('/')[-1]}
+        if ignore_file:
             ignore_file_download_path = os.path.join(
-                self.meta_temp_folder_path, f"{ignore_file.split('/')[-1]}.ignore"
+                self.meta_temp_folder_path, f"{ignored_file_name}"
             )
             ignore_meta_blob_client = self.blob_service_client.get_blob_client(
-                container="stage-1-container", blob=f"{ignore_file}.ignore"
+                container="stage-1-container", blob=f"{ignore_file}"
             )
             with contextlib.suppress(Exception):
                 with open(ignore_file_download_path, "wb") as data:
