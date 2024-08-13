@@ -31,7 +31,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/ECG"
     pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
-    ignore_folder = f"{study_id}/ignore"
+    ignore_file = f"{study_id}/ignore/ecg"
 
     logger = logging.Logwatch("ecg", print=True)
 
@@ -55,7 +55,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-
     # Delete the output folder if it exists
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
@@ -66,7 +65,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     paths = file_system_client.get_paths(path=input_folder)
 
     file_paths = []
-
     for path in paths:
         t = str(path.name)
 
@@ -116,7 +114,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp()
 
-    file_processor = FileMapProcessor(dependency_folder, ignore_folder, "ecg")
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
@@ -125,7 +123,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        if log_idx == 60:
+        if log_idx == 6:
             break
 
         path = file_item["file_path"]

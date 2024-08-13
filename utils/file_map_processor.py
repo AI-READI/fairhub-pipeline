@@ -15,12 +15,14 @@ import json
 class FileMapProcessor:
     """ Class for handling file processing """
 
-    def __init__(self, dependency_folder: str, ignore_folder: Union[str, None], channel: str):
+    def __init__(self, dependency_folder: str, ignore_file: Union[str, None]):
 
         self.file_map = []
+        # where actually ignored files stored in the array
         self.ignore_files = []
         self.dependency_folder = dependency_folder
-        self.ignore_folder = ignore_folder
+        # ignored file path in the azure
+        self.ignore_file = ignore_file
 
         # Establish azure connection
         sas_token = azureblob.generate_account_sas(
@@ -50,10 +52,10 @@ class FileMapProcessor:
             container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
         )
 
-        if self.ignore_folder:
-            ignore_file_download_path = os.path.join(self.meta_temp_folder_path, f"{channel}.ignore")
+        if self.ignore_file:
+            ignore_file_download_path = os.path.join(self.meta_temp_folder_path, f"{ignore_file.split('/')[-1]}.ignore")
             ignore_meta_blob_client = self.blob_service_client.get_blob_client(
-                container="stage-1-container", blob=f"{ignore_folder}/{channel}.ignore"
+                container="stage-1-container", blob=f"{ignore_file}.ignore"
             )
             with contextlib.suppress(Exception):
                 with open(ignore_file_download_path, "wb") as data:
