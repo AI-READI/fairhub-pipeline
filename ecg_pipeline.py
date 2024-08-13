@@ -12,7 +12,7 @@ import config
 import utils.dependency as deps
 import time
 import csv
-from traceback import print_exc, format_exc
+from traceback import format_exc
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 
@@ -72,7 +72,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_name = t.split("/")[-1]
 
-        print(f"Processing {file_name}")
+        logger.debug(f"Processing {file_name}")
 
         # Check if the item is an xml file
         if file_name.split(".")[-1] != "xml":
@@ -82,7 +82,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # The name of this folder is in the format siteName_dataType_startDate-endDate
         batch_folder = t.split("/")[-2]
 
-        print(f"Batch folder: {batch_folder}")
+        logger.debug(f"Batch folder: {batch_folder}")
 
         # Check if the folder name is in the format siteName_dataType_startDate-endDate
         if len(batch_folder.split("_")) != 3:
@@ -146,7 +146,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        if log_idx == 6:
+        if log_idx == 60:
             break
 
         path = file_item["file_path"]
@@ -163,7 +163,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_item["status"] = "ignored"
             file_item["convert_error"] = False
 
-            print(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
             continue
 
         # download the file to the temp folder
@@ -223,12 +223,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_item["convert_error"] = False
         file_item["processed"] = True
 
-        print(f"Converted {file_name} - ({log_idx}/{total_files})")
+        logger.debug(f"Converted {file_name} - ({log_idx}/{total_files})")
 
         output_files = conv_retval_dict["output_files"]
         participant_id = conv_retval_dict["participantID"]
 
-        print(
+        logger.debug(
             f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
@@ -292,7 +292,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # Do the data plot
-        # print(f"Data plotting {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Data plotting {file_name} - ({log_idx}/{total_files})")
 
         # dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
 
@@ -344,7 +344,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     except Exception as e:
         logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
         raise e
-
+    
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
     file_name = f"status_report_{timestr}.csv"
@@ -373,7 +373,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         writer.writerows(file_paths)
 
     with open(workflow_log_file_path, mode="rb") as data:
-        print(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
+        logger.debug(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
 
         output_blob_client = blob_service_client.get_blob_client(
             container="stage-1-container",
