@@ -13,11 +13,12 @@ import json
 class FileMapProcessor:
     """ Class for handling file processing """
 
-    def __init__(self, dependency_folder: str):
+    def __init__(self, dependency_folder: str, ignore_file_download_path):
 
         self.file_map = []
+        self.ignore_files = []
         self.dependency_folder = dependency_folder
-
+        self.ignore_file_download_path = ignore_file_download_path
         # Establish azure connection
         sas_token = azureblob.generate_account_sas(
             account_name="b2aistaging",
@@ -37,7 +38,6 @@ class FileMapProcessor:
         )
 
         # Create a temporary folder on the local machine
-        meta_temp_folder_path = tempfile.mkdtemp()
         self.meta_temp_folder_path = tempfile.mkdtemp()
 
         # Download the meta file for the pipeline
@@ -46,6 +46,20 @@ class FileMapProcessor:
         meta_blob_client = self.blob_service_client.get_blob_client(
             container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
         )
+
+        # Download the ignore file
+        # ignore_file_download_path = os.path.join(self.meta_temp_folder_path, "ecg.ignore")
+
+        if self.ignore_file_download_path:
+            with contextlib.suppress(Exception):
+                with open(self.ignore_file_download_path, "wb") as data:
+                    meta_blob_client.download_blob().readinto(data)
+
+                # Read the ignore file
+                with open(self.ignore_file_download_path, "r") as f:
+                    ignore_files = f.readlines()
+
+            self.ignore_files = [x.strip() for x in ignore_files]
 
         with contextlib.suppress(Exception):
             with open(file_map_download_path, "wb") as data:
@@ -154,3 +168,13 @@ class FileMapProcessor:
 
             output_blob_client.upload_blob(data)
         shutil.rmtree(self.meta_temp_folder_path)
+
+    def ecg_ignore_items(self, file_item, path):
+        file_name = path.split("/")[-1]
+
+        # Ignores files in the ecg pipeline
+        if file_name in self.ignore_files or path in self.ignore_files:
+            file_item["status"] = "ignored"
+            file_item["convert_error"] = False
+            return True
+        return False

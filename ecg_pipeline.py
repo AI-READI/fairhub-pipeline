@@ -117,27 +117,27 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
-    file_processor = FileMapProcessor(dependency_folder)
-
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp()
 
     # Download the ignore file
     ignore_file_download_path = os.path.join(meta_temp_folder_path, "ecg.ignore")
 
+    file_processor = FileMapProcessor(dependency_folder, ignore_file_download_path)
+
     meta_blob_client = blob_service_client.get_blob_client(
         container="stage-1-container", blob=f"{ignore_folder}/ecg.ignore"
     )
 
-    with contextlib.suppress(Exception):
-        with open(ignore_file_download_path, "wb") as data:
-            meta_blob_client.download_blob().readinto(data)
-
-        # Read the ignore file
-        with open(ignore_file_download_path, "r") as f:
-            ignore_files = f.readlines()
-
-    ignore_files = [x.strip() for x in ignore_files]
+    # with contextlib.suppress(Exception):
+    #     with open(ignore_file_download_path, "wb") as data:
+    #         meta_blob_client.download_blob().readinto(data)
+    #
+    #     # Read the ignore file
+    #     with open(ignore_file_download_path, "r") as f:
+    #         ignore_files = f.readlines()
+    #
+    # ignore_files = [x.strip() for x in ignore_files]
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
@@ -156,13 +156,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
 
         # get the file name from the path
-        file_name = path.split("/")[-1]
+        # file_name = path.split("/")[-1]
+
+        should_files_ignored = file_processor.ecg_ignore_items(file_item, path)
 
         # check if the file is in the ignore list
-        if file_name in ignore_files or path in ignore_files:
-            file_item["status"] = "ignored"
-            file_item["convert_error"] = False
-
+        # if file_name in ignore_files or path in ignore_files:
+        #     file_item["status"] = "ignored"
+        #     file_item["convert_error"] = False
+        #     file_processor.ecg_ignore_items(file_item, path)
+        #
+        if should_files_ignored:
             logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
             continue
 
