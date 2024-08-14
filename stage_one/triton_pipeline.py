@@ -34,6 +34,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/Triton"
     pipeline_workflow_log_folder = f"{study_id}/logs/Triton"
     processed_data_output_folder = f"{study_id}/pooled-data/Triton-processed"
+    ignore_file = f"{study_id}/ignore/triton.ignore"
 
     logger = logging.Logwatch("triton", print=True)
 
@@ -118,7 +119,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-    file_processor = FileMapProcessor(dependency_folder)
+    file_processor = FileMapProcessor(dependency_folder,ignore_file)
 
     total_files = len(file_paths)
 
@@ -139,6 +140,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_input_files = [path]
 
         # get the file name from the path
+        file_name = path.split("/")[-1]
+
+        should_file_ignored = file_processor.is_file_ignored(file_item, path)
+
+        if should_file_ignored:
+            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            continue
+
+        # get the file name from the path
         original_file_name = path.split("/")[-1]
 
         # download the file to the temp folder
@@ -146,7 +156,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             container="stage-1-container", blob=path
         )
 
-        # should_process = True
         input_last_modified = blob_client.get_blob_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
