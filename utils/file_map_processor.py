@@ -51,8 +51,9 @@ class FileMapProcessor:
         meta_blob_client = self.blob_service_client.get_blob_client(
             container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
         )
-        ignored_file_name = {ignore_file.split('/')[-1]}
         if ignore_file:
+
+            ignored_file_name = ignore_file.split('/')[-1]
             ignore_file_download_path = os.path.join(
                 self.meta_temp_folder_path, f"{ignored_file_name}"
             )
@@ -103,12 +104,9 @@ class FileMapProcessor:
                 t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
                 count_error = len(entry["error"])
 
-                if count_error > 0:
-                    return False
-
                 # Check if the file has been modified since the last time it was processed
-                if t == entry["input_last_modified"]:
-                    return False
+                return t != entry["input_last_modified"] or count_error > 0
+
         return True
 
     def confirm_output_files(self, path, workflow_output_files, input_last_modified):
