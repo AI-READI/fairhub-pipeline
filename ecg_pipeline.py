@@ -130,8 +130,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         workflow_input_files = [path]
 
-        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
-
         # get the file name from the path
         file_name = path.split("/")[-1]
 
