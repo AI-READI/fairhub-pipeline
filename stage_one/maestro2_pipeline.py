@@ -148,8 +148,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
             continue
 
-        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
-
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
             container="stage-1-container", blob=path
