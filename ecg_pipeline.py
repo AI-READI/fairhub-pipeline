@@ -123,7 +123,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        # if log_idx == 15:
+        # if log_idx == 2:
         #     break
 
         path = file_item["file_path"]

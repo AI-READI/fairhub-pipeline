@@ -17,10 +17,10 @@ class FileMapProcessor:
     def __init__(self, dependency_folder: str, ignore_file=None):
 
         self.file_map = []
-        # where actually ignored files stored in the array
+        # where actually ignored files are stored in the array
         self.ignore_files = []
         self.dependency_folder = dependency_folder
-        # ignored file path in the azure
+        # ignored file path on the azure
 
         # Establish azure connection
         sas_token = azureblob.generate_account_sas(
@@ -43,7 +43,6 @@ class FileMapProcessor:
         # Create a temporary folder on the local machine
         self.meta_temp_folder_path = tempfile.mkdtemp()
 
-        # Download the meta file for the pipeline
         file_map_download_path = os.path.join(
             self.meta_temp_folder_path, "file_map.json"
         )
@@ -52,14 +51,16 @@ class FileMapProcessor:
             container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
         )
         if ignore_file:
-
+            # ignore File name coming from the ignore file path
             ignored_file_name = ignore_file.split('/')[-1]
+
             ignore_file_download_path = os.path.join(
-                self.meta_temp_folder_path, f"{ignored_file_name}"
+                self.meta_temp_folder_path, ignored_file_name
             )
             ignore_meta_blob_client = self.blob_service_client.get_blob_client(
-                container="stage-1-container", blob=f"{ignore_file}"
+                container="stage-1-container", blob=ignore_file
             )
+            # Download the meta file for the pipeline
             with contextlib.suppress(Exception):
                 with open(ignore_file_download_path, "wb") as data:
                     ignore_meta_blob_client.download_blob().readinto(data)
@@ -67,10 +68,10 @@ class FileMapProcessor:
                 # Read the ignore file
                 with open(ignore_file_download_path, "r") as f:
                     self.ignore_files = f.readlines()
-
+            # Save trimmed file names
             self.ignore_files = [x.strip() for x in self.ignore_files]
 
-        # downloading file map
+        # Downloading file map
         with contextlib.suppress(Exception):
             with open(file_map_download_path, "wb") as data:
                 meta_blob_client.download_blob().readinto(data)
@@ -84,6 +85,7 @@ class FileMapProcessor:
             entry["seen"] = False
 
     def add_entry(self, path, input_last_modified):
+        # Add files that do not exist in the array
         entry = [entry for entry in self.file_map if entry["input_file"] == path]
         if len(entry) == 0:
             self.file_map.append(
@@ -97,6 +99,8 @@ class FileMapProcessor:
             )
 
     def file_should_process(self, path, input_last_modified) -> bool:
+        """Check if the file has been modified since the last time it was
+         processed and no errors exist during processing """
         for entry in self.file_map:
             if entry["input_file"] == path:
                 entry["seen"] = True
@@ -104,7 +108,6 @@ class FileMapProcessor:
                 t = input_last_modified.strftime("%Y-%m-%d %H:%M:%S+00:00")
                 count_error = len(entry["error"])
 
-                # Check if the file has been modified since the last time it was processed
                 return t != entry["input_last_modified"] or count_error > 0
 
         return True
@@ -180,3 +183,4 @@ class FileMapProcessor:
 
     def is_file_ignored(self, file_name, path) -> bool:
         return file_name in self.ignore_files or path in self.ignore_files
+    
