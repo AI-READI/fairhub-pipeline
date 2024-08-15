@@ -34,6 +34,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/Eidon"
     pipeline_workflow_log_folder = f"{study_id}/logs/Eidon"
     processed_data_output_folder = f"{study_id}/pooled-data/Eidon-processed"
+    ignore_file = f"{study_id}/ignore/eidon.ignore"
 
     logger = logging.Logwatch("eidon", print=True)
 
@@ -119,7 +120,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Download the meta file for the pipeline
     # file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
-    file_processor = FileMapProcessor(dependency_folder)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
@@ -138,6 +139,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         path = file_item["file_path"]
 
         workflow_input_files = [path]
+
+        # get the file name from the path
+        file_name = path.split("/")[-1]
+
+        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
+
+        if should_file_be_ignored:
+            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            continue
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(

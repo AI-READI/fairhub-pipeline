@@ -34,6 +34,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/Maestro2"
     pipeline_workflow_log_folder = f"{study_id}/logs/Maestro2"
     processed_data_output_folder = f"{study_id}/pooled-data/Maestro2-processed"
+    ignore_file = f"{study_id}/ignore/maestro2.ignore"
 
     logger = logging.Logwatch("maestro2", print=True)
 
@@ -71,16 +72,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for path in paths:
         t = str(path.name)
 
-        file_name = t.split("/")[-1]
+        original_file_name = t.split("/")[-1]
 
         # Check if the item is an .fda.zip file
-        if not file_name.endswith(".fda.zip"):
+        if not original_file_name.endswith(".fda.zip"):
             continue
 
         # Get the parent folder of the file.
         # The name of this file is in the format siteName_dataType_siteName_dataType_startDate-endDate_*.fda.zip
 
-        parts = file_name.split("_")
+        parts = original_file_name.split("_")
 
         if len(parts) != 6:
             continue
@@ -118,7 +119,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-    file_processor = FileMapProcessor(dependency_folder)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     total_files = len(file_paths)
 
@@ -138,14 +139,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         workflow_input_files = [path]
 
-        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
+        # get the file name from the path
+        original_file_name = path.split("/")[-1]
+
+        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
+
+        if should_file_be_ignored:
+            logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
+            continue
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
             container="stage-1-container", blob=path
         )
 
-        # should_process = True
         input_last_modified = blob_client.get_blob_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
@@ -179,7 +186,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             blob_client.download_blob().readinto(data)
 
         logger.info(
-            f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})"
+            f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
         )
 
         zip_files = imaging_utils.list_zip_files(step1_folder)
@@ -194,13 +201,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             os.makedirs(step2_folder)
 
         logger.debug(
-            f"Unzipping {file_name} to {step2_folder} - ({log_idx}/{total_files})"
+            f"Unzipping {original_file_name} to {step2_folder} - ({log_idx}/{total_files})"
         )
 
         imaging_utils.unzip_fda_file(download_path, step2_folder)
 
         logger.debug(
-            f"Unzipped {file_name} to {step2_folder} - ({log_idx}/{total_files})"
+            f"Unzipped {original_file_name} to {step2_folder} - ({log_idx}/{total_files})"
         )
 
         step3_folder = os.path.join(temp_folder_path, "step3")
@@ -221,7 +228,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     step2_data_folder, os.path.join(step3_folder, device)
                 )
         except Exception:
-            logger.error(f"Failed to organize {file_name} - ({log_idx}/{total_files})")
+            logger.error(f"Failed to organize {original_file_name} - ({log_idx}/{total_files})")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -256,7 +263,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     maestro2_instance.convert(folder, output_folder_path)
 
         except Exception:
-            logger.error(f"Failed to convert {file_name} - ({log_idx}/{total_files})")
+            logger.error(f"Failed to convert {original_file_name} - ({log_idx}/{total_files})")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -290,7 +297,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_item["processed"] = True
 
         logger.debug(
-            f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
         workflow_output_files = []

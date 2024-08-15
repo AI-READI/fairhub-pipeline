@@ -12,7 +12,9 @@ import config
 import utils.dependency as deps
 import time
 import csv
-from traceback import print_exc, format_exc
+from traceback import format_exc
+import utils.logwatch as logging
+from utils.file_map_processor import FileMapProcessor
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -29,7 +31,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/ECG"
     pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
-    ignore_folder = f"{study_id}/ignore"
+    ignore_file = f"{study_id}/ignore/ecg.ignore"
+
+    logger = logging.Logwatch("ecg", print=True)
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -51,7 +55,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-
     # Delete the output folder if it exists
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
@@ -62,23 +65,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     paths = file_system_client.get_paths(path=input_folder)
 
     file_paths = []
-
     for path in paths:
         t = str(path.name)
 
-        file_name = t.split("/")[-1]
+        original_file_name = t.split("/")[-1]
 
-        print(f"Processing {file_name}")
-
-        # Check if the item is an xml file
-        if file_name.split(".")[-1] != "xml":
+        # Check if the item is a xml file
+        if original_file_name.split(".")[-1] != "xml":
             continue
 
         # Get the parent folder of the file.
         # The name of this folder is in the format siteName_dataType_startDate-endDate
         batch_folder = t.split("/")[-2]
-
-        print(f"Batch folder: {batch_folder}")
 
         # Check if the folder name is in the format siteName_dataType_startDate-endDate
         if len(batch_folder.split("_")) != 3:
@@ -105,7 +103,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             }
         )
 
-    print(f"Found {len(file_paths)} files in {input_folder}")
+    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
 
     # Create a temporary folder on the local machine
     temp_folder_path = tempfile.mkdtemp()
@@ -116,22 +114,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp()
 
-    # Download the ignore file
-    ignore_file_download_path = os.path.join(meta_temp_folder_path, "ecg.ignore")
-
-    meta_blob_client = blob_service_client.get_blob_client(
-        container="stage-1-container", blob=f"{ignore_folder}/ecg.ignore"
-    )
-
-    with contextlib.suppress(Exception):
-        with open(ignore_file_download_path, "wb") as data:
-            meta_blob_client.download_blob().readinto(data)
-
-        # Read the ignore file
-        with open(ignore_file_download_path, "r") as f:
-            ignore_files = f.readlines()
-
-    ignore_files = [x.strip() for x in ignore_files]
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
@@ -140,21 +123,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
+        # if log_idx == 2:
+        #     break
+
         path = file_item["file_path"]
 
         workflow_input_files = [path]
 
-        print(f"Processing {path} - ({log_idx}/{total_files})")
-
         # get the file name from the path
-        file_name = path.split("/")[-1]
+        original_file_name = path.split("/")[-1]
 
-        # check if the file is in the ignore list
-        if file_name in ignore_files or path in ignore_files:
-            file_item["status"] = "ignored"
-            file_item["convert_error"] = False
+        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
-            print(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+        if should_file_be_ignored:
+            logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
             continue
 
         # download the file to the temp folder
@@ -162,12 +144,33 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             container="stage-1-container", blob=path
         )
 
-        download_path = os.path.join(temp_folder_path, file_name)
+        # should_process = True
+        input_last_modified = blob_client.get_blob_properties().last_modified
+
+        should_process = file_processor.file_should_process(path, input_last_modified)
+
+        if not should_process:
+            logger.debug(
+                f"The file {path} has not been modified since the last time it was processed",
+            )
+            logger.debug(
+                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
+            )
+
+            continue
+
+        file_processor.add_entry(path, input_last_modified)
+
+        file_processor.clear_errors(path)
+
+        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
+
+        download_path = os.path.join(temp_folder_path, original_file_name)
 
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
 
-        print(f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})")
+        logger.info(f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})")
 
         ecg_path = download_path
 
@@ -181,18 +184,25 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
             )
         except Exception:
+            logger.error(
+                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            file_processor.append_errors(error_exception, path)
             continue
 
         file_item["convert_error"] = False
         file_item["processed"] = True
 
-        print(f"Converted {file_name} - ({log_idx}/{total_files})")
+        logger.debug(f"Converted {original_file_name} - ({log_idx}/{total_files})")
 
         output_files = conv_retval_dict["output_files"]
         participant_id = conv_retval_dict["participantID"]
 
-        print(
-            f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+        logger.debug(
+            f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
         # file is in the format 1001_ecg_25aafb4b.dat
@@ -202,8 +212,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         outputs_uploaded = True
         upload_exception = ""
 
+        file_processor.delete_preexisting_output_files(path)
+
         for file in output_files:
+
             with open(f"{file}", "rb") as data:
+
                 file_name2 = file.split("/")[-1]
 
                 output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name2}"
@@ -220,29 +234,30 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
                     output_blob_client.upload_blob(data)
                 except Exception as e:
-                    print("type is:", e.__class__.__name__)
-                    upload_exception = format_exc()
-                    print("upload_exception:", "".join(upload_exception.splitlines()))
-                    upload_exception = "".join(upload_exception.splitlines())
-                    print_exc()
-                    # upload_exception = str(Exception)
-                    # print("📢 [ecg_pipeline.py:227]", upload_exception)
-                    outputs_uploaded = False
+                    logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
+
+                    file_processor.append_errors(error_exception, path)
+
                     continue
 
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
 
+        # Add the new output files to the file map
+        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
+
         if outputs_uploaded:
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
-            print(
-                f"Uploaded outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            logger.info(
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
         else:
             file_item["output_uploaded"] = upload_exception
-            print(
-                f"Failed to upload outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            logger.error(
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
 
         workflow_file_dependencies.add_dependency(
@@ -250,50 +265,59 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # Do the data plot
-        # print(f"Data plotting {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Data plotting {original_file_name} - ({log_idx}/{total_files})")
 
         # dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
 
-        # print(f"Data plotted {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Data plotted {original_file_name} - ({log_idx}/{total_files})")
 
         # dataplot_pngs = dataplot_retval_dict["output_files"]
 
-        # print(
-        #     f"Uploading {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
+        # logger.debug(
+        #     f"Uploading {original_file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
         # )
 
         # for file in dataplot_pngs:
         #     with open(f"{file}", "rb") as data:
-        #         file_name = file.split("/")[-1]
+        #         original_file_name = file.split("/")[-1]
         #         output_blob_client = blob_service_client.get_blob_client(
         #             container="stage-1-container",
-        #             blob=f"{data_plot_output_folder}/{file_name}",
+        #             blob=f"{data_plot_output_folder}/{original_file_name}",
         #         )
         #         output_blob_client.upload_blob(data)
 
-        # print(
-        #     f"Uploaded {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
+        # logger.debug(
+        #     f"Uploaded {original_file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
         # )
 
         # Create the file metadata
 
-        # print(f"Creating metadata for {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Creating metadata for {original_file_name} - ({log_idx}/{total_files})")
 
         # output_hea_file = conv_retval_dict["output_hea_file"]
 
         # hea_metadata = xecg.metadata(output_hea_file)
-        # print(hea_metadata)
+        # logger.debug(hea_metadata)
 
-        # print(f"Metadata created for {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Metadata created for {original_file_name} - ({log_idx}/{total_files})")
 
         shutil.rmtree(ecg_temp_folder_path)
         shutil.rmtree(wfdb_temp_folder_path)
         os.remove(download_path)
 
-        # dev
-        # if log_idx == 60:
-        #     break
+    file_processor.delete_out_of_date_output_files()
 
+    file_processor.remove_seen_flag_from_map()
+
+    logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+
+    try:
+        file_processor.upload_json()
+        logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+    except Exception as e:
+        logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
+        raise e
+    
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
     file_name = f"status_report_{timestr}.csv"
@@ -322,7 +346,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         writer.writerows(file_paths)
 
     with open(workflow_log_file_path, mode="rb") as data:
-        print(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
+        logger.debug(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
 
         output_blob_client = blob_service_client.get_blob_client(
             container="stage-1-container",
