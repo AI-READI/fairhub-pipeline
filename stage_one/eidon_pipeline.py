@@ -34,7 +34,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/Eidon"
     pipeline_workflow_log_folder = f"{study_id}/logs/Eidon"
     processed_data_output_folder = f"{study_id}/pooled-data/Eidon-processed"
-    ignore_file = f"{study_id}/ignore/ecg.ignore"
+    ignore_file = f"{study_id}/ignore/eidon.ignore"
 
     logger = logging.Logwatch("eidon", print=True)
 

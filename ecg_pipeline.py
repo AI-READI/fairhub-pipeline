@@ -68,10 +68,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for path in paths:
         t = str(path.name)
 
-        file_name = t.split("/")[-1]
+        original_file_name = t.split("/")[-1]
 
-        # Check if the item is an xml file
-        if file_name.split(".")[-1] != "xml":
+        # Check if the item is a xml file
+        if original_file_name.split(".")[-1] != "xml":
             continue
 
         # Get the parent folder of the file.
@@ -131,12 +131,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_input_files = [path]
 
         # get the file name from the path
-        file_name = path.split("/")[-1]
+        original_file_name = path.split("/")[-1]
 
         should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
         if should_file_be_ignored:
-            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
             continue
 
         # download the file to the temp folder
@@ -165,12 +165,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
 
-        download_path = os.path.join(temp_folder_path, file_name)
+        download_path = os.path.join(temp_folder_path, original_file_name)
 
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
 
-        logger.info(f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})")
+        logger.info(f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})")
 
         ecg_path = download_path
 
@@ -185,7 +185,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
         except Exception:
             logger.error(
-                f"Failed to convert {file_name} - ({log_idx}/{total_files})"
+                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -196,13 +196,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_item["convert_error"] = False
         file_item["processed"] = True
 
-        logger.debug(f"Converted {file_name} - ({log_idx}/{total_files})")
+        logger.debug(f"Converted {original_file_name} - ({log_idx}/{total_files})")
 
         output_files = conv_retval_dict["output_files"]
         participant_id = conv_retval_dict["participantID"]
 
         logger.debug(
-            f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
         # file is in the format 1001_ecg_25aafb4b.dat
@@ -252,12 +252,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
         else:
             file_item["output_uploaded"] = upload_exception
             logger.error(
-                f"Failed to upload outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
 
         workflow_file_dependencies.add_dependency(
@@ -265,41 +265,41 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # Do the data plot
-        # logger.debug(f"Data plotting {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Data plotting {original_file_name} - ({log_idx}/{total_files})")
 
         # dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
 
-        # logger.debug(f"Data plotted {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Data plotted {original_file_name} - ({log_idx}/{total_files})")
 
         # dataplot_pngs = dataplot_retval_dict["output_files"]
 
         # logger.debug(
-        #     f"Uploading {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
+        #     f"Uploading {original_file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
         # )
 
         # for file in dataplot_pngs:
         #     with open(f"{file}", "rb") as data:
-        #         file_name = file.split("/")[-1]
+        #         original_file_name = file.split("/")[-1]
         #         output_blob_client = blob_service_client.get_blob_client(
         #             container="stage-1-container",
-        #             blob=f"{data_plot_output_folder}/{file_name}",
+        #             blob=f"{data_plot_output_folder}/{original_file_name}",
         #         )
         #         output_blob_client.upload_blob(data)
 
         # logger.debug(
-        #     f"Uploaded {file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
+        #     f"Uploaded {original_file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
         # )
 
         # Create the file metadata
 
-        # logger.debug(f"Creating metadata for {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Creating metadata for {original_file_name} - ({log_idx}/{total_files})")
 
         # output_hea_file = conv_retval_dict["output_hea_file"]
 
         # hea_metadata = xecg.metadata(output_hea_file)
         # logger.debug(hea_metadata)
 
-        # logger.debug(f"Metadata created for {file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Metadata created for {original_file_name} - ({log_idx}/{total_files})")
 
         shutil.rmtree(ecg_temp_folder_path)
         shutil.rmtree(wfdb_temp_folder_path)

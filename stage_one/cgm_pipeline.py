@@ -84,11 +84,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for path in paths:
         t = str(path.name)
 
-        file_name = t.split("/")[-1]
-
+        original_file_name = t.split("/")[-1]
 
         # Check if the item is a csv file
-        if file_name.split(".")[-1] != "csv":
+        if original_file_name.split(".")[-1] != "csv":
             continue
 
         file_paths.append(
@@ -130,15 +129,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_input_files = [path]
 
         # get the file name from the path. It's in the format Clarity_Export_AIREADI_{id}_*.csv
-        file_name = path.split("/")[-1]
+        original_file_name = path.split("/")[-1]
 
         should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
         if should_file_be_ignored:
-            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
             continue
 
-        file_name_only = file_name.split(".")[0]
+        file_name_only = original_file_name.split(".")[0]
         patient_id = file_name_only.split("_")[3]
 
         # download the file to the temp folder
@@ -173,7 +172,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             blob_client.download_blob().readinto(data)
 
         logger.info(
-            f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})"
+            f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
         )
         
         cgm_path = download_path
@@ -209,7 +208,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
         except Exception:
             logger.error(
-                f"Failed to convert {file_name} - ({log_idx}/{total_files})"
+                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -221,7 +220,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_item["processed"] = True
 
         logger.debug(
-            f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
         # file is converted successfully. Upload the output file
@@ -273,7 +272,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
 
         # upload the QC file
-        logger.debug(f"Uploading QC file for {file_name} - ({log_idx}/{total_files})")
+        logger.debug(f"Uploading QC file for {original_file_name} - ({log_idx}/{total_files})")
         output_qc_file_path = f"{processed_data_qc_folder}/{patient_id}/QC_results.txt"
 
         try:
@@ -285,7 +284,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 output_blob_client.upload_blob(data)
         except Exception:
             file_item["qc_uploaded"] = False
-            logger.error(f"Failed to format {file_name} - ({log_idx}/{total_files})")
+            logger.error(f"Failed to format {original_file_name} - ({log_idx}/{total_files})")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -293,17 +292,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             continue
 
-        logger.debug(f"Uploaded QC file for {file_name} - ({log_idx}/{total_files})")
+        logger.debug(f"Uploaded QC file for {original_file_name} - ({log_idx}/{total_files})")
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
         else:
             logger.error(
-                f"Failed to upload outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
 
         workflow_file_dependencies.add_dependency(
