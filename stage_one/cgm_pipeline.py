@@ -54,7 +54,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             read=True, write=True, list=True, delete=True
         ),
         expiry=datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=1),
+        + datetime.timedelta(hours=24),
     )
 
     # Get the blob service client
@@ -68,10 +68,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-
-    # Delete the output folder if it exists
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_output_folder)
 
     # Delete the qc folder if it exists
     with contextlib.suppress(Exception):
@@ -164,7 +160,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_processor.clear_errors(path)
 
         logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
-        
+
         # File should be downloaded as DEX_{patient_id}.csv
         download_path = os.path.join(temp_folder_path, f"DEX-{patient_id}.csv")
 
@@ -174,7 +170,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         logger.info(
             f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
         )
-        
+
         cgm_path = download_path
 
         cgm_temp_folder_path = tempfile.mkdtemp()
@@ -212,6 +208,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
 
             file_processor.append_errors(error_exception, path)
             continue
@@ -255,6 +253,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
 
+                    logger.error(error_exception)
+
                     file_processor.append_errors(error_exception, path)
                     continue
 
@@ -269,10 +269,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
         # Add the new output files to the file map
-        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
+        file_processor.confirm_output_files(
+            path, workflow_output_files, input_last_modified
+        )
 
         # upload the QC file
-        logger.debug(f"Uploading QC file for {original_file_name} - ({log_idx}/{total_files})")
+        logger.debug(
+            f"Uploading QC file for {original_file_name} - ({log_idx}/{total_files})"
+        )
         output_qc_file_path = f"{processed_data_qc_folder}/{patient_id}/QC_results.txt"
 
         try:
@@ -284,15 +288,21 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 output_blob_client.upload_blob(data)
         except Exception:
             file_item["qc_uploaded"] = False
-            logger.error(f"Failed to format {original_file_name} - ({log_idx}/{total_files})")
+            logger.error(
+                f"Failed to format {original_file_name} - ({log_idx}/{total_files})"
+            )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
 
             file_processor.append_errors(error_exception, path)
 
             continue
 
-        logger.debug(f"Uploaded QC file for {original_file_name} - ({log_idx}/{total_files})")
+        logger.debug(
+            f"Uploaded QC file for {original_file_name} - ({log_idx}/{total_files})"
+        )
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
@@ -368,7 +378,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         writer.writerows(file_paths)
 
     with open(workflow_log_file_path, mode="rb") as data:
-        logger.debug(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
+        logger.debug(
+            f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
 
         output_blob_client = blob_service_client.get_blob_client(
             container="stage-1-container",

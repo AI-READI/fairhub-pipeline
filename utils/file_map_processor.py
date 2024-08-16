@@ -2,7 +2,6 @@ import contextlib
 import datetime
 import os
 import tempfile
-from typing import Union
 
 import azure.storage.blob as azureblob
 import config
@@ -52,7 +51,7 @@ class FileMapProcessor:
         )
         if ignore_file:
             # ignore File name coming from the ignore file path
-            ignored_file_name = ignore_file.split('/')[-1]
+            ignored_file_name = ignore_file.split("/")[-1]
 
             ignore_file_download_path = os.path.join(
                 self.meta_temp_folder_path, ignored_file_name
@@ -100,7 +99,7 @@ class FileMapProcessor:
 
     def file_should_process(self, path, input_last_modified) -> bool:
         """Check if the file has been modified since the last time it was
-         processed and no errors exist during processing """
+        processed and no errors exist during processing"""
         for entry in self.file_map:
             if entry["input_file"] == path:
                 entry["seen"] = True
@@ -183,4 +182,3 @@ class FileMapProcessor:
 
     def is_file_ignored(self, file_name, path) -> bool:
         return file_name in self.ignore_files or path in self.ignore_files
-    

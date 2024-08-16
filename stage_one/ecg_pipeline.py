@@ -39,9 +39,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         account_name="b2aistaging",
         account_key=config.AZURE_STORAGE_ACCESS_KEY,
         resource_types=azureblob.ResourceTypes(container=True, object=True),
-        permission=azureblob.AccountSasPermissions(read=True, write=True, list=True),
+        permission=azureblob.AccountSasPermissions(
+            read=True, write=True, list=True, delete=True
+        ),
         expiry=datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=1),
+        + datetime.timedelta(hours=24),
     )
 
     # Get the blob service client
@@ -55,9 +57,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    # Delete the output folder if it exists
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_output_folder)
 
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(data_plot_output_folder)
@@ -170,7 +169,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
 
-        logger.info(f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})")
+        logger.info(
+            f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
+        )
 
         ecg_path = download_path
 
@@ -189,6 +190,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
 
             file_processor.append_errors(error_exception, path)
             continue
@@ -233,10 +236,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         blob=output_file_path,
                     )
                     output_blob_client.upload_blob(data)
-                except Exception as e:
+                except Exception:
                     logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
+
+                    logger.error(error_exception)
 
                     file_processor.append_errors(error_exception, path)
 
@@ -246,7 +251,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 workflow_output_files.append(output_file_path)
 
         # Add the new output files to the file map
-        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
+        file_processor.confirm_output_files(
+            path, workflow_output_files, input_last_modified
+        )
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
@@ -317,7 +324,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     except Exception as e:
         logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
         raise e
-    
+
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
     file_name = f"status_report_{timestr}.csv"
@@ -346,7 +353,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         writer.writerows(file_paths)
 
     with open(workflow_log_file_path, mode="rb") as data:
-        logger.debug(f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}")
+        logger.debug(
+            f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
 
         output_blob_client = blob_service_client.get_blob_client(
             container="stage-1-container",

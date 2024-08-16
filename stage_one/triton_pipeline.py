@@ -1,6 +1,5 @@
 """Process ecg data files"""
 
-import contextlib
 import datetime
 import os
 import tempfile
@@ -42,7 +41,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         account_name="b2aistaging",
         account_key=config.AZURE_STORAGE_ACCESS_KEY,
         resource_types=azureblob.ResourceTypes(container=True, object=True),
-        permission=azureblob.AccountSasPermissions(read=True, write=True, list=True),
+        permission=azureblob.AccountSasPermissions(
+            read=True, write=True, list=True, delete=True
+        ),
         expiry=datetime.datetime.now(datetime.timezone.utc)
         + datetime.timedelta(hours=24),
     )
@@ -58,10 +59,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-
-    # Delete the output folder if it exists
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_output_folder)
 
     paths = file_system_client.get_paths(path=input_folder)
 
@@ -119,7 +116,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-    file_processor = FileMapProcessor(dependency_folder,ignore_file)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     total_files = len(file_paths)
 
@@ -230,9 +227,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     step2_data_folder, os.path.join(step3_folder, device)
                 )
         except Exception:
-            logger.error(f"Failed to organize {original_file_name} - ({log_idx}/{total_files})")
+            logger.error(
+                f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
+            )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
 
             file_processor.append_errors(error_exception, path)
             continue
@@ -265,9 +266,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     triton_instance.convert(folder, output_folder_path)
 
         except Exception:
-            logger.error(f"Failed to convert {original_file_name} - ({log_idx}/{total_files})")
+            logger.error(
+                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+            )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
 
             file_processor.append_errors(error_exception, path)
             continue
@@ -292,6 +297,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
+
+                    logger.error(error_exception)
 
                     file_processor.append_errors(error_exception, path)
                     continue
@@ -339,6 +346,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         error_exception = format_exc()
                         error_exception = "".join(error_exception.splitlines())
 
+                        logger.error(error_exception)
+
                         file_processor.append_errors(error_exception, path)
                         continue
 
@@ -346,7 +355,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     workflow_output_files.append(output_file_path)
 
         # Add the new output files to the file map
-        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
+        file_processor.confirm_output_files(
+            path, workflow_output_files, input_last_modified
+        )
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True

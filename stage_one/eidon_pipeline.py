@@ -61,10 +61,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_system_name="stage-1-container",
     )
 
-    # Delete the output folder if it exists
-    # with contextlib.suppress(Exception):
-    #     file_system_client.delete_directory(processed_data_output_folder)
-
     paths = file_system_client.get_paths(path=input_folder)
 
     file_paths = []
@@ -210,6 +206,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
+            logger.error(error_exception)
+
             file_processor.append_errors(error_exception, path)
             continue
 
@@ -246,6 +244,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
+            logger.error(error_exception)
+
             file_processor.append_errors(error_exception, path)
             continue
 
@@ -267,6 +267,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
 
             file_processor.append_errors(error_exception, path)
             continue
@@ -322,6 +324,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         error_exception = format_exc()
                         error_exception = "".join(error_exception.splitlines())
 
+                        logger.error(error_exception)
+
                         file_processor.append_errors(error_exception, path)
                         continue
 
@@ -329,7 +333,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     workflow_output_files.append(output_file_path)
 
         # Add the new output files to the file map
-        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
+        file_processor.confirm_output_files(
+            path, workflow_output_files, input_last_modified
+        )
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True

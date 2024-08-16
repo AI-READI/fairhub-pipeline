@@ -28,7 +28,7 @@ from publish_pipeline.generate_high_level_metadata.generate_study_description im
 )
 from publish_pipeline.register_doi.register_doi import pipeline as register_doi_pipeline
 from stage_one.ecg_pipeline import pipeline as stage_one_ecg_pipeline
-from cgm_pipeline import pipeline as stage_one_cgm_pipeline
+from stage_one.cgm_pipeline import pipeline as stage_one_cgm_pipeline
 from stage_one.eidon_pipeline import pipeline as stage_one_eidon_pipeline
 from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
 from stage_one.img_identifier_pipeline import (
