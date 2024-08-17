@@ -63,7 +63,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     input_folder = f"{study_id}/pooled-data/FitnessTracker"
     processed_data_output_folder = f"{study_id}/pooled-data/FitnessTracker-processed"
     dependency_folder = f"{study_id}/dependency/FitnessTracker"
-    manifest_folder = f"{study_id}/manifest/FitnessTracker"
     pipeline_workflow_log_folder = f"{study_id}/logs/FitnessTracker"
     ignore_file = f"{study_id}/ignore/fitnessTracker.ignore"
 
@@ -212,42 +211,106 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         download_path = os.path.join(temp_folder_path, original_file_name)
 
+        original_file_name_only = original_file_name.split(".")[0]
+
+        temp_output_folder_path = os.path.join(temp_folder_path, "output")
+        output_path = os.path.join(temp_output_folder_path, original_file_name_only)
+
         with open(download_path, "wb") as data:
             blob_client.download_blob().readinto(data)
-
-        print(file_item)
 
         logger.info(
             f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
         )
 
-        try:
-            garmin_read_sleep.convert(download_path)
-        except Exception as e:
-            logger.error(
-                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+        if file_item["modality"] == "Sleep":
+            try:
+                garmin_read_sleep.convert(download_path, output_path)
+            except Exception:
+                logger.error(
+                    f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+                )
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, path)
+                continue
+
+        file_item["convert_error"] = False
+        file_item["processed"] = True
+
+        logger.debug(
+            f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+        )
+
+        output_files = []
+
+        # list the contents of temp_folder_path
+        for root, dirs, files in os.walk(temp_output_folder_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+
+                output_files.append(file_path)
+
+        workflow_output_files = []
+
+        outputs_uploaded = True
+
+        file_processor.delete_preexisting_output_files(path)
+
+        for file in output_files:
+            with open(file, "rb") as data:
+                o_path = file.split("/")[4:]
+
+                file_name_2 = os.path.join(*o_path)
+
+                logger.info(f"Uploading {file_name_2} - ({log_idx}/{total_files})")
+
+                output_file_path = f"{processed_data_output_folder}/{file_name_2}"
+
+                try:
+                    output_blob_client = blob_service_client.get_blob_client(
+                        container="stage-1-container",
+                        blob=output_file_path,
+                    )
+                    output_blob_client.upload_blob(data)
+                except Exception:
+                    outputs_uploaded = False
+                    logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
+
+                    logger.error(error_exception)
+
+                    file_processor.append_errors(error_exception, path)
+                    continue
+
+                file_item["output_files"].append(output_file_path)
+                workflow_output_files.append(output_file_path)
+
+        # Add the new output files to the file map
+        file_processor.confirm_output_files(
+            path, workflow_output_files, input_last_modified
+        )
+
+        if outputs_uploaded:
+            file_item["output_uploaded"] = True
+            file_item["status"] = "success"
+            logger.info(
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
+        else:
+            logger.error(
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
 
-            logger.error(error_exception)
+        workflow_file_dependencies.add_dependency(
+            workflow_input_files, workflow_output_files
+        )
 
-            file_processor.append_errors(error_exception, path)
-            continue
-
-    file_item["convert_error"] = False
-    file_item["processed"] = True
-
-    logger.debug(
-        f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-    )
-
-    # list the contents of temp_folder_path
-    for root, dirs, files in os.walk(temp_folder_path):
-        for file in files:
-            file_path = os.path.join(root, file)
-
-            print(file_path)
+        shutil.rmtree(temp_folder_path)
 
 
 if __name__ == "__main__":

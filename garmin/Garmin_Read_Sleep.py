@@ -82,8 +82,10 @@ def parse_fit_file(input_fit_path, sleep_csv_path):
 
 def convert(
     input_fit_path: str,
+    output_path: str,
 ):
-    directory_name = os.path.splitext(os.path.basename(input_fit_path))[0]
+    # directory_name = os.path.splitext(os.path.basename(input_fit_path))[0]
+    directory_name = output_path
 
     # Create directory if it doesn't exist.
     if not os.path.exists(directory_name):
@@ -103,35 +105,35 @@ def convert(
     return
 
 
-def main():
-    """
-    Main execution function. Takes the input FIT file, processes it, and writes the data to CSV files.
+# def main():
+#     """
+#     Main execution function. Takes the input FIT file, processes it, and writes the data to CSV files.
 
-    Parameters:
-    - input_fit_path: Path to the input .fit file.
-    """
-    if len(sys.argv) != 2:
-        print("Usage: python script_name.py input_fit_file.fit")
-        return
+#     Parameters:
+#     - input_fit_path: Path to the input .fit file.
+#     """
+#     if len(sys.argv) != 2:
+#         print("Usage: python script_name.py input_fit_file.fit")
+#         return
 
-    input_fit_path = sys.argv[1]
-    directory_name = os.path.splitext(os.path.basename(input_fit_path))[0]
+#     input_fit_path = sys.argv[1]
+#     directory_name = os.path.splitext(os.path.basename(input_fit_path))[0]
 
-    # Create directory if it doesn't exist.
-    if not os.path.exists(directory_name):
-        os.makedirs(directory_name)
+#     # Create directory if it doesn't exist.
+#     if not os.path.exists(directory_name):
+#         os.makedirs(directory_name)
 
-    #    heart_rate_csv_path = os.path.join(directory_name, 'heart_rate_data.csv')
-    sleep_csv_path = os.path.join(directory_name, "sleep_data.csv")
+#     #    heart_rate_csv_path = os.path.join(directory_name, 'heart_rate_data.csv')
+#     sleep_csv_path = os.path.join(directory_name, "sleep_data.csv")
 
-    fit_data = parse_fit_file(input_fit_path, sleep_csv_path)
+#     fit_data = parse_fit_file(input_fit_path, sleep_csv_path)
 
-    with open(os.path.join(directory_name, "fit_data.csv"), "w") as csv_file:
-        for message_name, message_records in fit_data.items():
-            csv_file.write(f"Message: {message_name}\n")
-            for record_data in message_records:
-                csv_file.write("\t" + str(record_data) + "\n")
+#     with open(os.path.join(directory_name, "fit_data.csv"), "w") as csv_file:
+#         for message_name, message_records in fit_data.items():
+#             csv_file.write(f"Message: {message_name}\n")
+#             for record_data in message_records:
+#                 csv_file.write("\t" + str(record_data) + "\n")
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
