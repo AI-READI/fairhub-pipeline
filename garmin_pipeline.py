@@ -10,6 +10,7 @@ import multiprocessing
 from pathlib import Path
 
 import garmin.Garmin_Read_Sleep as garmin_read_sleep
+import garmin.Garmin_Read_Activity as garmin_read_activity
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
@@ -226,6 +227,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         if file_item["modality"] == "Sleep":
             try:
                 garmin_read_sleep.convert(download_path, output_path)
+            except Exception:
+                logger.error(
+                    f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+                )
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, path)
+                continue
+        else:
+            try:
+                garmin_read_activity.convert(download_path, output_path)
             except Exception:
                 logger.error(
                     f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
