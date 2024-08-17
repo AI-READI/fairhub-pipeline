@@ -28,7 +28,7 @@ done
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
-    """Process ecg data files for a study
+    """Process cgm data files for a study
     Args:
         study_id (str): the study id
     """
