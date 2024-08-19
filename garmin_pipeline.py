@@ -238,7 +238,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 file_processor.append_errors(error_exception, path)
                 continue
-        else:
+        elif file_item["modality"] == "Activity" or file_item["modality"] == "Monitor":
             try:
                 garmin_read_activity.convert(download_path, output_path)
             except Exception:
@@ -252,6 +252,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 file_processor.append_errors(error_exception, path)
                 continue
+        else:
+            logger.info(
+                f"Skipping {original_file_name} - ({log_idx}/{total_files}) - Unknown modality"
+            )
+            continue
 
         file_item["convert_error"] = False
         file_item["processed"] = True
