@@ -17,7 +17,9 @@ import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 
 
-def pipeline(study_id: str):  # sourcery skip: low-code-quality
+def pipeline(
+    study_id: str,
+):  # sourcery skip: collection-builtin-to-comprehension, comprehension-to-generator, low-code-quality
     """Process env sensor data files for a study
     Args:
         study_id (str): the study id
@@ -32,6 +34,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
     data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
     ignore_file = f"{study_id}/ignore/envSensor.ignore"
+    red_cap_export_file = (
+        f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Aug06_EnviroPhysSensorInfo.csv"
+    )
 
     logger = logging.Logwatch("env_sensor", print=True)
 
@@ -131,6 +136,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     total_files = len(patient_ids)
 
+    # Download the redcap export file
+    red_cap_export_file_path = os.path.join(meta_temp_folder_path, "redcap_export.csv")
+
+    blob_client = blob_service_client.get_blob_client(
+        container="stage-1-container", blob=red_cap_export_file
+    )
+
+    with open(red_cap_export_file_path, "wb") as data:
+        blob_client.download_blob().readinto(data)
+
     # for idx, file_item in enumerate(file_paths):
     for idx, patient_id in enumerate(patient_ids):
         log_idx = idx + 1
@@ -193,7 +208,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         try:
             conversion_dict = env_sensor.convert(
-                download_path, env_sensor_temp_folder_path, visit_file=patient_folder
+                temp_patient_folder_path,
+                env_sensor_temp_folder_path,
+                visit_file=red_cap_export_file_path,
             )
 
             print(f"Keys: {conversion_dict.keys()}")
@@ -212,10 +229,56 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_processor.append_errors(error_exception, path)
             continue
 
+        logger.debug(f"Converted {patient_folder} - ({log_idx}/{total_files})")
+
+        output_file = conversion_dict["output_file"]
+
+        # get file size in mb
+        file_size = os.path.getsize(output_file) / (1024 * 1024)
+
+        logger.debug(f"File size: {file_size} MB")
+
+        if conversion_dict["conversion_success"]:
+            meta_dict = env_sensor.metadata(output_file)
+
+            for k, v in meta_dict.items():
+                print(f"{k}\t:  {v}")
+
+            # Optionally make a plot for visual QA
+            # dataplot_dict = env_sensor.dataplot(
+            #     conversion_dict, data_plot_output_folder
+            # )
+
+        logger.debug(f"Uploading {output_file} - ({log_idx}/{total_files})")
+
+        with open(f"{output_file}", "rb") as data:
+            file_name2 = output_file.split("/")[-1]
+
+            output_file_path = f"{processed_data_output_folder}/{file_name2}"
+
+            try:
+                output_blob_client = blob_service_client.get_blob_client(
+                    container="stage-1-container",
+                    blob=output_file_path,
+                )
+                output_blob_client.upload_blob(data)
+            except Exception:
+                logger.error(
+                    f"Failed to upload {output_file} - ({log_idx}/{total_files})"
+                )
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                continue
+
+            file_item["output_files"].append(output_file_path)
+
+        logger.debug(f"Uploaded {output_file} - ({log_idx}/{total_files})")
+
         file_item["convert_error"] = False
         file_item["processed"] = True
-
-        logger.debug(f"Converted {patient_folder} - ({log_idx}/{total_files})")
 
         shutil.rmtree(env_sensor_temp_folder_path)
         shutil.rmtree(temp_patient_folder_path)

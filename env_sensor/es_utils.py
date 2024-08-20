@@ -88,7 +88,9 @@ def pipeline_get_pppp_nnn_from_foldername(s, sep="-"):
             name of routine that set each of these
     """
     folder_name = s["t"]["input_path"]
+
     basefile = os.path.basename(folder_name)
+
     items = basefile.split(sep)
 
     pppp_ok = True  # True until error found
