@@ -254,7 +254,7 @@ def pipeline(
         with open(f"{output_file}", "rb") as data:
             file_name2 = output_file.split("/")[-1]
 
-            output_file_path = f"{processed_data_output_folder}/{file_name2}"
+            output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{patient_id}/{file_name2}"
 
             try:
                 output_blob_client = blob_service_client.get_blob_client(
