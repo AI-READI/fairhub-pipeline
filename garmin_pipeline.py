@@ -10,6 +10,7 @@ from traceback import format_exc
 import garmin.Garmin_Read_Sleep as garmin_read_sleep
 import garmin.Garmin_Read_Activity as garmin_read_activity
 import garmin.standard_heart_rate as garmin_standardize_heart_rate
+import garmin.standard_oxygen_saturation as garmin_standardize_oxygen_saturation
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
@@ -164,9 +165,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     logger.debug(f"Found {len(file_paths)} files in {input_folder}")
 
-    # Create a temporary folder on the local machine
-    temp_folder_path = tempfile.mkdtemp()
-
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
@@ -189,6 +187,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Found {len(patient_files)} files for {patient_id}")
 
+        # Create a temporary folder on the local machine
+        temp_folder_path = tempfile.mkdtemp()
+
         # Recreate the patient folder
         temp_patient_folder_path = os.path.join(temp_folder_path, patient_id)
 
@@ -205,7 +206,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         total_files = len(patient_files)
 
         logger.info(
-            f"Begin downloading and conversion of all files for {patient_id} - ({patient_idx}/{total_patients})"
+            f"Begin download and conversion of all files for {patient_id} - ({patient_idx}/{total_patients})"
         )
 
         for idx2, file_item in enumerate(patient_files):
@@ -246,22 +247,22 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
 
             logger.info(
-                f"Converting {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                f"Converting {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
             )
 
-            if file_item["modality"] == "Sleep":
+            if file_modality == "Sleep":
                 try:
                     garmin_read_sleep.convert(
                         download_path, converted_output_folder_path
                     )
 
                     logger.info(
-                        f"Converted {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
                     )
 
                 except Exception:
                     logger.error(
-                        f"Failed to convert {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
                     )
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
@@ -270,19 +271,19 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     file_processor.append_errors(error_exception, patient_id)
                     continue
-            elif file_item["modality"] in ["Activity", "Monitor"]:
+            elif file_modality in ["Activity", "Monitor"]:
                 try:
                     garmin_read_activity.convert(
                         download_path, converted_output_folder_path
                     )
 
                     logger.info(
-                        f"Converted {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
                     )
 
                 except Exception:
                     logger.error(
-                        f"Failed to convert {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
                     )
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
@@ -293,9 +294,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     continue
             else:
                 logger.info(
-                    f"Skipping {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                    f"Skipping {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
                 )
                 continue
+
+            # Delete the downloaded file
+            os.remove(download_path)
 
         output_files = []
 
@@ -318,53 +322,113 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 final_heart_rate_output_folder,
             )
 
+            shutil.rmtree(heart_rate_jsons_output_folder)
+
             logger.info(
                 f"Standardized heart rate for {patient_id} - ({patient_idx}/{total_patients})"
             )
 
-            # list the contents of temp_folder_path
+            # list the contents of the final heart rate folder
             for root, dirs, files in os.walk(final_heart_rate_output_folder):
                 for file in files:
                     file_path = os.path.join(root, file)
 
-                    print(file_path)
+                    logger.info(
+                        f"Adding {file_path} to the output files for {patient_id} - ({patient_idx}/{total_patients})"
+                    )
+
                     output_files.append(
                         {
                             "file_to_upload": file_path,
                             "uploaded_file_path": f"{processed_data_output_folder}/heart_rate/garmin_vivosmart5/{patient_id}/{file}",
                         }
                     )
-
         except Exception:
             logger.error(
-                f"Failed to standardize heart rate for {original_file_name} - ({log_idx}/{total_files})"
+                f"Failed to standardize heart rate for {patient_id} - ({patient_idx}/{total_patients})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
             logger.error(error_exception)
 
-            file_processor.append_errors(error_exception, path)
+            file_processor.append_errors(error_exception, patient_id)
+            continue
+
+        try:
+            logger.info(
+                f"Standardizing oxygen saturation for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            oxygen_saturation_jsons_output_folder = os.path.join(
+                temp_folder_path, "oxygen_saturation_jsons"
+            )
+            final_oxygen_saturation_output_folder = os.path.join(
+                temp_folder_path, "final_oxygen_saturation"
+            )
+
+            garmin_standardize_oxygen_saturation.standardize_oxygen_saturation(
+                temp_conversion_output_folder_path,
+                patient_id,
+                oxygen_saturation_jsons_output_folder,
+                final_oxygen_saturation_output_folder,
+            )
+
+            shutil.rmtree(oxygen_saturation_jsons_output_folder)
+
+            logger.info(
+                f"Standardized oxygen saturation for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            # list the contents of the final oxygen saturation folder
+            for root, dirs, files in os.walk(final_oxygen_saturation_output_folder):
+                for file in files:
+                    file_path = os.path.join(root, file)
+
+                    logger.info(
+                        f"Adding {file_path} to the output files for {patient_id} - ({patient_idx}/{total_patients})"
+                    )
+
+                    output_files.append(
+                        {
+                            "file_to_upload": file_path,
+                            "uploaded_file_path": f"{processed_data_output_folder}/oxygen_saturation/garmin_vivosmart5/{patient_id}/{file}",
+                        }
+                    )
+        except Exception:
+            logger.error(
+                f"Failed to standardize oxygen saturation for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, patient_id)
             continue
 
         file_item["convert_error"] = False
         file_item["processed"] = True
 
-        logger.debug(
-            f"Uploading outputs of {patient_id} - ({log_idx}/{total_files}) - {len(output_files)} files"
-        )
-
         workflow_output_files = []
 
         outputs_uploaded = True
 
-        for file in output_files:
+        total_output_files = len(output_files)
+
+        logger.info(
+            f"Uploading {total_output_files} output files for {patient_id} - ({patient_idx}/{total_patients})"
+        )
+
+        for idx3, file in enumerate(output_files):
+            log_idx = idx3 + 1
+
             f_path = file["file_to_upload"]
             f_name = f_path.split("/")[-1]
 
             with open(f_path, "rb") as data:
                 logger.info(
-                    f"Uploading {f_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                    f"Uploading {f_name} - ({log_idx}/{total_output_files}) - ({patient_idx}/{total_patients})"
                 )
 
                 output_file_path = file["uploaded_file_path"]
@@ -383,7 +447,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     logger.error(error_exception)
 
-                    file_processor.append_errors(error_exception, path)
+                    file_processor.append_errors(error_exception, patient_id)
                     continue
 
                 file_item["output_files"].append(output_file_path)
