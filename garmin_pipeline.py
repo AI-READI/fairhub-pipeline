@@ -13,6 +13,8 @@ import garmin.standard_heart_rate as garmin_standardize_heart_rate
 import garmin.standard_oxygen_saturation as garmin_standardize_oxygen_saturation
 import garmin.standard_physical_activities as garmin_standardize_physical_activities
 import garmin.standard_physical_activity_calorie as garmin_standardize_physical_activity_calories
+import garmin.standard_respiratory_rate as garmin_standardize_respiratory_rate
+import garmin.standard_sleep_stages as garmin_standardize_sleep_stages
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
@@ -262,6 +264,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
                     )
 
+                    for root, dirs, files in os.walk(converted_output_folder_path):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+
+                            logger.info(
+                                f"Adding {file_path} to the output files for {patient_id} - ({patient_idx}/{total_patients})"
+                            )
+
                 except Exception:
                     logger.error(
                         f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
@@ -506,6 +516,94 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         except Exception:
             logger.error(
                 f"Failed to standardize physical activity calories for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, patient_id)
+            continue
+
+        try:
+            logger.info(
+                f"Standardizing respiratory rate for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            respiratory_rate_jsons_output_folder = os.path.join(
+                temp_folder_path, "respiratory_rate_jsons"
+            )
+            final_respiratory_rate_output_folder = os.path.join(
+                temp_folder_path, "final_respiratory_rate"
+            )
+
+            garmin_standardize_respiratory_rate.standardize_respiratory_rate(
+                temp_conversion_output_folder_path,
+                patient_id,
+                respiratory_rate_jsons_output_folder,
+                final_respiratory_rate_output_folder,
+            )
+
+            shutil.rmtree(respiratory_rate_jsons_output_folder)
+
+            logger.info(
+                f"Standardized respiratory rate for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            # list the contents of the final respiratory rate folder
+            for root, dirs, files in os.walk(final_respiratory_rate_output_folder):
+                for file in files:
+                    file_path = os.path.join(root, file)
+
+                    logger.info(
+                        f"Adding {file_path} to the output files for {patient_id} - ({patient_idx}/{total_patients})"
+                    )
+
+                    output_files.append(
+                        {
+                            "file_to_upload": file_path,
+                            "uploaded_file_path": f"{processed_data_output_folder}/respiratory_rate/garmin_vivosmart5/{patient_id}/{file}",
+                        }
+                    )
+        except Exception:
+            logger.error(
+                f"Failed to standardize respiratory rate for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, patient_id)
+            continue
+
+        try:
+            logger.info(
+                f"Standardizing sleep stages for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            sleep_stages_jsons_output_folder = os.path.join(
+                temp_folder_path, "sleep_jsons"
+            )
+            final_sleep_stages_output_folder = os.path.join(
+                temp_folder_path, "final_sleep_stages"
+            )
+
+            garmin_standardize_sleep_stages.standardize_sleep_stages(
+                temp_conversion_output_folder_path,
+                patient_id,
+                sleep_stages_jsons_output_folder,
+                final_sleep_stages_output_folder,
+            )
+
+            shutil.rmtree(sleep_stages_jsons_output_folder)
+
+            logger.info(
+                f"Standardized sleep stages for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+        except Exception:
+            logger.error(
+                f"Failed to standardize sleep stages for {patient_id} - ({patient_idx}/{total_patients})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())

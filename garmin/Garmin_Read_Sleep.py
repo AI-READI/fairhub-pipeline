@@ -1,4 +1,3 @@
-import sys
 import os
 from fitparse import FitFile
 from datetime import datetime, timedelta
@@ -12,8 +11,7 @@ def garmin_to_datetime(garmin_timestamp):
     delta = timedelta(seconds=garmin_timestamp)
 
     # Add timedelta to Garmin epoch to get the datetime
-    result_datetime = garmin_epoch + delta
-    return result_datetime
+    return garmin_epoch + delta
 
 
 def append_sleep_to_csv(sleep_data, csv_path):

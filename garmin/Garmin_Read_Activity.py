@@ -1,8 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import sys
+
 import os
-import pytz
+
 import numpy as np
 
 
@@ -341,7 +341,7 @@ def parse_fit_file(
             if (
                 "current_activity_type_intensity" in record_data
                 and "timestamp" in record_data
-                and not "timestamp_16" in record_data
+                and "timestamp_16" not in record_data
             ):
                 activity_type_to_csv(record_data, activity_type_csv_path)
 
