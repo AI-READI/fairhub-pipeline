@@ -6,27 +6,24 @@ import os
 import tempfile
 import shutil
 from traceback import format_exc
-import multiprocessing
-from pathlib import Path
 
 import garmin.Garmin_Read_Sleep as garmin_read_sleep
 import garmin.Garmin_Read_Activity as garmin_read_activity
+import garmin.standard_heart_rate as garmin_standardize_heart_rate
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
-import time
-import csv
 from utils.file_map_processor import FileMapProcessor
 import utils.logwatch as logging
 
 """
-### Usage Instructions:
-### The `FitnessTracker_Path` variable is used to specify the base directory path where the Garmin data is located.
-### Depending on the dataset you want to process, uncomment and update the appropriate `FitnessTracker_Path` line.
-### Make sure only one `FitnessTracker_Path` is uncommented at a time.
-### Please note the folder names for UCSD_All and UW is GARMIN, but for UAB it should be changed to Gamrin (Lines 13, 14, and 15)
-### Update the paths in lines 22 and 24 to point to the correct API code
+# Usage Instructions:
+# The `FitnessTracker_Path` variable is used to specify the base directory path where the Garmin data is located.
+# Depending on the dataset you want to process, uncomment and update the appropriate `FitnessTracker_Path` line.
+# Make sure only one `FitnessTracker_Path` is uncommented at a time.
+# Please note the folder names for UCSD_All and UW is GARMIN, but for UAB it should be changed to Gamrin (Lines 13, 14, and 15)
+# Update the paths in lines 22 and 24 to point to the correct API code
 
 FitnessTracker_Path="/Users/arashalavi/Desktop/AIREADI-STANDARD-CODE/UAB/FitnessTracker" #(it uses /FitnessTracker-*/Garmin/* below)
 #FitnessTracker_Path="/Users/arashalavi/Desktop/AIREADI-STANDARD-CODE/UCSD_All/FitnessTracker" #(it uses /FitnessTracker-*/GARMIN/* below)
@@ -64,7 +61,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     input_folder = f"{study_id}/pooled-data/FitnessTracker"
     processed_data_output_folder = f"{study_id}/pooled-data/FitnessTracker-processed"
     dependency_folder = f"{study_id}/dependency/FitnessTracker"
-    pipeline_workflow_log_folder = f"{study_id}/logs/FitnessTracker"
     ignore_file = f"{study_id}/ignore/fitnessTracker.ignore"
 
     logger = logging.Logwatch("fitness_tracker", print=True)
@@ -107,6 +103,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     file_count = 0
     added_file_count = 0
 
+    # Create a unique set of patient ids
+    patient_ids = set()
+
     for path in paths:
         file_count += 1
 
@@ -135,6 +134,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         if len(parts) != 7:
             continue
 
+        patient_identifier = parts[3]
+        patient_id_parts = patient_identifier.split("-")
+        if len(patient_id_parts) != 2:
+            continue
+
+        patient_id = patient_id_parts[1]
+
+        modality = parts[5]
+
+        if modality not in ["Activity", "Monitor", "Sleep"]:
+            continue
+
         file_paths.append(
             {
                 "file_path": t,
@@ -143,13 +154,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "convert_error": True,
                 "output_uploaded": False,
                 "output_files": [],
-                "patient_id": parts[3],
-                "modality": parts[5],
+                "patient_id": patient_id,
+                "modality": modality,
                 "file_name": original_file_name,
             }
         )
 
+        patient_ids.add(patient_id)
+
     logger.debug(f"Found {len(file_paths)} files in {input_folder}")
+
+    # Create a temporary folder on the local machine
+    temp_folder_path = tempfile.mkdtemp()
 
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
@@ -158,137 +174,200 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
-    total_files = len(file_paths)
+    total_patients = len(patient_ids)
 
-    allowed_modalities = ["Activity", "Monitor", "Sleep"]
+    for idx, patient_id in enumerate(patient_ids):
+        patient_idx = idx + 1
 
-    for idx, file_item in enumerate(file_paths):
-        log_idx = idx + 1
+        logger.debug(f"Processing {patient_id} - ({patient_idx}/{total_patients})")
 
-        if file_item["modality"] not in allowed_modalities:
-            logger.info(
-                f"Modality not requested for processing - {file_item['modality']} - ({log_idx}/{total_files})"
-            )
-            continue
+        patient_files = [
+            file_item
+            for file_item in file_paths
+            if file_item["patient_id"] == patient_id
+        ]
 
-        # Create a temporary folder on the local machine
-        temp_folder_path = tempfile.mkdtemp()
+        logger.debug(f"Found {len(patient_files)} files for {patient_id}")
 
-        path = file_item["file_path"]
+        # Recreate the patient folder
+        temp_patient_folder_path = os.path.join(temp_folder_path, patient_id)
 
-        workflow_input_files = [path]
+        os.makedirs(temp_patient_folder_path, exist_ok=True)
 
-        # get the file name from the path
-        original_file_name = path.split("/")[-1]
+        workflow_input_files = []
 
-        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
+        file_processor.add_entry(patient_id, "")
 
-        if should_file_be_ignored:
-            logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
-            continue
+        file_processor.clear_errors(patient_id)
 
-        # download the file to the temp folder
-        blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container", blob=path
-        )
+        temp_conversion_output_folder_path = os.path.join(temp_folder_path, "converted")
 
-        input_last_modified = blob_client.get_blob_properties().last_modified
-
-        should_process = file_processor.file_should_process(path, input_last_modified)
-
-        if not should_process:
-            logger.debug(
-                f"The file {path} has not been modified since the last time it was processed",
-            )
-            logger.debug(
-                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
-            )
-
-            continue
-
-        file_processor.add_entry(path, input_last_modified)
-
-        file_processor.clear_errors(path)
-
-        download_path = os.path.join(temp_folder_path, original_file_name)
-
-        original_file_name_only = original_file_name.split(".")[0]
-
-        temp_output_folder_path = os.path.join(temp_folder_path, "output")
-        output_path = os.path.join(temp_output_folder_path, original_file_name_only)
-
-        with open(download_path, "wb") as data:
-            blob_client.download_blob().readinto(data)
+        total_files = len(patient_files)
 
         logger.info(
-            f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
+            f"Begin downloading and conversion of all files for {patient_id} - ({patient_idx}/{total_patients})"
         )
 
-        if file_item["modality"] == "Sleep":
-            try:
-                garmin_read_sleep.convert(download_path, output_path)
-            except Exception:
-                logger.error(
-                    f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
-                )
-                error_exception = format_exc()
-                error_exception = "".join(error_exception.splitlines())
+        for idx2, file_item in enumerate(patient_files):
+            file_idx = idx2 + 1
 
-                logger.error(error_exception)
+            path = file_item["file_path"]
 
-                file_processor.append_errors(error_exception, path)
-                continue
-        elif file_item["modality"] == "Activity" or file_item["modality"] == "Monitor":
-            try:
-                garmin_read_activity.convert(download_path, output_path)
-            except Exception:
-                logger.error(
-                    f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
-                )
-                error_exception = format_exc()
-                error_exception = "".join(error_exception.splitlines())
+            workflow_input_files.append(path)
 
-                logger.error(error_exception)
+            original_file_name = path.split("/")[-1]
+            original_file_name_only = original_file_name.split(".")[0]
+            file_modality = file_item["modality"]
 
-                file_processor.append_errors(error_exception, path)
-                continue
-        else:
-            logger.info(
-                f"Skipping {original_file_name} - ({log_idx}/{total_files}) - Unknown modality"
+            logger.debug(
+                f"Downloading {path} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
             )
+
+            download_path = os.path.join(
+                temp_patient_folder_path, file_modality, original_file_name
+            )
+
+            # Create the directory if it does not exist
+            os.makedirs(os.path.dirname(download_path), exist_ok=True)
+
+            blob_client = blob_service_client.get_blob_client(
+                container="stage-1-container", blob=path
+            )
+
+            with open(download_path, "wb") as data:
+                blob_client.download_blob().readinto(data)
+
+            logger.info(
+                f"Downloaded {original_file_name} to {download_path} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+            )
+
+            converted_output_folder_path = os.path.join(
+                temp_conversion_output_folder_path, original_file_name_only
+            )
+
+            logger.info(
+                f"Converting {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+            )
+
+            if file_item["modality"] == "Sleep":
+                try:
+                    garmin_read_sleep.convert(
+                        download_path, converted_output_folder_path
+                    )
+
+                    logger.info(
+                        f"Converted {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                    )
+
+                except Exception:
+                    logger.error(
+                        f"Failed to convert {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                    )
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
+
+                    logger.error(error_exception)
+
+                    file_processor.append_errors(error_exception, patient_id)
+                    continue
+            elif file_item["modality"] in ["Activity", "Monitor"]:
+                try:
+                    garmin_read_activity.convert(
+                        download_path, converted_output_folder_path
+                    )
+
+                    logger.info(
+                        f"Converted {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                    )
+
+                except Exception:
+                    logger.error(
+                        f"Failed to convert {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                    )
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
+
+                    logger.error(error_exception)
+
+                    file_processor.append_errors(error_exception, patient_id)
+                    continue
+            else:
+                logger.info(
+                    f"Skipping {modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                )
+                continue
+
+        output_files = []
+
+        try:
+            logger.info(
+                f"Standardizing heart rate for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            heart_rate_jsons_output_folder = os.path.join(
+                temp_folder_path, "heart_rate_jsons"
+            )
+            final_heart_rate_output_folder = os.path.join(
+                temp_folder_path, "final_heart_rate"
+            )
+
+            garmin_standardize_heart_rate.standardize_heart_rate(
+                temp_conversion_output_folder_path,
+                patient_id,
+                heart_rate_jsons_output_folder,
+                final_heart_rate_output_folder,
+            )
+
+            logger.info(
+                f"Standardized heart rate for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            # list the contents of temp_folder_path
+            for root, dirs, files in os.walk(final_heart_rate_output_folder):
+                for file in files:
+                    file_path = os.path.join(root, file)
+
+                    print(file_path)
+                    output_files.append(
+                        {
+                            "file_to_upload": file_path,
+                            "uploaded_file_path": f"{processed_data_output_folder}/heart_rate/garmin_vivosmart5/{patient_id}/{file}",
+                        }
+                    )
+
+        except Exception:
+            logger.error(
+                f"Failed to standardize heart rate for {original_file_name} - ({log_idx}/{total_files})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, path)
             continue
 
         file_item["convert_error"] = False
         file_item["processed"] = True
 
         logger.debug(
-            f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            f"Uploading outputs of {patient_id} - ({log_idx}/{total_files}) - {len(output_files)} files"
         )
-
-        output_files = []
-
-        # list the contents of temp_folder_path
-        for root, dirs, files in os.walk(temp_output_folder_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-
-                output_files.append(file_path)
 
         workflow_output_files = []
 
         outputs_uploaded = True
 
-        file_processor.delete_preexisting_output_files(path)
-
         for file in output_files:
-            with open(file, "rb") as data:
-                o_path = file.split("/")[4:]
+            f_path = file["file_to_upload"]
+            f_name = f_path.split("/")[-1]
 
-                file_name_2 = os.path.join(*o_path)
+            with open(f_path, "rb") as data:
+                logger.info(
+                    f"Uploading {f_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                )
 
-                logger.info(f"Uploading {file_name_2} - ({log_idx}/{total_files})")
-
-                output_file_path = f"{processed_data_output_folder}/{file_name_2}"
+                output_file_path = file["uploaded_file_path"]
 
                 try:
                     output_blob_client = blob_service_client.get_blob_client(
@@ -310,21 +389,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
 
-        # Add the new output files to the file map
-        file_processor.confirm_output_files(
-            path, workflow_output_files, input_last_modified
-        )
-
         if outputs_uploaded:
             file_item["output_uploaded"] = True
-            file_item["status"] = "success"
-            logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-            )
         else:
-            logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-            )
+            file_item["output_uploaded"] = False
 
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
