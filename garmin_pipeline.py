@@ -64,9 +64,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/FitnessTracker"
-    processed_data_output_folder = f"{study_id}/pooled-data/FitnessTracker-processed"
-    dependency_folder = f"{study_id}/dependency/FitnessTracker"
+    input_folder = f"{study_id}/Stanford-Test/Pilot_Aug22_2024/Garmin/Pool"
+    processed_data_output_folder = (
+        f"{study_id}/Stanford-Test/Pilot_Aug22_2024/Garmin/Processed"
+    )
+    dependency_folder = f"{study_id}/Stanford-Test/Pilot_Aug22_2024/Garmin"
     ignore_file = f"{study_id}/ignore/fitnessTracker.ignore"
 
     logger = logging.Logwatch("fitness_tracker", print=True)
@@ -104,7 +106,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     file_paths = []
 
     # dev limit
-    dev_limit = 1000
+    # dev_limit = 0
 
     file_count = 0
     added_file_count = 0
@@ -129,28 +131,32 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         added_file_count += 1
 
         # dev limit
-        if added_file_count > dev_limit:
-            break
+        # if added_file_count > dev_limit:
+        #     break
 
         if added_file_count % 1000 == 0:
             logger.info(f"Added {added_file_count} files to the processing queue...")
 
         parts = t.split("/")
 
-        if len(parts) != 7:
+        # print(parts)
+
+        if len(parts) < 9:
             continue
 
-        patient_identifier = parts[3]
+        patient_identifier = parts[-4]
         patient_id_parts = patient_identifier.split("-")
         if len(patient_id_parts) != 2:
             continue
 
         patient_id = patient_id_parts[1]
 
-        modality = parts[5]
+        modality = parts[-2]
 
         if modality not in ["Activity", "Monitor", "Sleep"]:
             continue
+
+        # print(f"{patient_id} - {modality} - {original_file_name}")
 
         file_paths.append(
             {

@@ -36,10 +36,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/CGM"
-    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
+    input_folder = f"{study_id}/Stanford-Test/Pilot_Aug22_2024/CGM/Pool"
+    # input_folder = f"{study_id}/pooled-data/CGM"
+    processed_data_output_folder = (
+        f"{study_id}/Stanford-Test/Pilot_Aug22_2024/CGM/Processed"
+    )
+    # processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
-    dependency_folder = f"{study_id}/dependency/CGM"
+    dependency_folder = f"{study_id}/Stanford-Test/Pilot_Aug22_2024/CGM"
+    # dependency_folder = f"{study_id}/dependency/CGM"
     manifest_folder = f"{study_id}/manifest/CGM"
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
@@ -134,7 +139,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             continue
 
         file_name_only = original_file_name.split(".")[0]
-        patient_id = file_name_only.split("_")[3]
+        # patient_id = file_name_only.split("_")[3]
+        patient_id = file_name_only.split("-")[1]
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
