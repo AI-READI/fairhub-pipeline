@@ -16,6 +16,7 @@ import time
 import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
+from utils.time_estimator import TimeEstimator
 
 # import pprint
 
@@ -68,15 +69,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
-    # variables for the calculation of the ETA
-    total_processed_files: int = 0
-    processed_seconds: float = 0.0
-
     for path in paths:
         t = str(path.name)
-
-        start_time = time.time()
-
         original_file_name = t.split("/")[-1]
 
         # Check if the item is an .fda.zip file
@@ -116,14 +110,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "output_files": [],
             }
         )
-        total_processed_files += 1
-
-        end_time = time.time()
-
-        processed_seconds += end_time - start_time
-
-        # average_time = processed_seconds / total_processed_files
-        file_processor.calculate_estimated_time(processed_seconds, total_processed_files)
 
     logger.debug(f"Found {len(file_paths)} files in {input_folder}")
 
@@ -137,11 +123,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     device = "Maestro2"
 
+    # variables for the calculation of the ETA
+    total_processed_files: int = 0
+    processed_seconds: float = 0.0
+
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
+        start_time = time.time()
+        # start_time = time_estimator.start_time()
         # dev
-        if log_idx == 8:
+        if log_idx == 12:
             break
 
         # Create a temporary folder on the local machine
@@ -387,6 +379,22 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             workflow_input_files, workflow_output_files
         )
 
+        total_processed_files += 1
+
+        end_time = time.time()
+        # end_time = time_estimator.end_time()
+        time_estimator = TimeEstimator(start_time, end_time)
+
+        # remaining_files = len(file_paths) - total_processed_files
+
+        # processed_seconds += end_time - start_time
+        time_estimator.eta(total_processed_files, file_paths, processed_seconds)
+        # average_time = processed_seconds / total_processed_files
+        # eta = average_time * remaining_files
+
+        # print(eta)
+
+        # logger.debug(f"eta is {eta}")
         shutil.rmtree(temp_folder_path)
 
     # file_processor.delete_out_of_date_output_files()
