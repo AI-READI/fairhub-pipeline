@@ -4,9 +4,8 @@ import json
 import glob
 import os
 from pathlib import Path
-import sys
 
-root_dir = sys.argv[1]
+from traceback import format_exc
 
 
 def merge_json_files(file_paths, outdir, ptname):
@@ -40,25 +39,18 @@ def merge_json_files(file_paths, outdir, ptname):
         json.dump(combined_data, combined_file, indent=4)
 
 
-for pt in os.listdir(root_dir):
+def standardize_stress(root_dir, patient_id, output_folder, final_output):
+    pt = patient_id
 
-    if "FitnessTracker-" in pt:
+    pt_hr_count = 0
 
-        pt_hr_count = 0
+    pt_heartrate_files = []
 
-        pt_heartrate_files = []
+    try:
+        if os.path.isdir(root_dir):
+            for entry in os.listdir(root_dir):
+                hr_file = root_dir + "/" + entry + "/stress_level_data*.csv"
 
-        monitor_files = root_dir + pt + "/Garmin/Monitor/"
-        for entry in os.listdir(monitor_files):
-            full_path = os.path.join(monitor_files, entry)
-            if os.path.isdir(full_path):
-                hr_file = (
-                    root_dir
-                    + pt
-                    + "/Garmin/Monitor/"
-                    + entry
-                    + "/stress_level_data*.csv"
-                )
                 for filename in glob.glob(hr_file):
                     pt_heartrate_files.append(filename)
 
@@ -66,7 +58,8 @@ for pt in os.listdir(root_dir):
         for file_path in pt_heartrate_files:
 
             # Get patient ID
-            patient_ID = file_path.split(root_dir)[1].split("/")[0]
+            # patient_ID = file_path.split(root_dir)[1].split("/")[0]
+            patient_ID = patient_id
 
             # Get HR file name
             hr_file_name = file_path.split("stress_level_data")[1].replace(".csv", "")
@@ -77,9 +70,9 @@ for pt in os.listdir(root_dir):
             # Prepare the JSON structure again
             json_output = {
                 "header": {
-                    "uuid": patient_ID.replace("FitnessTracker", "AIREADI"),
+                    "uuid": f"AIREADI-{patient_ID}",
                     "creation_date_time": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    "user_id": patient_ID.replace("FitnessTracker", "AIREADI"),
+                    "user_id": f"AIREADI-{patient_ID}",
                     "schema_id": {"namespace": "", "name": "", "version": ""},
                 },
                 "body": {"stress": []},
@@ -102,23 +95,23 @@ for pt in os.listdir(root_dir):
             formatted_json = json.dumps(json_output, indent=4, sort_keys=False)
 
             # To save the formatted JSON to a file
-            output_dir = Path("stress_jsons/" + patient_ID + "_stress")
+            output_dir = Path(output_folder)
             output_dir.mkdir(parents=True, exist_ok=True)
             output_filename = patient_ID + "_" + hr_file_name + ".json"
-            output_file_path = output_dir / output_filename
+            output_file_path = os.path.join(output_dir, output_filename)
+
             with open(output_file_path, "w") as f:
                 f.write(formatted_json)
 
-        print(pt.replace("FitnessTracker-", ""), ",", pt_hr_count)
-        ## Merge files:
-        file_paths = []
-        pt_directory = "stress_jsons/" + pt + "_stress/"
+        pt_directory = output_folder
         pt_directory_path = Path(pt_directory)
-        out_directory = "stress/garmin_vivosmart5/" + pt.replace("FitnessTracker-", "")
-        out_directory_path = Path(
-            "stress/garmin_vivosmart5/" + pt.replace("FitnessTracker-", "")
-        )
+
+        out_directory = os.path.join(final_output, pt)
+        out_directory_path = Path(out_directory)
         out_directory_path.mkdir(parents=True, exist_ok=True)
-        for file in pt_directory_path.glob("*.json"):
-            file_paths.append(file)
-        merge_json_files(file_paths, out_directory, pt.replace("FitnessTracker-", ""))
+
+        file_paths = list(pt_directory_path.glob("*.json"))
+
+        merge_json_files(file_paths, out_directory, pt)
+    except Exception:
+        print(format_exc())

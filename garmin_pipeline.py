@@ -15,6 +15,7 @@ import garmin.standard_physical_activities as garmin_standardize_physical_activi
 import garmin.standard_physical_activity_calorie as garmin_standardize_physical_activity_calories
 import garmin.standard_respiratory_rate as garmin_standardize_respiratory_rate
 import garmin.standard_sleep_stages as garmin_standardize_sleep_stages
+import garmin.standard_stress as garmin_standardize_stress
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
@@ -601,9 +602,72 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.info(
                 f"Standardized sleep stages for {patient_id} - ({patient_idx}/{total_patients})"
             )
+
+            for root, dirs, files in os.walk(final_sleep_stages_output_folder):
+                for file in files:
+                    file_path = os.path.join(root, file)
+
+                    logger.info(
+                        f"Adding {file_path} to the output files for {patient_id} - ({patient_idx}/{total_patients})"
+                    )
+
+                    output_files.append(
+                        {
+                            "file_to_upload": file_path,
+                            "uploaded_file_path": f"{processed_data_output_folder}/sleep/garmin_vivosmart5/{patient_id}/{file}",
+                        }
+                    )
         except Exception:
             logger.error(
                 f"Failed to standardize sleep stages for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, patient_id)
+            continue
+
+        try:
+            logger.info(
+                f"Standardizing stress for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            stress_jsons_output_folder = os.path.join(temp_folder_path, "stress_jsons")
+            final_stress_output_folder = os.path.join(temp_folder_path, "final_stress")
+
+            garmin_standardize_stress.standardize_stress(
+                temp_conversion_output_folder_path,
+                patient_id,
+                stress_jsons_output_folder,
+                final_stress_output_folder,
+            )
+
+            shutil.rmtree(stress_jsons_output_folder)
+
+            logger.info(
+                f"Standardized stress for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            # list the contents of the final stress folder
+            for root, dirs, files in os.walk(final_stress_output_folder):
+                for file in files:
+                    file_path = os.path.join(root, file)
+
+                    logger.info(
+                        f"Adding {file_path} to the output files for {patient_id} - ({patient_idx}/{total_patients})"
+                    )
+
+                    output_files.append(
+                        {
+                            "file_to_upload": file_path,
+                            "uploaded_file_path": f"{processed_data_output_folder}/stress/garmin_vivosmart5/{patient_id}/{file}",
+                        }
+                    )
+        except Exception:
+            logger.error(
+                f"Failed to standardize stress for {patient_id} - ({patient_idx}/{total_patients})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
