@@ -11,6 +11,8 @@ import garmin.Garmin_Read_Sleep as garmin_read_sleep
 import garmin.Garmin_Read_Activity as garmin_read_activity
 import garmin.standard_heart_rate as garmin_standardize_heart_rate
 import garmin.standard_oxygen_saturation as garmin_standardize_oxygen_saturation
+import garmin.standard_physical_activities as garmin_standardize_physical_activities
+import garmin.standard_physical_activity_calorie as garmin_standardize_physical_activity_calories
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
@@ -398,6 +400,112 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         except Exception:
             logger.error(
                 f"Failed to standardize oxygen saturation for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, patient_id)
+            continue
+
+        try:
+            logger.info(
+                f"Standardizing physical activities for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            physical_activities_jsons_output_folder = os.path.join(
+                temp_folder_path, "physical_activities_jsons"
+            )
+            final_physical_activities_output_folder = os.path.join(
+                temp_folder_path, "final_physical_activities"
+            )
+
+            garmin_standardize_physical_activities.standardize_physical_activities(
+                temp_conversion_output_folder_path,
+                patient_id,
+                physical_activities_jsons_output_folder,
+                final_physical_activities_output_folder,
+            )
+
+            shutil.rmtree(physical_activities_jsons_output_folder)
+
+            logger.info(
+                f"Standardized physical activities for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            # list the contents of the final physical activities folder
+            for root, dirs, files in os.walk(final_physical_activities_output_folder):
+                for file in files:
+                    file_path = os.path.join(root, file)
+
+                    logger.info(
+                        f"Adding {file_path} to the output files for {patient_id} - ({patient_idx}/{total_patients})"
+                    )
+
+                    output_files.append(
+                        {
+                            "file_to_upload": file_path,
+                            "uploaded_file_path": f"{processed_data_output_folder}/physical_activity/garmin_vivosmart5/{patient_id}/{file}",
+                        }
+                    )
+        except Exception:
+            logger.error(
+                f"Failed to standardize physical activities for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, patient_id)
+            continue
+
+        try:
+            logger.info(
+                f"Standardizing physical activity calories for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            physical_activity_calories_jsons_output_folder = os.path.join(
+                temp_folder_path, "physical_activity_calories_jsons"
+            )
+            final_physical_activity_calories_output_folder = os.path.join(
+                temp_folder_path, "final_physical_activity_calories"
+            )
+
+            garmin_standardize_physical_activity_calories.standardize_physical_activity_calories(
+                temp_conversion_output_folder_path,
+                patient_id,
+                physical_activity_calories_jsons_output_folder,
+                final_physical_activity_calories_output_folder,
+            )
+
+            shutil.rmtree(physical_activity_calories_jsons_output_folder)
+
+            logger.info(
+                f"Standardized physical activity calories for {patient_id} - ({patient_idx}/{total_patients})"
+            )
+
+            # list the contents of the final physical activity calories folder
+            for root, dirs, files in os.walk(
+                final_physical_activity_calories_output_folder
+            ):
+                for file in files:
+                    file_path = os.path.join(root, file)
+
+                    logger.info(
+                        f"Adding {file_path} to the output files for {patient_id} - ({patient_idx}/{total_patients})"
+                    )
+
+                    output_files.append(
+                        {
+                            "file_to_upload": file_path,
+                            "uploaded_file_path": f"{processed_data_output_folder}/physical_activity_calorie/garmin_vivosmart5/{patient_id}/{file}",
+                        }
+                    )
+        except Exception:
+            logger.error(
+                f"Failed to standardize physical activity calories for {patient_id} - ({patient_idx}/{total_patients})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())

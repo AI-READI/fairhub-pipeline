@@ -4,39 +4,26 @@ import json
 import glob
 import os
 from pathlib import Path
-import sys
+from traceback import format_exc
 
 
-root_dir = sys.argv[1]
+def standardize_physical_activities(root_dir, patient_id, output_folder, final_output):
+    pt = patient_id
 
-for pt in os.listdir(root_dir):
+    pt_hr_count = 0
 
-    if "FitnessTracker-" in pt:
+    pt_heartrate_files = []
 
-        pt_hr_count = 0
+    try:
+        if os.path.isdir(root_dir):
+            for entry in os.listdir(root_dir):
+                hr_file = root_dir + "/" + entry + "/active_calories_data*.csv"
 
-        pt_heartrate_files = []
-
-        monitor_files = root_dir + pt + "/Garmin/Monitor/"
-        for entry in os.listdir(monitor_files):
-            full_path = os.path.join(monitor_files, entry)
-            if os.path.isdir(full_path):
-                hr_file = (
-                    root_dir
-                    + pt
-                    + "/Garmin/Monitor/"
-                    + entry
-                    + "/active_calories_data*.csv"
-                )
                 for filename in glob.glob(hr_file):
                     pt_heartrate_files.append(filename)
-                hr_file2 = (
-                    root_dir
-                    + pt
-                    + "/Garmin/Monitor/"
-                    + entry
-                    + "/activity_type_data*.csv"
-                )
+
+                hr_file2 = root_dir + "/" + entry + "/activity_type_data*.csv"
+
                 for filename in glob.glob(hr_file2):
                     pt_heartrate_files.append(filename)
 
@@ -47,31 +34,30 @@ for pt in os.listdir(root_dir):
         merged_df["datetime"] = pd.to_datetime(merged_df["datetime"])
         # Sort based on 'datetime'
         sorted_df = merged_df.sort_values(by="datetime")
+
         # Optionally, save to a new file
-        merged_dir = Path("physical_activities_jsons/" + pt + "_physical_activities")
-        merged_dir.mkdir(parents=True, exist_ok=True)
+        merged_dir_path = os.path.join(output_folder, pt + "_physical_activities")
+        os.makedirs(merged_dir_path, exist_ok=True)
+
         sorted_df.to_csv(
-            "physical_activities_jsons/"
-            + pt
-            + "_physical_activities/"
-            + "merged_sorted.csv",
+            os.path.join(merged_dir_path, "merged_sorted.csv"),
             index=False,
         )
 
         # Read the CSV file
-        file_path = (
-            "physical_activities_jsons/"
-            + pt
-            + "_physical_activities/"
-            + "merged_sorted.csv"
+        file_path = os.path.join(
+            output_folder, pt + "_physical_activities", "merged_sorted.csv"
         )
+
         df = pd.read_csv(file_path)
+
+        patient_ID = patient_id
 
         json_data = {
             "header": {
-                "uuid": pt.replace("FitnessTracker", "AIREADI"),
+                "uuid": f"AIREADI-{patient_ID}",
                 "creation_date_time": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "user_id": pt.replace("FitnessTracker", "AIREADI"),
+                "user_id": f"AIREADI-{patient_ID}",
                 "schema_id": {"namespace": "", "name": "", "version": ""},
             },
             "body": {"activity": []},
@@ -88,7 +74,7 @@ for pt in os.listdir(root_dir):
             if row["activity_type"] == "sedentary":
                 value = 0
                 act_type = row["activity_type"]
-            elif row["activity_type"] == "9" or row["activity_type"] == 9:
+            elif row["activity_type"] in ["9", 9]:
                 value = ""
                 act_type = ""
             else:
@@ -132,20 +118,31 @@ for pt in os.listdir(root_dir):
 
         formatted_json = json.dumps(json_data, indent=4, sort_keys=False)
 
-        print(pt.replace("FitnessTracker-", ""), ",", pt_hr_count)
+        out_directory = os.path.join(final_output, pt)
+        out_directory_path = Path(out_directory)
+        out_directory_path.mkdir(parents=True, exist_ok=True)
 
-        # To save the formatted JSON to a file
-        out_directory = Path(
-            "physical_activity/garmin_vivosmart5/" + pt.replace("FitnessTracker-", "")
-        )
-        out_directory.mkdir(parents=True, exist_ok=True)
         with open(
-            "physical_activity/garmin_vivosmart5/"
-            + pt.replace("FitnessTracker-", "")
-            + "/"
-            + pt.replace("FitnessTracker-", "")
-            + "_activity"
-            + ".json",
+            os.path.join(final_output, pt + "_activity.json"),
             "w",
         ) as combined_file:
             combined_file.write(formatted_json)
+
+        # To save the formatted JSON to a file
+        # out_directory = Path(
+        #     "physical_activity/garmin_vivosmart5/" + pt.replace("FitnessTracker-", "")
+        # )
+        # out_directory.mkdir(parents=True, exist_ok=True)
+        # with open(
+        #     "physical_activity/garmin_vivosmart5/"
+        #     + pt.replace("FitnessTracker-", "")
+        #     + "/"
+        #     + pt.replace("FitnessTracker-", "")
+        #     + "_activity"
+        #     + ".json",
+        #     "w",
+        # ) as combined_file:
+        #     combined_file.write(formatted_json)
+
+    except Exception:
+        print(format_exc())
