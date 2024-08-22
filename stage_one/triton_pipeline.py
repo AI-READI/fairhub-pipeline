@@ -66,6 +66,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     imaging_utils.update_pydicom_dicom_dictionary()
 
+    # variables for the calculation of the ETA
+    total_processed_files: int = 0
+    processed_seconds: float = 0.0
+
     for path in paths:
         t = str(path.name)
 

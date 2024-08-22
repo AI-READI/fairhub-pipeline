@@ -66,8 +66,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     imaging_utils.update_pydicom_dicom_dictionary()
 
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+
+    # variables for the calculation of the ETA
+    total_processed_files: int = 0
+    processed_seconds: float = 0.0
+
     for path in paths:
         t = str(path.name)
+
+        start_time = time.time()
 
         original_file_name = t.split("/")[-1]
 
@@ -108,6 +116,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "output_files": [],
             }
         )
+        total_processed_files += 1
+
+        end_time = time.time()
+
+        processed_seconds += end_time - start_time
+
+        # average_time = processed_seconds / total_processed_files
+        file_processor.calculate_estimated_time(processed_seconds, total_processed_files)
 
     logger.debug(f"Found {len(file_paths)} files in {input_folder}")
 
@@ -116,7 +132,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     total_files = len(file_paths)
 
@@ -126,8 +141,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         log_idx = idx + 1
 
         # dev
-        # if log_idx == 17:
-        #     break
+        if log_idx == 8:
+            break
 
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
@@ -311,7 +326,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         outputs_uploaded = True
 
-        file_processor.delete_preexisting_output_files(path)
+        # file_processor.delete_preexisting_output_files(path)
 
         for root, dirs, files in os.walk(destination_folder):
             for file in files:
@@ -374,7 +389,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         shutil.rmtree(temp_folder_path)
 
-    file_processor.delete_out_of_date_output_files()
+    # file_processor.delete_out_of_date_output_files()
 
     file_processor.remove_seen_flag_from_map()
 

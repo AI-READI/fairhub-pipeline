@@ -64,6 +64,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     paths = file_system_client.get_paths(path=input_folder)
 
     file_paths = []
+
+    # variables for the calculation of the ETA
+    total_processed_files: int = 0
+    processed_seconds: float = 0.0
+
     for path in paths:
         t = str(path.name)
 

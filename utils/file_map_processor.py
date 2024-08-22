@@ -162,6 +162,10 @@ class FileMapProcessor:
         for entry in self.file_map:
             del entry["seen"]
 
+    def calculate_estimated_time(self, processed_seconds, total_processed_files):
+        # Calculate estimated time
+        average_time = processed_seconds / total_processed_files
+
     def upload_json(self):
         # Write the file map to a file
         file_map_file_path = os.path.join(self.meta_temp_folder_path, "file_map.json")
