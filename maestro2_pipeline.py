@@ -118,14 +118,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-
     total_files = len(file_paths)
 
     device = "Maestro2"
 
-    # variables for the calculation of the ETA
-    # total_processed_files: int = 0
-    # processed_seconds: float = 0.0
     time_estimator = TimeEstimator()
 
     for idx, file_item in enumerate(file_paths):
@@ -366,7 +362,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             path, workflow_output_files, input_last_modified
         )
 
-        time_estimator.eta(file_paths)
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
@@ -382,6 +377,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
+        time_estimator.eta(file_paths)
 
         # logger.debug(f"eta is {eta}")
         shutil.rmtree(temp_folder_path)

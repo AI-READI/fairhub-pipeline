@@ -8,7 +8,8 @@ class TimeEstimator:
 
     def __init__(self):
         self.start_time = time.time()
-        # self.end_time = end_time
+
+        # variables for the calculation of the ETA
         self.total_processed_files: int = 0
         self.processed_seconds: float = 0.0
 
