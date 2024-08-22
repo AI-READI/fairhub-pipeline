@@ -124,14 +124,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     device = "Maestro2"
 
     # variables for the calculation of the ETA
-    total_processed_files: int = 0
-    processed_seconds: float = 0.0
+    # total_processed_files: int = 0
+    # processed_seconds: float = 0.0
+    time_estimator = TimeEstimator()
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        start_time = time.time()
-        # start_time = time_estimator.start_time()
+        # start_time = time.time()
         # dev
         if log_idx == 12:
             break
@@ -161,6 +161,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         should_process = file_processor.file_should_process(path, input_last_modified)
         if not should_process:
+            time_estimator.eta(file_paths)
+
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -364,6 +366,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             path, workflow_output_files, input_last_modified
         )
 
+        time_estimator.eta(file_paths)
+
         if outputs_uploaded:
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
@@ -378,21 +382,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
-
-        total_processed_files += 1
-
-        end_time = time.time()
-        # end_time = time_estimator.end_time()
-        time_estimator = TimeEstimator(start_time, end_time)
-
-        # remaining_files = len(file_paths) - total_processed_files
-
-        # processed_seconds += end_time - start_time
-        time_estimator.eta(total_processed_files, file_paths, processed_seconds)
-        # average_time = processed_seconds / total_processed_files
-        # eta = average_time * remaining_files
-
-        # print(eta)
 
         # logger.debug(f"eta is {eta}")
         shutil.rmtree(temp_folder_path)
