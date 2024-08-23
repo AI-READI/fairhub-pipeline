@@ -690,6 +690,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f"Uploading {total_output_files} output files for {patient_id} - ({patient_idx}/{total_patients})"
         )
 
+        file_processor.confirm_output_files(
+            patient_id, [file["uploaded_file_path"] for file in output_files], ""
+        )
+
         for idx3, file in enumerate(output_files):
             log_idx = idx3 + 1
 
@@ -731,6 +735,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
+
+        logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+
+        try:
+            file_processor.upload_json()
+            logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+        except Exception as e:
+            logger.error(
+                f"Failed to upload file map to {dependency_folder}/file_map.json"
+            )
+            raise e
 
         shutil.rmtree(temp_folder_path)
 
