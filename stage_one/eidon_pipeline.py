@@ -17,6 +17,7 @@ import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 from traceback import format_exc
+from utils.time_estimator import TimeEstimator
 
 # import pprint
 
@@ -125,9 +126,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
     total_files = len(file_paths)
+    
+    # time_estimator = TimeEstimator()
+    # total_processed_files: int = 0
+    #
+    # processed_seconds: float = 0.0
+    time_estimator = TimeEstimator(file_paths)
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
+        # start_time = time.time()
 
         # dev
         # if log_idx == 10:
@@ -160,6 +168,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
+            time_estimator.progress()
+
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -290,6 +300,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_processor.delete_preexisting_output_files(path)
 
+
+
         for root, dirs, files in os.walk(destination_folder):
             for file in files:
                 file_path = os.path.join(root, file)
@@ -355,6 +367,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
+        # total_processed_files += 1
+        #
+        # end_time = time.time()
+        # processed_seconds += end_time - start_time
+        #
+        # average_time = processed_seconds / total_processed_files
+        # remaining_files = len(file_paths) - total_processed_files
+        #
+        # eta = average_time * remaining_files
+        # print("**************",total_processed_files, eta, average_time, "seconds", "**************")
+
+        time_estimator.progress()
 
         shutil.rmtree(temp_folder_path)
 

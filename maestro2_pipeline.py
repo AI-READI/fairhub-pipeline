@@ -122,15 +122,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     device = "Maestro2"
 
-    time_estimator = TimeEstimator()
+    time_estimator = TimeEstimator(file_paths)
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        # start_time = time.time()
         # dev
-        if log_idx == 12:
-            break
+        # if log_idx == 12:
+        #     break
 
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
@@ -157,7 +156,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         should_process = file_processor.file_should_process(path, input_last_modified)
         if not should_process:
-            time_estimator.eta(file_paths)
+            time_estimator.progress()
 
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
@@ -377,7 +376,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
-        time_estimator.eta(file_paths)
+        time_estimator.progress()
 
         # logger.debug(f"eta is {eta}")
         shutil.rmtree(temp_folder_path)

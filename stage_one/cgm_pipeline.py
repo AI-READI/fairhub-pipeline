@@ -17,6 +17,7 @@ import time
 import csv
 from utils.file_map_processor import FileMapProcessor
 import utils.logwatch as logging
+from utils.time_estimator import TimeEstimator
 
 """
 SCRIPT_PATH=""
@@ -118,6 +119,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     manifest = cgm_manifest.CGMManifest()
 
+    time_estimator = TimeEstimator(file_paths)
+
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
@@ -150,6 +153,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
+            time_estimator.progress()
+
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -322,6 +327,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
+        time_estimator.progress()
 
         shutil.rmtree(cgm_temp_folder_path)
 
