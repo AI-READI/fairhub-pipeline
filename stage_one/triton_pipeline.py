@@ -127,7 +127,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     device = "Triton"
 
-    time_estimator = TimeEstimator(file_paths)
+    time_estimator = TimeEstimator(len(file_paths))
+
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
