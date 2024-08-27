@@ -17,7 +17,7 @@ class CGMManifest:
         directory: str,
     ):
         # Define date format as used in JSON files
-        # date_format = "%Y-%m-%dT%H:%M:%SZ"
+        # date_format = "%Y-%m-%dT%H:%M:%S%z"
 
         # Traverse through all files in the directory and its subdirectories
         for root, dirs, files in sorted(os.walk(directory)):
@@ -95,7 +95,7 @@ class CGMManifest:
             with open(file_path, "r") as json_file:
                 try:
                     data = json.load(json_file)
-                    if "cgm" in data["body"]:  # Access 'cgm' within 'body'
+                    if data["body"]:  # Access 'cgm' within 'body'
                         # Initialize variables for glucose calculation
                         total_glucose = 0
                         num_records = 0

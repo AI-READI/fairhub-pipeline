@@ -45,7 +45,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
     dependency_folder = f"{study_id}/Stanford-Test/Pilot_Aug22_2024/CGM"
     # dependency_folder = f"{study_id}/dependency/CGM"
-    manifest_folder = f"{study_id}/manifest/CGM"
+    manifest_folder = f"{study_id}/Stanford-Test/Pilot_Aug22_2024/CGM/manifest"
+    # manifest_folder = f"{study_id}/manifest/CGM"
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
 
@@ -149,7 +150,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         input_last_modified = blob_client.get_blob_properties().last_modified
 
-        should_process = file_processor.file_should_process(path, input_last_modified)
+        # should_process = file_processor.file_should_process(path, input_last_modified)
+        should_process = True
 
         if not should_process:
             logger.debug(
@@ -354,8 +356,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # Delete the manifest file if it exists
-        # with contextlib.suppress(Exception):
-        output_blob_client.delete_blob()
+        with contextlib.suppress(Exception):
+            output_blob_client.delete_blob()
 
         output_blob_client.upload_blob(data)
 
