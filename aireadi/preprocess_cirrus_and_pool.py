@@ -158,7 +158,7 @@ def main():  # sourcery skip: low-code-quality
 
             for dir_path, dir_name, file_list in os.walk(output_dir):
                 for dir_name in dir_name:
-                    dir_path = os.path.join(output_dir, dir_name)
+                    output_dir_path = os.path.join(output_dir, dir_name)
                     zip_file_base_name = (
                         f"{site_name}_{device}_{date_range}_{dir_name}.fda.zip"
                     )
@@ -170,9 +170,11 @@ def main():  # sourcery skip: low-code-quality
                         mode="w",
                         compression=zipfile.ZIP_DEFLATED,
                     ) as archive:
-                        for dir_path, dir_name, file_list in os.walk(dir_path):
+                        for sub_folder_dir_path, dir_name, file_list in os.walk(
+                            output_dir_path
+                        ):
                             for file in file_list:
-                                file_path = os.path.join(dir_path, file)
+                                file_path = os.path.join(sub_folder_dir_path, file)
                                 archive.write(filename=file_path, arcname=file)
 
                     # Upload the zip file to the destination container
