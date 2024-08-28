@@ -22,6 +22,8 @@ import config
 import utils.dependency as deps
 from utils.file_map_processor import FileMapProcessor
 import utils.logwatch as logging
+import csv
+
 
 """
 # Usage Instructions:
@@ -66,6 +68,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     input_folder = f"{study_id}/pooled-data/FitnessTracker"
     processed_data_output_folder = f"{study_id}/pooled-data/FitnessTracker-processed"
+    pipeline_workflow_log_folder = f"{study_id}/logs/FitnessTracker"
     dependency_folder = f"{study_id}/dependency/FitnessTracker"
     ignore_file = f"{study_id}/ignore/fitnessTracker.ignore"
 
@@ -173,6 +176,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="garmin_pipeline_meta_")
+
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
@@ -193,7 +199,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         logger.debug(f"Found {len(patient_files)} files for {patient_id}")
 
         # Create a temporary folder on the local machine
-        temp_folder_path = tempfile.mkdtemp()
+        temp_folder_path = tempfile.mkdtemp(prefix="garmin_pipeline_")
 
         # Recreate the patient folder
         temp_patient_folder_path = os.path.join(temp_folder_path, patient_id)
@@ -272,7 +278,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             logger.info(
                                 f"Adding {file_path} to the output files for {patient_id} - ({patient_idx}/{total_patients})"
                             )
-
                 except Exception:
                     logger.error(
                         f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
@@ -690,10 +695,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f"Uploading {total_output_files} output files for {patient_id} - ({patient_idx}/{total_patients})"
         )
 
-        file_processor.confirm_output_files(
-            patient_id, [file["uploaded_file_path"] for file in output_files], ""
-        )
-
         for idx3, file in enumerate(output_files):
             log_idx = idx3 + 1
 
@@ -727,6 +728,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
 
+        file_processor.confirm_output_files(
+            patient_id, [file["uploaded_file_path"] for file in output_files], ""
+        )
+
         if outputs_uploaded:
             file_item["output_uploaded"] = True
         else:
@@ -748,6 +753,81 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             raise e
 
         shutil.rmtree(temp_folder_path)
+
+    # file_processor.delete_out_of_date_output_files()
+
+    # file_processor.remove_seen_flag_from_map()
+
+    logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+
+    try:
+        file_processor.upload_json()
+        logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+    except Exception as e:
+        logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
+        raise e
+
+    # Write the workflow log to a file
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    file_name = f"status_report_{timestr}.csv"
+    workflow_log_file_path = os.path.join(meta_temp_folder_path, file_name)
+
+    with open(workflow_log_file_path, mode="w") as f:
+        fieldnames = [
+            "file_path",
+            "status",
+            "processed",
+            "convert_error",
+            "output_uploaded",
+            "output_files",
+            "patient_id",
+            "modality",
+            "file_name",
+        ]
+
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+        for file_item in file_paths:
+            writer.writerow(file_item)
+
+        writer.writeheader()
+        writer.writerows(file_paths)
+
+    with open(workflow_log_file_path, mode="rb") as data:
+        logger.debug(
+            f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
+
+        output_blob_client = blob_service_client.get_blob_client(
+            container="stage-1-container",
+            blob=f"{pipeline_workflow_log_folder}/{file_name}",
+        )
+
+        output_blob_client.upload_blob(data)
+
+        logger.info(
+            f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
+
+    # Write the dependencies to a file
+    deps_output = workflow_file_dependencies.write_to_file(meta_temp_folder_path)
+
+    json_file_path = deps_output["file_path"]
+    json_file_name = deps_output["file_name"]
+
+    logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
+
+    with open(json_file_path, "rb") as data:
+        output_blob_client = blob_service_client.get_blob_client(
+            container="stage-1-container",
+            blob=f"{dependency_folder}/{json_file_name}",
+        )
+        output_blob_client.upload_blob(data)
+
+        logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
+
+    # Clean up the temporary folder
+    shutil.rmtree(meta_temp_folder_path)
 
 
 if __name__ == "__main__":
