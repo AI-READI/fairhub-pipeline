@@ -72,7 +72,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         original_file_name = t.split("/")[-1]
 
         # Check if the item is an .fda.zip file
-        if not original_file_name.endswith(".fda.zip"):
+        if not original_file_name.endswith(".zip"):
             continue
 
         # Get the parent folder of the file.
