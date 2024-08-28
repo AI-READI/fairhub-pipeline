@@ -17,6 +17,7 @@ import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 from traceback import format_exc
+import json
 
 # import pprint
 
@@ -98,6 +99,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "start_date": start_date,
                 "end_date": end_date,
                 "organize_error": True,
+                "organize_result": "",
                 "convert_error": True,
                 "format_error": True,
                 "output_uploaded": False,
@@ -197,8 +199,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         try:
             # raise Exception("error line1")
             for file in filtered_file_names:
-                # organize_result = eidon_instance.organize(download_path, organize_temp_folder_path)
-                eidon_instance.organize(file, step2_folder)
+
+                organize_result = eidon_instance.organize(file, step2_folder)
+
+                file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
             logger.error(
                 f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
@@ -383,6 +387,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "start_date",
             "end_date",
             "organize_error",
+            "organize_result",
             "convert_error",
             "format_error",
             "output_uploaded",
