@@ -23,7 +23,7 @@ import utils.dependency as deps
 from utils.file_map_processor import FileMapProcessor
 import utils.logwatch as logging
 import csv
-
+import time
 
 """
 # Usage Instructions:
@@ -734,8 +734,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
+            file_item["status"] = "success"
+            logger.info(
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
         else:
-            file_item["output_uploaded"] = False
+            logger.error(
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
 
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
