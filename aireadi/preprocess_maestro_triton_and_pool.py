@@ -7,7 +7,7 @@ import zipfile
 import tempfile
 import shutil
 import azure.storage.filedatalake as azurelake  # type: ignore
-
+from traceback import format_exc
 import config
 
 dicom_executable_location = os.path.abspath(
@@ -15,11 +15,11 @@ dicom_executable_location = os.path.abspath(
 )
 
 
-def main():
+def main():  # sourcery skip: low-code-quality
     """script downloads files to local, runs executable, then bundles output and uploads to data lake stage-1 container"""
     project_name = "AI-READI"
-    # site_names = ["UW", "UAB", "UCSD"]
-    site_names = ["UAB"]
+    site_names = ["UW", "UAB", "UCSD"]
+    # site_names = ["UAB"]
     devices = ["Maestro2", "Triton"]
 
     # create datalake clients
@@ -31,6 +31,7 @@ def main():
     )
 
     completed_files = []
+    error_files = []
 
     # Create temporary folders on the local machine
     temp_source_folder_path = tempfile.mkdtemp(prefix="maestro_triton_source_")
@@ -40,12 +41,17 @@ def main():
         print(f"Processing data for device {device}")
 
         completed_files = []
+        error_files = []
 
         device_completed_files_path = f"completed_files_{device}.json"
+        device_error_files_path = f"error_files_{device}.json"
 
         if os.path.exists(device_completed_files_path):
             with open(device_completed_files_path, "r") as f:
                 completed_files = json.load(f)
+
+        if os.path.exists(device_error_files_path):
+            os.remove(device_error_files_path)
 
         for site_name in site_names:
             print(f"Processing {device} data for {site_name}")
@@ -75,11 +81,9 @@ def main():
 
                     # Check if file has already been processed
                     if any(
-                        [
-                            file["input_file"] == full_file_path
-                            and file["device"] == device
-                            for file in completed_files
-                        ]
+                        file["input_file"] == full_file_path
+                        and file["device"] == device
+                        for file in completed_files
                     ):
                         print(
                             f"File {full_file_path} has already been processed. Skipping"
@@ -115,24 +119,40 @@ def main():
 
                     print(f"Running executable for file {file_name}")
 
-                    returncode = subprocess.call(
-                        [
-                            dicom_executable_location,
-                            temp_file_path,
-                            output_folder_path,
-                            "-octa",
-                            "-enfaceSlabs",
-                            "-overlayDcm",
-                            "-segDcm",
-                            "-dcm",
-                        ]
-                    )
+                    try:
+                        subprocess.call(
+                            [
+                                dicom_executable_location,
+                                temp_file_path,
+                                output_folder_path,
+                                "-octa",
+                                "-enfaceSlabs",
+                                "-overlayDcm",
+                                "-segDcm",
+                                "-dcm",
+                            ]
+                        )
 
-                    if returncode == 0:
                         print("Command completed successfully")
-                    else:
-                        print(f"Command failed with return code {returncode}")
-                        exit(returncode)
+
+                    except Exception as e:
+                        print(f"Command failed with error: {e}")
+
+                        error_files.append(
+                            {
+                                "site": site_name,
+                                "device": device,
+                                "input_file": full_file_path,
+                                "error": format_exc(),
+                            }
+                        )
+
+                        with open(device_error_files_path, "w") as f:
+                            json.dump(error_files, f, indent=4)
+
+                        shutil.rmtree(output_folder_path)
+                        os.remove(temp_file_path)
+                        continue
 
                     # Create a zip file
                     zip_file_base_name = f"{file_name}.zip"
