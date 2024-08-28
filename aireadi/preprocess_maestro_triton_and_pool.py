@@ -132,6 +132,7 @@ def main():
                         print("Command completed successfully")
                     else:
                         print(f"Command failed with return code {returncode}")
+                        exit(returncode)
 
                     # Create a zip file
                     zip_file_base_name = f"{file_name}.zip"

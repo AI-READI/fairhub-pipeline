@@ -10,10 +10,10 @@ import shutil
 
 import config
 
-# & "C:\Users\b2aiUsr\.scripts\zeiss\bin\java.exe" -cp ".;C:\Program Files\MATLAB\MATLAB Runtime\v91\toolbox\javabuilder\jar\javabuilder.jar;C:\Users\b2aiUsr\.scripts\zeiss\cirrusdcmold\*" demoVis C:\Users\b2aiUsr\.scripts\zeiss\N_4063OD_SD512_20220407 C:\Users\b2aiUsr\.scripts\zeiss\N_4063OD_SD512_20220407_CONVERTED 0
+# & "C:\Users\b2aiUsr\.scripts\zeiss\bin\java.exe" -cp ".;C:\Program Files\MATLAB\MATLAB Runtime\v91\toolbox\javabuilder\jar\javabuilder.jar;C:\Users\b2aiUsr\.scripts\zeiss\cirrusDCMvisualizationsDICOMWrapper20240719_141654\*" demoVis C:\Users\b2aiUsr\.scripts\zeiss\UW_Cirrus_20240604-20240607 C:\Users\b2aiUsr\.scripts\zeiss\UW_Cirrus_20240604-20240607_CONVERTED 0
 
 java_path = r"C:\Users\b2aiUsr\.scripts\zeiss\bin\java.exe"
-classpath = r".;C:\Program Files\MATLAB\MATLAB Runtime\v91\toolbox\javabuilder\jar\javabuilder.jar;C:\Users\b2aiUsr\.scripts\zeiss\cirrusDCMvisualizationsDICOMWrapper20240719_141654\*"
+classpath = r"'.;C:\Program Files\MATLAB\MATLAB Runtime\v91\toolbox\javabuilder\jar\javabuilder.jar;C:\Users\b2aiUsr\.scripts\zeiss\cirrusDCMvisualizationsDICOMWrapper20240719_141654\*'"
 main_class = "demoVis"
 # input_dir = r"C:\Users\b2aiUsr\.scripts\zeiss\N_4063OD_SD512_20220407"
 # output_dir = r"C:\Users\b2aiUsr\.scripts\zeiss\N_4063OD_SD512_20220407_CONVERTED"
@@ -26,7 +26,8 @@ completed_folders_file = "completed_folders.json"
 def main():
     """script downloads cirrus files to local, runs executable, then bundles output and uploads to data lake stage-1 container"""
     project_name = "AI-READI"
-    site_names = ["UW", "UAB", "UCSD"]
+    # site_names = ["UW", "UAB", "UCSD"]
+    site_names = ["site-test"]
     device = "Cirrus"
 
     # create datalake clients
@@ -133,6 +134,7 @@ def main():
                 print("Command executed successfully")
             else:
                 print(f"Command failed with return code {returncode}")
+                exit(returncode)
 
             # subprocess.call(
             #     [
@@ -206,7 +208,7 @@ def main():
 
             # Write at the end of each loop in case of failure
             with open(completed_folders_file, "w") as f:
-                json.dump(completed_folders, f)
+                json.dump(completed_folders, f, indent=4)
 
             print(f"Folder {folder_name} processed successfully")
 
