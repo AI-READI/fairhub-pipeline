@@ -7,7 +7,7 @@ import zipfile
 import tempfile
 import azure.storage.filedatalake as azurelake  # type: ignore
 import shutil
-
+from traceback import format_exc
 import config
 
 # & "C:\Users\b2aiUsr\.scripts\zeiss\bin\java.exe" -cp ".;C:\Program Files\MATLAB\MATLAB Runtime\v91\toolbox\javabuilder\jar\javabuilder.jar;C:\Users\b2aiUsr\.scripts\zeiss\cirrusDCMvisualizationsDICOMWrapper20240719_141654\*" demoVis C:\Users\b2aiUsr\.scripts\zeiss\UW_Cirrus_20240604-20240607 C:\Users\b2aiUsr\.scripts\zeiss\UW_Cirrus_20240604-20240607_CONVERTED 0
@@ -60,7 +60,7 @@ def main():  # sourcery skip: low-code-quality
 
             # Check if folder has already been processed
             if any(
-                [folder["folder"] == full_folder_path for folder in completed_folders]
+                folder["folder"] == full_folder_path for folder in completed_folders
             ):
                 print(f"Folder {full_folder_path} has already been processed. Skipping")
                 continue
@@ -118,23 +118,35 @@ def main():  # sourcery skip: low-code-quality
             input_dir = temp_source_folder_path
             output_dir = output_folder_path
 
-            returncode = subprocess.call(
-                [
-                    java_path,
-                    "-cp",
-                    classpath,
-                    main_class,
-                    input_dir,
-                    output_dir,
-                    additional_arg,
-                ]
-            )
+            try:
+                subprocess.call(
+                    [
+                        java_path,
+                        "-cp",
+                        classpath,
+                        main_class,
+                        input_dir,
+                        output_dir,
+                        additional_arg,
+                    ]
+                )
+            except Exception as e:
+                print(f"Command failed with error: {e}")
 
-            if returncode == 0:
-                print("Command executed successfully")
-            else:
-                print(f"Command failed with return code {returncode}")
-                exit(returncode)
+                error_log = format_exc()
+                print(f"Error log: {error_log}")
+
+                # Write to an error log file
+                error_log_file = f"{folder_name}_error_log.txt"
+                with open(error_log_file, "w") as f:
+                    f.write(error_log)
+
+                # Clean up
+                print("Cleaning up")
+                shutil.rmtree(temp_output_folder_path)
+                shutil.rmtree(temp_source_folder_path)
+
+                continue
 
             # subprocess.call(
             #     [
