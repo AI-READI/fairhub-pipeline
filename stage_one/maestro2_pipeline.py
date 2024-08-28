@@ -153,6 +153,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         input_last_modified = blob_client.get_blob_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
+
         if not should_process:
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",

@@ -28,7 +28,7 @@ done
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
-    """Process ecg data files for a study
+    """Process cgm data files for a study
     Args:
         study_id (str): the study id
     """
@@ -232,7 +232,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_processor.delete_preexisting_output_files(path)
 
         for file in output_files:
-
             with open(f"{file}", "rb") as data:
 
                 file_name2 = file.split("/")[-1]
