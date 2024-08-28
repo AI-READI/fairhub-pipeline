@@ -36,19 +36,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/Stanford-Test/Pilot_Aug22_2024/CGM/Pool"
-    # input_folder = f"{study_id}/pooled-data/CGM"
+    input_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/CGM-Pool"
     processed_data_output_folder = (
-        f"{study_id}/Stanford-Test/Pilot_Aug22_2024/CGM/Processed"
+        f"{study_id}/Stanford-Test/PILOT-Aug27-2024/CGM-Processed"
     )
-    # processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
-    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
-    dependency_folder = f"{study_id}/Stanford-Test/Pilot_Aug22_2024/CGM"
-    # dependency_folder = f"{study_id}/dependency/CGM"
-    manifest_folder = f"{study_id}/Stanford-Test/Pilot_Aug22_2024/CGM/manifest"
-    # manifest_folder = f"{study_id}/manifest/CGM"
-    pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
+    processed_data_qc_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/CGM-qc"
+    dependency_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/"
+    manifest_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/manifest"
+    pipeline_workflow_log_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/CGM-logs"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
+
+    # input_folder = f"{study_id}/pooled-data/CGM"
+    # processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
+    # dependency_folder = f"{study_id}/dependency/CGM"
+    # manifest_folder = f"{study_id}/manifest/CGM"
 
     logger = logging.Logwatch("cgm", print=True)
 
@@ -133,15 +134,21 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # get the file name from the path. It's in the format Clarity_Export_AIREADI_{id}_*.csv
         original_file_name = path.split("/")[-1]
 
-        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
+        # should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
+        should_file_be_ignored = False
 
         if should_file_be_ignored:
             logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
             continue
 
         file_name_only = original_file_name.split(".")[0]
-        # patient_id = file_name_only.split("_")[3]
-        patient_id = file_name_only.split("-")[1]
+
+        patient_id = "Unknown"
+
+        if file_name_only.split("-")[0] == "DEX":
+            patient_id = file_name_only.split("-")[1]
+        elif file_name_only.split("_")[0] == "Clarity":
+            patient_id = file_name_only.split("_")[3]
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
