@@ -165,7 +165,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
-            time_estimator.progress()
+            logger.debug(time_estimator.progress())
 
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
@@ -383,7 +383,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             workflow_input_files, workflow_output_files
         )
 
-        time_estimator.progress()
+        logger.debug(time_estimator.progress())
 
         shutil.rmtree(temp_folder_path)
 
