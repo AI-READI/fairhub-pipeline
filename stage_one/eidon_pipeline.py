@@ -66,10 +66,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     file_paths = []
 
-    # variables for the calculation of the ETA
-    total_processed_files: int = 0
-    processed_seconds: float = 0.0
-
     for path in paths:
         t = str(path.name)
 
@@ -126,10 +122,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
     total_files = len(file_paths)
-    
-    # total_processed_files: int = 0
-    #
-    # processed_seconds: float = 0.0
+
     time_estimator = TimeEstimator(len(file_paths))
 
     for idx, file_item in enumerate(file_paths):
@@ -161,7 +154,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             container="stage-1-container", blob=path
         )
 
-        # should_process = True
         input_last_modified = blob_client.get_blob_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
@@ -299,8 +291,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_processor.delete_preexisting_output_files(path)
 
-
-
         for root, dirs, files in os.walk(destination_folder):
             for file in files:
                 file_path = os.path.join(root, file)
@@ -366,16 +356,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
-        # total_processed_files += 1
-        #
-        # end_time = time.time()
-        # processed_seconds += end_time - start_time
-        #
-        # average_time = processed_seconds / total_processed_files
-        # remaining_files = len(file_paths) - total_processed_files
-        #
-        # eta = average_time * remaining_files
-        # print("**************",total_processed_files, eta, average_time, "seconds", "**************")
 
         logger.debug(time_estimator.step())
 
