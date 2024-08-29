@@ -92,6 +92,11 @@ def main():  # sourcery skip: low-code-quality
 
                     file_name = os.path.basename(full_file_path)
 
+                    # if file_name does not end with .fda, skip
+                    if not file_name.endswith(".fda"):
+                        print(f"File {file_name} is not an FDA file. Skipping")
+                        continue
+
                     temp_file_path = os.path.join(
                         temp_source_folder_path,
                         file_name,
@@ -188,9 +193,12 @@ def main():  # sourcery skip: low-code-quality
                     # Clean up
                     print("Cleaning up")
 
-                    os.remove(zip_file_base_name)
-                    shutil.rmtree(output_folder_path)
-                    os.remove(temp_file_path)
+                    if os.path.exists(zip_file_base_name):
+                        os.remove(zip_file_base_name)
+                    if os.path.exists(output_folder_path):
+                        shutil.rmtree(output_folder_path)
+                    if os.path.exists(temp_file_path):
+                        os.remove(temp_file_path)
 
                     # Update the completed files list
                     completed_files.append(
