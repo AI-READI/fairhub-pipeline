@@ -12,83 +12,83 @@ class CGMManifest:
     ):
         self.output_data = []
 
-    def calculate_sampling_extent(
-        self,
-        directory: str,
-    ):
-        # Define date format as used in JSON files
-        # date_format = "%Y-%m-%dT%H:%M:%S%z"
+    # def calculate_sampling_extent(
+    #     self,
+    #     directory: str,
+    # ):
+    #     # Define date format as used in JSON files
+    #     # date_format = "%Y-%m-%dT%H:%M:%S%z"
 
-        # Traverse through all files in the directory and its subdirectories
-        for root, dirs, files in sorted(os.walk(directory)):
-            dirs.sort()  # Sort directories
-            for file in sorted(files):  # Sort files if needed
-                if file.endswith(".json"):
-                    file_path = os.path.join(root, file)
-                    with open(file_path, "r") as json_file:
-                        try:
-                            data = json.load(json_file)
-                            if "cgm" in data["body"]:  # Access 'cgm' within 'body'
-                                # Initialize variables for glucose calculation
-                                total_glucose = 0
-                                num_records = 0
-                                unique_days = set()
+    #     # Traverse through all files in the directory and its subdirectories
+    #     for root, dirs, files in sorted(os.walk(directory)):
+    #         dirs.sort()  # Sort directories
+    #         for file in sorted(files):  # Sort files if needed
+    #             if file.endswith(".json"):
+    #                 file_path = os.path.join(root, file)
+    #                 with open(file_path, "r") as json_file:
+    #                     try:
+    #                         data = json.load(json_file)
+    #                         if "cgm" in data["body"]:  # Access 'cgm' within 'body'
+    #                             # Initialize variables for glucose calculation
+    #                             total_glucose = 0
+    #                             num_records = 0
+    #                             unique_days = set()
 
-                                for record in data["body"][
-                                    "cgm"
-                                ]:  # Iterate over 'cgm' records
-                                    if (
-                                        "blood_glucose" in record
-                                        and "value" in record["blood_glucose"]
-                                    ):
-                                        glucose_value = record["blood_glucose"]["value"]
-                                        if glucose_value == "Low":
-                                            glucose_value = 70
-                                        elif glucose_value == "High":
-                                            glucose_value = 200
-                                        else:
-                                            glucose_value = int(glucose_value)
+    #                             for record in data["body"][
+    #                                 "cgm"
+    #                             ]:  # Iterate over 'cgm' records
+    #                                 if (
+    #                                     "blood_glucose" in record
+    #                                     and "value" in record["blood_glucose"]
+    #                                 ):
+    #                                     glucose_value = record["blood_glucose"]["value"]
+    #                                     if glucose_value == "Low":
+    #                                         glucose_value = 70
+    #                                     elif glucose_value == "High":
+    #                                         glucose_value = 200
+    #                                     else:
+    #                                         glucose_value = int(glucose_value)
 
-                                        total_glucose += glucose_value
-                                        num_records += 1
+    #                                     total_glucose += glucose_value
+    #                                     num_records += 1
 
-                                        # Handling date for unique days calculation
-                                        date_str = record["effective_time_frame"][
-                                            "time_interval"
-                                        ]["start_date_time"].split("T")[0]
-                                        unique_days.add(date_str)
+    #                                     # Handling date for unique days calculation
+    #                                     date_str = record["effective_time_frame"][
+    #                                         "time_interval"
+    #                                     ]["start_date_time"].split("T")[0]
+    #                                     unique_days.add(date_str)
 
-                                # Calculate average blood glucose if there are records
-                                if num_records > 0:
-                                    average_glucose = total_glucose / num_records
-                                else:
-                                    average_glucose = None
+    #                             # Calculate average blood glucose if there are records
+    #                             if num_records > 0:
+    #                                 average_glucose = total_glucose / num_records
+    #                             else:
+    #                                 average_glucose = None
 
-                                # Extract additional metadata
-                                participant_id = data["header"]["patient_id"].split(
-                                    "-"
-                                )[-1]
-                                glucose_sensor_id = data["body"]["cgm"][0][
-                                    "source_device_id"
-                                ]
-                                manufacturer = "Dexcom"  # As an example
-                                manufacturer_model_name = "G6"  # As an example
+    #                             # Extract additional metadata
+    #                             participant_id = data["header"]["patient_id"].split(
+    #                                 "-"
+    #                             )[-1]
+    #                             glucose_sensor_id = data["body"]["cgm"][0][
+    #                                 "source_device_id"
+    #                             ]
+    #                             manufacturer = "Dexcom"  # As an example
+    #                             manufacturer_model_name = "G6"  # As an example
 
-                                # Append metadata for CSV
-                                self.output_data.append(
-                                    [
-                                        participant_id,
-                                        file_path,
-                                        num_records,
-                                        average_glucose,
-                                        len(unique_days),
-                                        glucose_sensor_id,
-                                        manufacturer,
-                                        manufacturer_model_name,
-                                    ]
-                                )
-                        except (KeyError, IndexError, json.JSONDecodeError) as e:
-                            print(f"Error processing file {file_path}: {e}")
+    #                             # Append metadata for CSV
+    #                             self.output_data.append(
+    #                                 [
+    #                                     participant_id,
+    #                                     file_path,
+    #                                     num_records,
+    #                                     average_glucose,
+    #                                     len(unique_days),
+    #                                     glucose_sensor_id,
+    #                                     manufacturer,
+    #                                     manufacturer_model_name,
+    #                                 ]
+    #                             )
+    #                     except (KeyError, IndexError, json.JSONDecodeError) as e:
+    #                         print(f"Error processing file {file_path}: {e}")
 
     def calculate_file_sampling_extent(self, file_path: str, glucose_filepath: str):
         if file_path.endswith(".json"):
@@ -155,6 +155,9 @@ class CGMManifest:
         self,
         file_path: str,
     ):
+        # Sort the output data by participant ID
+        self.output_data.sort(key=lambda x: x[0])
+
         # Write the data to a TSV file
         with open(file_path, "w") as f:
             f.write(

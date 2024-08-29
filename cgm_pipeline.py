@@ -191,11 +191,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         cgm_temp_folder_path = tempfile.mkdtemp()
 
         cgm_output_file_path = os.path.join(
-            cgm_temp_folder_path, f"DEX-{patient_id}.json"
+            cgm_temp_folder_path, f"{patient_id}_DEX.json"
         )
         cgm_final_output_file_path = os.path.join(
             cgm_temp_folder_path,
-            f"DEX-{patient_id}/DEX-{patient_id}.json",
+            f"DEX-{patient_id}/{patient_id}_DEX.json",
         )
         cgm_final_output_qc_file_path = os.path.join(
             cgm_temp_folder_path,

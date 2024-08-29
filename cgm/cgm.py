@@ -280,7 +280,7 @@ def convert(
 
     # create output JSON file
     args_output_list = output_path.split("/")
-    json_file = args_output_list[-1]
+    json_file = args_output_list[-1].rstrip(".json") + "_DEX" + ".json"
     with open(
         output_path.rstrip(".json") + "/" + json_file, "w", encoding="utf-8"
     ) as json_file_handler:
