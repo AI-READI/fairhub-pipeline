@@ -5,6 +5,7 @@ import os
 import tempfile
 import shutil
 from traceback import format_exc
+import json
 
 import imaging.imaging_maestro2_triton_root as Maestro2_Triton
 import imaging.imaging_utils as imaging_utils
@@ -103,6 +104,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "start_date": start_date,
                 "end_date": end_date,
                 "organize_error": True,
+                "organize_result": "",
                 "convert_error": True,
                 "format_error": False,
                 "output_uploaded": False,
@@ -154,6 +156,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         input_last_modified = blob_client.get_blob_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
+
         if not should_process:
             logger.debug(time_estimator.step())
 
@@ -221,12 +224,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         try:
             for step2_data_folder in step2_data_folders:
-                # organize_result = maestro2_instance.organize(
-                #     step2_data_folder, step3_folder
-                # )
-                maestro2_instance.organize(
+                organize_result = maestro2_instance.organize(
                     step2_data_folder, os.path.join(step3_folder, device)
                 )
+
+                file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
             logger.error(
                 f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
@@ -408,6 +410,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "start_date",
             "end_date",
             "organize_error",
+            "organize_result",
             "convert_error",
             "format_error",
             "output_uploaded",

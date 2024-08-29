@@ -12,6 +12,9 @@ xmltodict
 sierraecg
 wfdb
 
+# garmin
+fitparse
+
 # Azure
 azure-functions
 azure-storage-blob
