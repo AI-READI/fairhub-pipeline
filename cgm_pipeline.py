@@ -36,14 +36,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/CGM-Pool"
+    input_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-Pool"
     processed_data_output_folder = (
-        f"{study_id}/Stanford-Test/PILOT-Aug27-2024/CGM-Processed"
+        f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-Processed"
     )
-    processed_data_qc_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/CGM-qc"
-    dependency_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/"
-    manifest_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/manifest"
-    pipeline_workflow_log_folder = f"{study_id}/Stanford-Test/PILOT-Aug27-2024/CGM-logs"
+    processed_data_qc_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-qc"
+    dependency_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/"
+    manifest_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/manifest"
+    pipeline_workflow_log_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-logs"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
 
     # input_folder = f"{study_id}/pooled-data/CGM"
@@ -79,6 +79,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Delete the qc folder if it exists
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_qc_folder)
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_output_folder)
 
     paths = file_system_client.get_paths(path=input_folder)
 
@@ -191,11 +193,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         cgm_temp_folder_path = tempfile.mkdtemp()
 
         cgm_output_file_path = os.path.join(
-            cgm_temp_folder_path, f"{patient_id}_DEX.json"
+            cgm_temp_folder_path, f"DEX-{patient_id}.json"
         )
         cgm_final_output_file_path = os.path.join(
             cgm_temp_folder_path,
-            f"DEX-{patient_id}/{patient_id}_DEX.json",
+            f"DEX-{patient_id}/DEX-{patient_id}.json",
         )
         cgm_final_output_qc_file_path = os.path.join(
             cgm_temp_folder_path,
@@ -203,6 +205,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         uuid = f"AIREADI-{patient_id}"
+
+        timezone = "pst"
+
+        # if patient id starts with a 7xxx(UAB), set the timezone to "cst"
+        if patient_id.startswith("7"):
+            timezone = "cst"
 
         try:
             cgm.convert(
@@ -215,7 +223,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 transmitter_time=5,
                 transmitter_id=6,
                 uuid=uuid,
-                timezone="pst",
+                timezone=timezone,
             )
         except Exception:
             logger.error(
@@ -249,16 +257,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         for file in output_files:
             with open(f"{file}", "rb") as data:
 
-                file_name2 = file.split("/")[-1]
+                # file_name2 = file.split("/")[-1]
 
                 logger.debug(f"Uploading {file} - ({log_idx}/{total_files})")
 
-                output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{file_name2}"
+                output_file_path = f"wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{patient_id}_DEX.json"
 
                 try:
                     output_blob_client = blob_service_client.get_blob_client(
                         container="stage-1-container",
-                        blob=output_file_path,
+                        blob=f"{processed_data_output_folder}/{output_file_path}",
                     )
                     output_blob_client.upload_blob(data)
                 except Exception:
@@ -275,7 +283,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
 
-                manifest_glucose_file_path = f"wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{file_name2}"
+                manifest_glucose_file_path = output_file_path
 
                 # Generate the manifest entry
                 manifest.calculate_file_sampling_extent(
