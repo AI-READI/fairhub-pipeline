@@ -84,15 +84,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         if len(parts) != 4:
             continue
-        # print(parts, "fff")
         site_name = parts[0]
         data_type = parts[1]
         # site_name_2 = parts[2]
         # data_type_2 = parts[3]
-        # start_date_end_date = parts[4]
+        start_date_end_date = parts[2]
 
-        # start_date = start_date_end_date.split("-")[0]
-        # end_date = start_date_end_date.split("-")[1]
+        start_date = start_date_end_date.split("-")[0]
+        end_date = start_date_end_date.split("-")[1]
 
         file_paths.append(
             {
@@ -101,8 +100,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "processed": False,
                 "site_name": site_name,
                 "data_type": data_type,
-                # "start_date": start_date,
-                # "end_date": end_date,
+                "start_date": start_date,
+                "end_date": end_date,
                 "organize_error": True,
                 "convert_error": True,
                 "format_error": False,
@@ -315,7 +314,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         outputs_uploaded = True
 
-        # file_processor.delete_preexisting_output_files(path)
+        file_processor.delete_preexisting_output_files(path)
 
         for root, dirs, files in os.walk(destination_folder):
             for file in files:
@@ -361,7 +360,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             path, workflow_output_files, input_last_modified
         )
 
-
         if outputs_uploaded:
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
@@ -379,8 +377,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         logger.debug(time_estimator.step())
 
         shutil.rmtree(temp_folder_path)
-
-    # file_processor.delete_out_of_date_output_files()
+    file_processor.delete_out_of_date_output_files()
 
     file_processor.remove_seen_flag_from_map()
 

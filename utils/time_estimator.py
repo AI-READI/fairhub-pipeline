@@ -1,5 +1,4 @@
-import os
-import tempfile
+import math
 import datetime
 import time
 
@@ -7,26 +6,49 @@ import time
 class TimeEstimator:
     """Class for handling calculating estimated time of arrival"""
 
-    def __init__(self, file_paths):
+    def __init__(self, total_file):
         self.start_time = time.time()
 
         # variables for the calculation of the ETA
         self.total_processed_files: int = 0
-        self.elapsed_time: float = 0.0
-        self.file_paths = file_paths
+        self.total_file = total_file
 
-    def get_eta(self):
+    @property
+    def elapsed_time(self):
         end_time = time.time()
+        elapsed_time = (end_time - self.start_time)
+        return elapsed_time
 
-        self.elapsed_time = (end_time - self.start_time)
+    @property
+    def eta(self):
         average_time = self.elapsed_time / self.total_processed_files
-        return average_time * (len(self.file_paths) - self.total_processed_files)
+        return average_time * (self.total_file - self.total_processed_files)
 
-    def progress(self) -> int:
+    @property
+    def finish_time(self):
+        """ calculate finish time """
+
+        current_time = datetime.datetime.now()
+        finish_time = current_time + datetime.timedelta(seconds=self.eta)
+        formatted_finish_time = finish_time.strftime("%H:%M:%S")
+
+        return formatted_finish_time
+
+    def step(self):
         self.total_processed_files += 1
-        eta: float = self.get_eta()
-        finish_time = datetime.datetime.fromtimestamp(eta).strftime("%H:%M:%S")
 
-        print("***", "time elapsed:", self.elapsed_time, "time left", eta,
-              "estimated finish time:", finish_time)
-        return eta
+        # converts days, hours, minutes, and seconds into readable format
+        total_seconds = self.eta
+        days = total_seconds // (60 * 60 * 24)
+        total_seconds %= (60 * 60 * 24)
+        hours = total_seconds // (60 * 60)
+        total_seconds %= (60 * 60)
+        minutes = total_seconds // 60
+        total_seconds %= 60
+        seconds = total_seconds
+        return (
+            f"Time elapsed: {round(self.elapsed_time)} seconds,"
+            f"time left: {' '.join([f'{days} days,' if days else '', f'{hours} hours,' if hours else '', f'{int(minutes)} minutes' if minutes else ''])} "
+            f"{round(seconds)} seconds, estimated finish time: {self.finish_time}"
+        )
+
