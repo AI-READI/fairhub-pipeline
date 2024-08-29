@@ -109,6 +109,8 @@ def main():  # sourcery skip: low-code-quality
                     f.write(file_client.download_file().readall())
 
             temp_output_folder_path = tempfile.mkdtemp(prefix="cirrus_output_")
+            # current_directory = os.getcwd()
+            # temp_output_folder_path = os.path.join(current_directory, folder_name)
 
             output_folder_path = temp_output_folder_path
 
@@ -147,20 +149,6 @@ def main():  # sourcery skip: low-code-quality
                 shutil.rmtree(temp_source_folder_path)
 
                 continue
-
-            # subprocess.call(
-            #     [
-            #         "&",
-            #         "C:\\Users\\b2aiUsr\\.scripts\\zeiss\\bin\\java.exe",
-            #         "-cp",
-            #         ".;C:\\Program Files\\MATLAB\\MATLAB Runtime\\v91\\toolbox\\javabuilder\\jar\\javabuilder.jar;C:\\Users\\b2aiUsr\\.scripts\\zeiss\\cirrusdcmold\\*",
-            #         "demoVis",
-            #         temp_source_folder_path,
-            #         output_folder_path,
-            #         "0",
-            #     ],
-            #     stdout=sys.stdout,
-            # )
 
             # Create the zip files
 
@@ -204,7 +192,7 @@ def main():  # sourcery skip: low-code-quality
                     # Clean up
                     print("Cleaning up")
                     os.remove(zip_file_base_name)
-                    shutil.rmtree(dir_path)
+                    shutil.rmtree(output_dir_path)
 
             # Clean up
             print("Cleaning up")
