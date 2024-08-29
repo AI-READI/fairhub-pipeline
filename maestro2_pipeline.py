@@ -82,17 +82,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         parts = original_file_name.split("_")
 
-        if len(parts) != 6:
+        if len(parts) != 4:
             continue
-
+        # print(parts, "fff")
         site_name = parts[0]
         data_type = parts[1]
         # site_name_2 = parts[2]
         # data_type_2 = parts[3]
-        start_date_end_date = parts[4]
+        # start_date_end_date = parts[4]
 
-        start_date = start_date_end_date.split("-")[0]
-        end_date = start_date_end_date.split("-")[1]
+        # start_date = start_date_end_date.split("-")[0]
+        # end_date = start_date_end_date.split("-")[1]
 
         file_paths.append(
             {
@@ -101,8 +101,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "processed": False,
                 "site_name": site_name,
                 "data_type": data_type,
-                "start_date": start_date,
-                "end_date": end_date,
+                # "start_date": start_date,
+                # "end_date": end_date,
                 "organize_error": True,
                 "convert_error": True,
                 "format_error": False,
@@ -156,7 +156,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         should_process = file_processor.file_should_process(path, input_last_modified)
         if not should_process:
-            time_estimator.progress()
+            logger.debug(time_estimator.step())
 
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
@@ -376,9 +376,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
-        time_estimator.progress()
+        logger.debug(time_estimator.step())
 
-        # logger.debug(f"eta is {eta}")
         shutil.rmtree(temp_folder_path)
 
     # file_processor.delete_out_of_date_output_files()
