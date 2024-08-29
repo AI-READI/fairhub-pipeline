@@ -15,6 +15,7 @@ import csv
 from traceback import format_exc
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
+from utils.time_estimator import TimeEstimator
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -64,6 +65,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     paths = file_system_client.get_paths(path=input_folder)
 
     file_paths = []
+
     for path in paths:
         t = str(path.name)
 
@@ -119,6 +121,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     total_files = len(file_paths)
 
+    time_estimator = TimeEstimator(len(file_paths))
+
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
@@ -149,6 +153,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
+            logger.debug(time_estimator.step())
+
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -307,6 +313,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # logger.debug(hea_metadata)
 
         # logger.debug(f"Metadata created for {original_file_name} - ({log_idx}/{total_files})")
+        logger.debug(time_estimator.step())
 
         shutil.rmtree(ecg_temp_folder_path)
         shutil.rmtree(wfdb_temp_folder_path)

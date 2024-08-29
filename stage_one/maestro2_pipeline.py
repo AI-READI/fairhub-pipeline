@@ -17,6 +17,7 @@ import time
 import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
+from utils.time_estimator import TimeEstimator
 
 # import pprint
 
@@ -67,9 +68,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     imaging_utils.update_pydicom_dicom_dictionary()
 
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+
     for path in paths:
         t = str(path.name)
-
         original_file_name = t.split("/")[-1]
 
         # Check if the item is an .fda.zip file
@@ -81,14 +83,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         parts = original_file_name.split("_")
 
-        if len(parts) != 6:
+        if len(parts) != 4:
             continue
-
         site_name = parts[0]
         data_type = parts[1]
         # site_name_2 = parts[2]
         # data_type_2 = parts[3]
-        start_date_end_date = parts[4]
+        start_date_end_date = parts[2]
 
         start_date = start_date_end_date.split("-")[0]
         end_date = start_date_end_date.split("-")[1]
@@ -118,17 +119,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
     total_files = len(file_paths)
 
     device = "Maestro2"
+
+    time_estimator = TimeEstimator(len(file_paths))
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
         # dev
-        # if log_idx == 17:
+        # if log_idx == 12:
         #     break
 
         # Create a temporary folder on the local machine
@@ -157,6 +158,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
+            logger.debug(time_estimator.step())
+
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -373,9 +376,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
+        logger.debug(time_estimator.step())
 
         shutil.rmtree(temp_folder_path)
-
     file_processor.delete_out_of_date_output_files()
 
     file_processor.remove_seen_flag_from_map()
