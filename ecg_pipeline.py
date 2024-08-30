@@ -29,6 +29,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     input_folder = f"{study_id}/pooled-data/ECG"
     processed_data_output_folder = f"{study_id}/pooled-data/ECG-processed"
     dependency_folder = f"{study_id}/dependency/ECG"
+    participant_filter_list_file = (
+        f"{study_id}/dependency/ECG/ParticipantIDs_12_01_2023_through_07_31_2024.csv"
+    )
     pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
     ignore_file = f"{study_id}/ignore/ecg.ignore"
@@ -48,11 +51,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_system_client.delete_directory(processed_data_output_folder)
 
     with contextlib.suppress(Exception):
-        file_system_client.delete_directory(dependency_folder)
+        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
     paths = file_system_client.get_paths(path=input_folder)
 
     file_paths = []
+    participant_filter_list = []
 
     for path in paths:
         t = str(path.name)
@@ -103,6 +107,27 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp()
 
+    # Get the participant filter list file
+    with contextlib.suppress(Exception):
+        file_client = file_system_client.get_file_client(
+            file_path=participant_filter_list_file
+        )
+
+        temp_participant_filter_list_file = os.path.join(
+            meta_temp_folder_path, "filter_file.csv"
+        )
+
+        with open(file=temp_participant_filter_list_file, mode="wb") as f:
+            f.write(file_client.download_file().readall())
+
+        with open(file=temp_participant_filter_list_file, mode="r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                participant_filter_list.append(row[0])
+
+        # remove the first row
+        participant_filter_list.pop(0)
+
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
@@ -116,8 +141,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        # if log_idx == 5:
-        #     break
+        if log_idx == 5:
+            break
 
         path = file_item["file_path"]
 
@@ -177,16 +202,29 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             conv_retval_dict = xecg.convert(
                 ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
             )
+
+            participant_id = conv_retval_dict["participantID"]
+
+            if participant_id not in participant_filter_list:
+                logger.error(
+                    f"Participant ID {participant_id} not in the allowed list. Skipping {original_file_name} - ({log_idx}/{total_files})"
+                )
+
+                file_processor.append_errors(
+                    f"Participant ID {participant_id} not in the allowed list",
+                    path,
+                )
+                continue
         except Exception:
             logger.error(
                 f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
             )
             error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
+            e = "".join(error_exception.splitlines())
 
-            logger.error(error_exception)
+            logger.error(e)
 
-            file_processor.append_errors(error_exception, path)
+            file_processor.append_errors(e, path)
             continue
 
         file_item["convert_error"] = False
@@ -231,13 +269,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 except Exception:
                     logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
                     error_exception = format_exc()
-                    error_exception = "".join(error_exception.splitlines())
+                    e = "".join(error_exception.splitlines())
 
-                    logger.error(error_exception)
+                    logger.error(e)
 
                     outputs_uploaded = False
 
-                    file_processor.append_errors(error_exception, path)
+                    file_processor.append_errors(e, path)
 
                     continue
 
