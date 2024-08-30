@@ -141,8 +141,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        if log_idx == 5:
-            break
+        # if log_idx == 5:
+        #     break
 
         path = file_item["file_path"]
 
@@ -165,7 +165,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
-            logger.debug(time_estimator.step())
+            logger.time(time_estimator.step())
 
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
@@ -206,7 +206,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             participant_id = conv_retval_dict["participantID"]
 
             if participant_id not in participant_filter_list:
-                logger.error(
+                logger.warn(
                     f"Participant ID {participant_id} not in the allowed list. Skipping {original_file_name} - ({log_idx}/{total_files})"
                 )
 
@@ -351,7 +351,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f"Metadata created for {original_file_name} - ({log_idx}/{total_files})"
         )
 
-        logger.debug(time_estimator.step())
+        logger.time(time_estimator.step())
 
         shutil.rmtree(ecg_temp_folder_path)
         shutil.rmtree(wfdb_temp_folder_path)

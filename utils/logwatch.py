@@ -64,3 +64,9 @@ class Logwatch:
         if self.print:
             print(message)
         requests.post(self.drain, json={"level": "trace", "message": message})
+
+    def time(self, message: str):
+        """Send a time message to the logwatch server"""
+        if self.print:
+            print(message)
+        requests.post(self.drain, json={"level": "time", "message": message})

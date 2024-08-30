@@ -761,7 +761,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
             raise e
 
-        logger.debug(time_estimator.step())
+        logger.time(time_estimator.step())
 
         shutil.rmtree(temp_folder_path)
 
