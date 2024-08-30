@@ -65,3 +65,33 @@ def extract_metadata(hea_file, extended_meta=False):
         return meta_dict
     else:
         return hea_dict
+
+
+class ECGManifest:
+    def __init__(self):
+        self.manifest = []
+
+    def add_metadata(self, entry, wfdb_hea_filepath, wfdb_dat_filepath):
+
+        entry["wfdb_hea_filepath"] = wfdb_hea_filepath
+        entry["wfdb_dat_filepath"] = wfdb_dat_filepath
+
+        self.manifest.append(entry)
+
+    def write_tsv(
+        self,
+        file_path: str,
+    ):
+        # Sort the manifest by participant_id
+        self.manifest = sorted(self.manifest, key=lambda x: x["participant_id"])
+
+        # Write the data to a TSV file
+        with open(file_path, "w") as f:
+            f.write(
+                "participant_id\tmodality\twfdb_hea_filepath\twfdb_dat_filepath\tmachine_text\tmachine_detail_description\tdevice_documentation_type_and_version\tinterpretation_criteriaversion\tpatient_criteriaversion\tinternalmeasurements_version\tparticipant_position\tRate\tPR\tQRSD\tQT\tQTc\tP\tQRS\tT\treport_description\tmanufacturer\tmanufacturers_model_name\n"
+            )
+
+            for entry in self.manifest:
+                f.write(
+                    f"{entry['participant_id']}\t{entry['modality']}\t{entry['wfdb_hea_filepath']}\t{entry['wfdb_dat_filepath']}\t{entry['machine_text']}\t{entry['machine_detail_description']}\t{entry['device_documentation_type_and_version']}\t{entry['interpretation_criteriaversion']}\t{entry['patient_criteriaversion']}\t{entry['internalmeasurements_version']}\t{entry['participant_position']}\t{entry['Rate']}\t{entry['PR']}\t{entry['QRSD']}\t{entry['QT']}\t{entry['QTc']}\t{entry['P']}\t{entry['QRS']}\t{entry['T']}\t{entry['report_description']}\t{entry['manufacturer']}\t{entry['device_model']}\n"
+                )

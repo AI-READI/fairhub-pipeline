@@ -5,6 +5,7 @@ import os
 import tempfile
 import shutil
 import ecg.ecg_root as ecg
+import ecg.ecg_metadata as ecg_metadata
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
@@ -42,6 +43,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(data_plot_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(dependency_folder)
 
     paths = file_system_client.get_paths(path=input_folder)
 
@@ -102,12 +109,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     total_files = len(file_paths)
 
+    manifest = ecg_metadata.ECGManifest()
+
     time_estimator = TimeEstimator(len(file_paths))
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        # if log_idx == 2:
+        # if log_idx == 5:
         #     break
 
         path = file_item["file_path"]
@@ -202,14 +211,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_processor.delete_preexisting_output_files(path)
 
         for file in output_files:
-
             with open(f"{file}", "rb") as data:
-
                 file_name2 = file.split("/")[-1]
 
                 output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name2}"
-
-                print(f"Uploading {file_name2} to {output_file_path}")
 
                 try:
                     output_file_client = file_system_client.get_file_client(
@@ -290,12 +295,24 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # logger.debug(f"Creating metadata for {original_file_name} - ({log_idx}/{total_files})")
 
-        # output_hea_file = conv_retval_dict["output_hea_file"]
+        # Generate the metadata
 
-        # hea_metadata = xecg.metadata(output_hea_file)
-        # logger.debug(hea_metadata)
+        output_hea_file = conv_retval_dict["output_hea_file"]
+        output_dat_file = conv_retval_dict["output_dat_file"]
 
-        # logger.debug(f"Metadata created for {original_file_name} - ({log_idx}/{total_files})")
+        # Check if the file already exists.
+        if os.path.exists(output_hea_file) and os.path.exists(output_dat_file):
+            hea_metadata = xecg.metadata(output_hea_file)
+
+            output_hea_file = f"/cardiac_ecg/ecg_12lead/philips_tc30/{participant_id}/{output_hea_file.split('/')[-1]}"
+            output_dat_file = f"/cardiac_ecg/ecg_12lead/philips_tc30/{participant_id}/{output_dat_file.split('/')[-1]}"
+
+            manifest.add_metadata(hea_metadata, output_hea_file, output_dat_file)
+
+        logger.debug(
+            f"Metadata created for {original_file_name} - ({log_idx}/{total_files})"
+        )
+
         logger.debug(time_estimator.step())
 
         shutil.rmtree(ecg_temp_folder_path)
@@ -305,6 +322,23 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     file_processor.delete_out_of_date_output_files()
 
     file_processor.remove_seen_flag_from_map()
+
+    # Write the manifest to a file
+    manifest_file_path = os.path.join(temp_folder_path, "manifest.tsv")
+
+    manifest.write_tsv(manifest_file_path)
+
+    logger.debug(f"Uploading manifest file to {dependency_folder}/manifest.tsv")
+
+    # Upload the manifest file
+    with open(manifest_file_path, "rb") as data:
+        output_file_client = file_system_client.get_file_client(
+            file_path=f"{processed_data_output_folder}/manifest.tsv"
+        )
+
+        output_file_client.upload_data(data, overwrite=True)
+
+    logger.info(f"Uploaded manifest file to {dependency_folder}/manifest.tsv")
 
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
