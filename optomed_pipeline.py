@@ -19,8 +19,6 @@ from utils.file_map_processor import FileMapProcessor
 from traceback import format_exc
 import json
 
-# import pprint
-
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
     """Process ecg data files for a study
@@ -194,167 +192,167 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         step2_folder = os.path.join(temp_folder_path, "step2")
 
-        eidon_instance = EIDON.Eidon()
+        # eidon_instance = EIDON.Eidon()
+        #
+        # try:
+        #     # raise Exception("error line1")
+        #     for file in filtered_file_names:
+        #
+        #         organize_result = eidon_instance.organize(file, step2_folder)
+        #
+        #         file_item["organize_result"] = json.dumps(organize_result)
+        # except Exception:
+        #     logger.error(
+        #         f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
+        #     )
+        #     error_exception = format_exc()
+        #     error_exception = "".join(error_exception.splitlines())
+        #
+        #     logger.error(error_exception)
+        #
+        #     file_processor.append_errors(error_exception, path)
+        #     continue
+        #
+        # file_item["organize_error"] = False
+        #
+        # step3_folder = os.path.join(temp_folder_path, "step3")
+        #
+        # protocols = [
+        #     "eidon_mosaic_cfp",
+        #     "eidon_uwf_central_cfp",
+        #     "eidon_uwf_central_faf",
+        #     "eidon_uwf_central_ir",
+        #     "eidon_uwf_nasal_cfp",
+        #     "eidon_uwf_temporal_cfp",
+        # ]
+        #
+        # try:
+        #     for protocol in protocols:
+        #         output = os.path.join(step3_folder, protocol)
+        #
+        #         if not os.path.exists(output):
+        #             os.makedirs(output)
+        #
+        #         files = imaging_utils.get_filtered_file_names(
+        #             os.path.join(step2_folder, protocol)
+        #         )
+        #
+        #         for file in files:
+        #             eidon_instance.convert(file, output)
+        # except Exception:
+        #     logger.error(
+        #         f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+        #     )
+        #     error_exception = format_exc()
+        #     error_exception = "".join(error_exception.splitlines())
+        #
+        #     logger.error(error_exception)
+        #
+        #     file_processor.append_errors(error_exception, path)
+        #     continue
 
-        try:
-            # raise Exception("error line1")
-            for file in filtered_file_names:
+        # file_item["convert_error"] = False
+        #
+        # device_list = [step3_folder]
+        #
+        # destination_folder = os.path.join(temp_folder_path, "step4")
+        #
+        # try:
+        #     for folder in device_list:
+        #         filelist = imaging_utils.get_filtered_file_names(folder)
+        #
+        #         for file in filelist:
+        #             imaging_utils.format_file(file, destination_folder)
+        # except Exception:
+        #     logger.error(
+        #         f"Failed to format {original_file_name} - ({log_idx}/{total_files})"
+        #     )
+        #     error_exception = format_exc()
+        #     error_exception = "".join(error_exception.splitlines())
+        #
+        #     logger.error(error_exception)
+        #
+        #     file_processor.append_errors(error_exception, path)
+        #     continue
 
-                organize_result = eidon_instance.organize(file, step2_folder)
-
-                file_item["organize_result"] = json.dumps(organize_result)
-        except Exception:
-            logger.error(
-                f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
-            )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, path)
-            continue
-
-        file_item["organize_error"] = False
-
-        step3_folder = os.path.join(temp_folder_path, "step3")
-
-        protocols = [
-            "eidon_mosaic_cfp",
-            "eidon_uwf_central_cfp",
-            "eidon_uwf_central_faf",
-            "eidon_uwf_central_ir",
-            "eidon_uwf_nasal_cfp",
-            "eidon_uwf_temporal_cfp",
-        ]
-
-        try:
-            for protocol in protocols:
-                output = os.path.join(step3_folder, protocol)
-
-                if not os.path.exists(output):
-                    os.makedirs(output)
-
-                files = imaging_utils.get_filtered_file_names(
-                    os.path.join(step2_folder, protocol)
-                )
-
-                for file in files:
-                    eidon_instance.convert(file, output)
-        except Exception:
-            logger.error(
-                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
-            )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, path)
-            continue
-
-        file_item["convert_error"] = False
-
-        device_list = [step3_folder]
-
-        destination_folder = os.path.join(temp_folder_path, "step4")
-
-        try:
-            for folder in device_list:
-                filelist = imaging_utils.get_filtered_file_names(folder)
-
-                for file in filelist:
-                    imaging_utils.format_file(file, destination_folder)
-        except Exception:
-            logger.error(
-                f"Failed to format {original_file_name} - ({log_idx}/{total_files})"
-            )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, path)
-            continue
-
-        file_item["format_error"] = False
-        file_item["processed"] = True
-
-        logger.debug(
-            f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-        )
-
-        workflow_output_files = []
-
-        outputs_uploaded = True
-
-        file_processor.delete_preexisting_output_files(path)
-
-        for root, dirs, files in os.walk(destination_folder):
-            for file in files:
-                file_path = os.path.join(root, file)
-
-                with open(f"{file_path}", "rb") as data:
-                    file_name2 = file_path.split("/")[-5:]
-
-                    combined_file_name = "/".join(file_name2)
-
-                    logger.debug(
-                        f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
-                    )
-
-                    output_file_path = (
-                        f"{processed_data_output_folder}/{combined_file_name}"
-                    )
-
-                    with contextlib.suppress(Exception):
-                        output_blob_client = blob_service_client.get_blob_client(
-                            container="stage-1-container", blob=output_file_path
-                        )
-                        output_blob_client.delete_blob()
-
-                    try:
-                        output_blob_client = blob_service_client.get_blob_client(
-                            container="stage-1-container", blob=output_file_path
-                        )
-                        output_blob_client.upload_blob(data)
-                        #
-                        # raise Exception()
-                    except Exception:
-                        outputs_uploaded = False
-                        logger.error(
-                            f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
-                        )
-                        error_exception = format_exc()
-                        error_exception = "".join(error_exception.splitlines())
-
-                        logger.error(error_exception)
-
-                        file_processor.append_errors(error_exception, path)
-                        continue
-
-                    file_item["output_files"].append(output_file_path)
-                    workflow_output_files.append(output_file_path)
+        # file_item["format_error"] = False
+        # file_item["processed"] = True
+        #
+        # logger.debug(
+        #     f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+        # )
+        #
+        # workflow_output_files = []
+        #
+        # outputs_uploaded = True
+        #
+        # file_processor.delete_preexisting_output_files(path)
+        #
+        # for root, dirs, files in os.walk(destination_folder):
+        #     for file in files:
+        #         file_path = os.path.join(root, file)
+        #
+        #         with open(f"{file_path}", "rb") as data:
+        #             file_name2 = file_path.split("/")[-5:]
+        #
+        #             combined_file_name = "/".join(file_name2)
+        #
+        #             logger.debug(
+        #                 f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
+        #             )
+        #
+        #             output_file_path = (
+        #                 f"{processed_data_output_folder}/{combined_file_name}"
+        #             )
+        #
+        #             with contextlib.suppress(Exception):
+        #                 output_blob_client = blob_service_client.get_blob_client(
+        #                     container="stage-1-container", blob=output_file_path
+        #                 )
+        #                 output_blob_client.delete_blob()
+        #
+        #             try:
+        #                 output_blob_client = blob_service_client.get_blob_client(
+        #                     container="stage-1-container", blob=output_file_path
+        #                 )
+        #                 output_blob_client.upload_blob(data)
+        #                 #
+        #                 # raise Exception()
+        #             except Exception:
+        #                 outputs_uploaded = False
+        #                 logger.error(
+        #                     f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
+        #                 )
+        #                 error_exception = format_exc()
+        #                 error_exception = "".join(error_exception.splitlines())
+        #
+        #                 logger.error(error_exception)
+        #
+        #                 file_processor.append_errors(error_exception, path)
+        #                 continue
+        #
+        #             file_item["output_files"].append(output_file_path)
+        #             workflow_output_files.append(output_file_path)
 
         # Add the new output files to the file map
-        file_processor.confirm_output_files(
-            path, workflow_output_files, input_last_modified
-        )
-
-        if outputs_uploaded:
-            file_item["output_uploaded"] = True
-            file_item["status"] = "success"
-            logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-            )
-        else:
-            logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-            )
-
-        workflow_file_dependencies.add_dependency(
-            workflow_input_files, workflow_output_files
-        )
+        # file_processor.confirm_output_files(
+        #     path, workflow_output_files, input_last_modified
+        # )
+        #
+        # if outputs_uploaded:
+        #     file_item["output_uploaded"] = True
+        #     file_item["status"] = "success"
+        #     logger.info(
+        #         f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+        #     )
+        # else:
+        #     logger.error(
+        #         f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+        #     )
+        #
+        # workflow_file_dependencies.add_dependency(
+        #     workflow_input_files, workflow_output_files
+        # )
 
         shutil.rmtree(temp_folder_path)
 
@@ -436,12 +434,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
     shutil.rmtree(meta_temp_folder_path)
-
-    # dev
-    # move the workflow log file and the json file to the current directory
-    # shutil.move(workflow_log_file_path, "status.csv")
-    # shutil.move(json_file_path, "file_map.json")
-
 
 if __name__ == "__main__":
     pipeline("AI-READI")
