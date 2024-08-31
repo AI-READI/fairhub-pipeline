@@ -155,6 +155,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         if should_file_be_ignored:
             logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
+
+            logger.time(time_estimator.step())
             continue
 
         # download the file to the temp folder
@@ -165,8 +167,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
-            logger.time(time_estimator.step())
-
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -174,6 +174,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
             )
 
+            logger.time(time_estimator.step())
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -214,6 +215,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     f"Participant ID {participant_id} not in the allowed list",
                     path,
                 )
+
+                logger.time(time_estimator.step())
                 continue
         except Exception:
             logger.error(
@@ -225,6 +228,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.error(e)
 
             file_processor.append_errors(e, path)
+
+            logger.time(time_estimator.step())
             continue
 
         file_item["convert_error"] = False
@@ -277,6 +282,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     file_processor.append_errors(e, path)
 
+                    logger.time(time_estimator.step())
                     continue
 
                 file_item["output_files"].append(output_file_path)
