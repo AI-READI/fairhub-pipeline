@@ -87,6 +87,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_paths.append(
                 {
                     "file_path": t,
+                    "is_directory": False,
                     "status": "failed",
                     "processed": False,
                     "batch_folder": batch_folder,
