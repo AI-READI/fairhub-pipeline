@@ -430,7 +430,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         output_file_client.upload_data(data, overwrite=True)
 
-    deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
+    deps_output = workflow_file_dependencies.write_to_file(meta_temp_folder_path)
 
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]

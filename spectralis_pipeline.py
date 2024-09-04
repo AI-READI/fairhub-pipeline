@@ -4,13 +4,13 @@ import contextlib
 import os
 import tempfile
 import shutil
-import ecg.ecg_root as ecg
-import ecg.ecg_metadata as ecg_metadata
+from imaging.imaging_spectralis_root import Spectralis
 import azure.storage.filedatalake as azurelake
 import config
-import utils.dependency as deps
 import time
 import csv
+import imaging.imaging_utils as imaging_utils
+import utils.dependency as deps
 from traceback import format_exc
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
@@ -104,10 +104,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     logger.info(f"Found {len(file_paths)} items in {input_folder}")
 
     # Create a temporary folder on the local machine
-    temp_folder_path = tempfile.mkdtemp()
+    temp_folder_path = tempfile.mkdtemp(prefix="spectralis_")
 
     # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp()
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="spectralis_meta_")
 
     total_files = len(file_paths)
 
@@ -130,6 +130,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # get the file name from the path
         original_file_name = path.split("/")[-1]
+
+        step1_folder = os.path.join(temp_folder_path, "step1")
 
         should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
@@ -171,10 +173,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
 
-        x= path.split(os.path.join(input_folder, file_item["batch_folder"]))[1]
+        batch_folder = file_item["batch_folder"]
 
-        download_path = os.path.join(temp_folder_path, 
-            x.lstrip("/").replace("/", "\\"))
+        download_path = os.path.join(step1_folder, original_file_name)
 
         with open(file=download_path, mode="wb") as f:
             f.write(file_client.download_file().readall())
@@ -183,14 +184,187 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
         )
 
- 
+        spectralis_instance = Spectralis()
 
- 
 
+        # Organize spectralis files by protocol
+
+        step2_folder = os.path.join(temp_folder_path, 'step2')
+
+        filtered_list = imaging_utils.spectralis_get_filtered_file_names(batch_folder)
+
+        for file_name in filtered_list:
+            organize_result = spectralis_instance.organize(file_name, step2_folder)
+
+        # convert dicom files to nema compliant dicom files
+        protocols = [
+    "spectralis_onh_rc_hr_oct",
+    "spectralis_onh_rc_hr_retinal_photography",
+    "spectralis_ppol_mac_hr_oct",
+    "spectralis_ppol_mac_hr_oct_small",
+    "spectralis_ppol_mac_hr_retinal_photography",
+    "spectralis_ppol_mac_hr_retinal_photography_small",
+]
+
+        step3_folder = os.path.join(temp_folder_path, 'step3')
+
+        for protocol in protocols:
+            output = f".../step3/{protocol}"
+            if not os.path.exists(output):
+                os.makedirs(output)
+
+            files = imaging_utils.get_filtered_file_names(f".../step2/{protocol}")
+
+            for file in files:
+                spectralis_instance.convert(file, output)
+
+        step4_folder = os.path.join(temp_folder_path, 'step4')
+        metadata_folder = os.path.join(temp_folder_path, 'metadata')
+
+        for folder in [step3_folder]:
+            filelist = imaging_utils.get_filtered_file_names(folder)
+
+            for file in filelist:
+                full_file_path = imaging_utils.format_file_path(file, step4_folder) 
+
+                spectralis_instance.metadata(full_file_path, metadata_folder)
+ 
+        # Upload the processed files to the output folder
+
+        workflow_output_files = []
+
+        outputs_uploaded = True
+        upload_exception = ""
+
+        file_processor.delete_preexisting_output_files(path)
+
+        for root, dirs, files in os.walk(step4_folder):
+            for file in files:
+                full_file_path = os.path.join(root, file)
+
+                output_file_path = os.path.join(
+                    processed_data_output_folder,
+                    file_item["batch_folder"],
+                    file,
+                )
+
+                try:
+                    output_file_client = file_system_client.get_file_client(output_file_path)
+
+                    # Check if the file already exists. If it does, throw an exception
+                    if output_file_client.exists():
+                        raise Exception(
+                            f"File {output_file_path} already exists. Throwing exception"
+                        )
+
+                    with open(full_file_path, "rb") as f:
+                        file_client.upload_data(f, overwrite=True)
+                except Exception :
+                    error_exception = format_exc()
+                    e = "".join(error_exception.splitlines())
+
+                    logger.error(e)
+
+                    outputs_uploaded = False
+                    
+
+                    file_processor.append_errors(e, path)
+
+                file_item["output_files"].append(output_file_path)
+                workflow_output_files.append(output_file_path) 
+
+        # Add the new output files to the file map
+
+        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
+
+        if outputs_uploaded:
+            file_item["output_uploaded"] = True
+            file_item["status"] = "success"
+            logger.info(
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
+        else:
+            file_item["output_uploaded"] = upload_exception
+            logger.error(
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
+
+        workflow_file_dependencies.add_dependency(
+            workflow_input_files, workflow_output_files
+        )
+
+        logger.time(time_estimator.step())
+
+        shutil.rmtree(metadata_folder)
+        shutil.rmtree(step4_folder)
+        shutil.rmtree(step3_folder)
+        shutil.rmtree(step2_folder)
+        os.remove(download_path)
+
+    file_processor.delete_out_of_date_output_files()
+
+    file_processor.remove_seen_flag_from_map()
+
+    logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+
+    try:
+        file_processor.upload_json()
+        logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+    except Exception as e:
+        logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
+        raise e
+
+    # Write the workflow log to a file
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    file_name = f"status_report_{timestr}.csv"
+    workflow_log_file_path = os.path.join(meta_temp_folder_path, file_name)
+
+    with open(workflow_log_file_path, "w", newline="") as csvfile:
+        fieldnames = [
+            "file_path",
+            "status",
+            "processed",
+            "batch_folder",
+            "site_name",
+            "data_type",
+            "start_date",
+            "end_date",
+            "convert_error",
+            "output_uploaded",
+            "output_files",
+        ]
+
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        writer.writeheader()
+        writer.writerows(file_paths)
+
+    # Upload the workflow log file to the pipeline_workflow_log_folder
+    with open(workflow_log_file_path, mode="rb") as data:
+        logger.debug(
+            f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
+
+        output_file_client = file_system_client.get_file_client(
+            file_path=f"{pipeline_workflow_log_folder}/{file_name}"
+        )
+
+        output_file_client.upload_data(data, overwrite=True)
+
+    
+    deps_output = workflow_file_dependencies.write_to_file(meta_temp_folder_path)
+    
+    json_file_path = deps_output["file_path"]
+    json_file_name = deps_output["file_name"]
+
+    with open(json_file_path, "rb") as data:
+        output_file_client = file_system_client.get_file_client(
+            file_path=f"{dependency_folder}/{json_file_name}"
+        )
+
+        output_file_client.upload_data(data, overwrite=True)
+
+    shutil.rmtree(meta_temp_folder_path)
 
 if __name__ == "__main__":
     pipeline("AI-READI")
-
-    # delete the ecg.log file
-    if os.path.exists("ecg.log"):
-        os.remove("ecg.log")
