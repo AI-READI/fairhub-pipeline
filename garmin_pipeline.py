@@ -24,6 +24,7 @@ from utils.file_map_processor import FileMapProcessor
 import utils.logwatch as logging
 import csv
 import time
+from utils.time_estimator import TimeEstimator
 
 """
 # Usage Instructions:
@@ -184,6 +185,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     total_patients = len(patient_ids)
+
+    time_estimator = TimeEstimator(len(file_paths))
 
     for idx, patient_id in enumerate(patient_ids):
         patient_idx = idx + 1
@@ -757,6 +760,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 f"Failed to upload file map to {dependency_folder}/file_map.json"
             )
             raise e
+
+        logger.time(time_estimator.step())
 
         shutil.rmtree(temp_folder_path)
 

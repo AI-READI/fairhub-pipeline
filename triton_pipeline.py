@@ -1,12 +1,13 @@
 """Process ecg data files"""
 
-import contextlib
 import datetime
 import os
 import tempfile
 import shutil
+from traceback import format_exc
+import json
 
-import imaging.imaging_eidon_retinal_photography_root as EIDON
+import imaging.imaging_maestro2_triton_root as Maestro2_Triton
 import imaging.imaging_utils as imaging_utils
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
@@ -16,8 +17,7 @@ import time
 import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
-from traceback import format_exc
-import json
+from utils.time_estimator import TimeEstimator
 
 # import pprint
 
@@ -31,13 +31,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/Eidon"
-    dependency_folder = f"{study_id}/dependency/Eidon"
-    pipeline_workflow_log_folder = f"{study_id}/logs/Eidon"
-    processed_data_output_folder = f"{study_id}/pooled-data/Eidon-processed"
-    ignore_file = f"{study_id}/ignore/eidon.ignore"
+    input_folder = f"{study_id}/pooled-data/Triton"
+    dependency_folder = f"{study_id}/dependency/Triton"
+    pipeline_workflow_log_folder = f"{study_id}/logs/Triton"
+    processed_data_output_folder = f"{study_id}/pooled-data/Triton-processed"
+    ignore_file = f"{study_id}/ignore/triton.ignore"
 
-    logger = logging.Logwatch("eidon", print=True)
+    logger = logging.Logwatch("triton", print=True)
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -66,24 +66,30 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     file_paths = []
 
+    imaging_utils.update_pydicom_dicom_dictionary()
+
     for path in paths:
         t = str(path.name)
 
-        file_name = t.split("/")[-1]
+        original_file_name = t.split("/")[-1]
 
-        # Check if the item is an dicom file
-        if file_name.split(".")[-1] != "dcm":
+        # Check if the item is an .fda.zip file
+        if not original_file_name.endswith(".zip"):
             continue
 
         # Get the parent folder of the file.
-        # The name of this folder is in the format siteName_dataType_startDate-endDate
-        batch_folder = t.split("/")[-2]
+        # The name of this file is in the format siteName_dataType_siteName_dataType_startDate-endDate_*.fda.zip
 
-        # Check if the folder name is in the format siteName_dataType_startDate-endDate
-        if len(batch_folder.split("_")) != 3:
+        parts = original_file_name.split("_")
+
+        if len(parts) != 6:
             continue
 
-        site_name, data_type, start_date_end_date = batch_folder.split("_")
+        site_name = parts[0]
+        data_type = parts[1]
+        # site_name_2 = parts[2]
+        # data_type_2 = parts[3]
+        start_date_end_date = parts[4]
 
         start_date = start_date_end_date.split("-")[0]
         end_date = start_date_end_date.split("-")[1]
@@ -93,7 +99,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "file_path": t,
                 "status": "failed",
                 "processed": False,
-                "batch_folder": batch_folder,
                 "site_name": site_name,
                 "data_type": data_type,
                 "start_date": start_date,
@@ -101,7 +106,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "organize_error": True,
                 "organize_result": "",
                 "convert_error": True,
-                "format_error": True,
+                "format_error": False,
                 "output_uploaded": False,
                 "output_files": [],
             }
@@ -112,23 +117,21 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp()
-
-    # Download the meta file for the pipeline
-    # file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
-    workflow_file_dependencies = deps.WorkflowFileDependencies()
-
     total_files = len(file_paths)
+
+    device = "Triton"
+
+    time_estimator = TimeEstimator(len(file_paths))
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
         # dev
-        # if log_idx == 10:
+        # if log_idx == 15:
         #     break
 
         # Create a temporary folder on the local machine
@@ -139,25 +142,29 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_input_files = [path]
 
         # get the file name from the path
-        file_name = path.split("/")[-1]
+        original_file_name = path.split("/")[-1]
 
         should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
         if should_file_be_ignored:
-            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
             continue
+
+        # get the file name from the path
+        original_file_name = path.split("/")[-1]
 
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
             container="stage-1-container", blob=path
         )
 
-        # should_process = True
         input_last_modified = blob_client.get_blob_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
+            logger.time(time_estimator.step())
+
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -173,9 +180,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
 
-        # get the file name from the path
-        original_file_name = path.split("/")[-1]
-
         step1_folder = os.path.join(temp_folder_path, "step1")
 
         if not os.path.exists(step1_folder):
@@ -187,20 +191,44 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             blob_client.download_blob().readinto(data)
 
         logger.info(
-            f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})"
+            f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
         )
 
-        filtered_file_names = imaging_utils.get_filtered_file_names(step1_folder)
+        zip_files = imaging_utils.list_zip_files(step1_folder)
+
+        if len(zip_files) == 0:
+            logger.warn(f"No zip files found in {step1_folder}")
+            continue
 
         step2_folder = os.path.join(temp_folder_path, "step2")
 
-        eidon_instance = EIDON.Eidon()
+        if not os.path.exists(step2_folder):
+            os.makedirs(step2_folder)
+
+        logger.debug(
+            f"Unzipping {original_file_name} to {step2_folder} - ({log_idx}/{total_files})"
+        )
+
+        imaging_utils.unzip_fda_file(download_path, step2_folder)
+
+        logger.info(
+            f"Unzipped {original_file_name} to {step2_folder} - ({log_idx}/{total_files})"
+        )
+
+        step3_folder = os.path.join(temp_folder_path, "step3")
+
+        step2_data_folders = imaging_utils.list_subfolders(
+            os.path.join(step2_folder, device)
+        )
+
+        # process the files
+        triton_instance = Maestro2_Triton.Maestro2_Triton()
 
         try:
-            # raise Exception("error line1")
-            for file in filtered_file_names:
-
-                organize_result = eidon_instance.organize(file, step2_folder)
+            for step2_data_folder in step2_data_folders:
+                organize_result = triton_instance.organize(
+                    step2_data_folder, os.path.join(step3_folder, device)
+                )
 
                 file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
@@ -217,30 +245,31 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_item["organize_error"] = False
 
-        step3_folder = os.path.join(temp_folder_path, "step3")
+        step4_folder = os.path.join(temp_folder_path, "step4")
+
+        if not os.path.exists(step4_folder):
+            os.makedirs(step4_folder)
 
         protocols = [
-            "eidon_mosaic_cfp",
-            "eidon_uwf_central_cfp",
-            "eidon_uwf_central_faf",
-            "eidon_uwf_central_ir",
-            "eidon_uwf_nasal_cfp",
-            "eidon_uwf_temporal_cfp",
+            "triton_3d_radial_oct",
+            "triton_macula_6x6_octa",
+            "triton_macula_12x12_octa",
         ]
 
         try:
             for protocol in protocols:
-                output = os.path.join(step3_folder, protocol)
+                output_folder_path = os.path.join(step4_folder, device, protocol)
 
-                if not os.path.exists(output):
-                    os.makedirs(output)
+                if not os.path.exists(output_folder_path):
+                    os.makedirs(output_folder_path)
 
-                files = imaging_utils.get_filtered_file_names(
-                    os.path.join(step2_folder, protocol)
+                folders = imaging_utils.list_subfolders(
+                    os.path.join(step3_folder, device, protocol)
                 )
 
-                for file in files:
-                    eidon_instance.convert(file, output)
+                for folder in folders:
+                    triton_instance.convert(folder, output_folder_path)
+
         except Exception:
             logger.error(
                 f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
@@ -255,33 +284,34 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_item["convert_error"] = False
 
-        device_list = [step3_folder]
+        device_list = [os.path.join(step4_folder, device)]
 
-        destination_folder = os.path.join(temp_folder_path, "step4")
+        destination_folder = os.path.join(temp_folder_path, "step5")
 
-        try:
-            for folder in device_list:
-                filelist = imaging_utils.get_filtered_file_names(folder)
+        for device_folder in device_list:
+            file_list = imaging_utils.get_filtered_file_names(device_folder)
 
-                for file in filelist:
-                    imaging_utils.format_file(file, destination_folder)
-        except Exception:
-            logger.error(
-                f"Failed to format {original_file_name} - ({log_idx}/{total_files})"
-            )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
+            for file_name in file_list:
 
-            logger.error(error_exception)
+                try:
+                    imaging_utils.format_file(file_name, destination_folder)
+                except Exception:
+                    file_item["format_error"] = True
+                    logger.error(
+                        f"Failed to format {file_name} - ({log_idx}/{total_files})"
+                    )
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
 
-            file_processor.append_errors(error_exception, path)
-            continue
+                    logger.error(error_exception)
 
-        file_item["format_error"] = False
+                    file_processor.append_errors(error_exception, path)
+                    continue
+
         file_item["processed"] = True
 
         logger.debug(
-            f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
         workflow_output_files = []
@@ -307,19 +337,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         f"{processed_data_output_folder}/{combined_file_name}"
                     )
 
-                    with contextlib.suppress(Exception):
-                        output_blob_client = blob_service_client.get_blob_client(
-                            container="stage-1-container", blob=output_file_path
-                        )
-                        output_blob_client.delete_blob()
-
                     try:
                         output_blob_client = blob_service_client.get_blob_client(
-                            container="stage-1-container", blob=output_file_path
+                            container="stage-1-container",
+                            blob=output_file_path,
                         )
                         output_blob_client.upload_blob(data)
-                        #
-                        # raise Exception()
                     except Exception:
                         outputs_uploaded = False
                         logger.error(
@@ -356,6 +379,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             workflow_input_files, workflow_output_files
         )
 
+        logger.time(time_estimator.step())
+
         shutil.rmtree(temp_folder_path)
 
     file_processor.delete_out_of_date_output_files()
@@ -371,10 +396,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
         raise e
 
+    temp_folder_path = tempfile.mkdtemp()
+
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
     file_name = f"status_report_{timestr}.csv"
-    workflow_log_file_path = os.path.join(meta_temp_folder_path, file_name)
+    workflow_log_file_path = os.path.join(temp_folder_path, file_name)
 
     with open(workflow_log_file_path, mode="w") as f:
         fieldnames = [
@@ -419,7 +446,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
     # Write the dependencies to a file
-    deps_output = workflow_file_dependencies.write_to_file(meta_temp_folder_path)
+    deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
 
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
@@ -435,7 +462,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
-    shutil.rmtree(meta_temp_folder_path)
+    shutil.rmtree(temp_folder_path)
 
     # dev
     # move the workflow log file and the json file to the current directory
