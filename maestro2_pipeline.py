@@ -3,6 +3,7 @@
 import os
 import tempfile
 import shutil
+import contextlib
 from traceback import format_exc
 import json
 
@@ -18,9 +19,6 @@ from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
 
 from pydicom.datadict import DicomDictionary, keyword_dict
-
-
-# import pprint
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -45,6 +43,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
     paths = file_system_client.get_paths(path=input_folder)
 

@@ -1,9 +1,9 @@
 """Process triton data files"""
 
 import os
+import contextlib
 import tempfile
 import shutil
-import contextlib
 from traceback import format_exc
 import json
 
@@ -33,7 +33,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     input_folder = f"{study_id}/pooled-data/Triton"
     dependency_folder = f"{study_id}/dependency/Triton"
     pipeline_workflow_log_folder = f"{study_id}/logs/Triton"
-    processed_data_output_folder = f"{study_id}/pooled-data/Triton-processed"
+    processed_data_output_folder = f"{study_id}/pooled-data/Triton-hpc-processed"
     ignore_file = f"{study_id}/ignore/triton.ignore"
 
     logger = logging.Logwatch("triton", print=True)
