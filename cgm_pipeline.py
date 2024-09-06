@@ -17,6 +17,7 @@ import time
 import csv
 from utils.file_map_processor import FileMapProcessor
 import utils.logwatch as logging
+from utils.time_estimator import TimeEstimator
 
 """
 SCRIPT_PATH=""
@@ -28,7 +29,7 @@ done
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
-    """Process ecg data files for a study
+    """Process cgm data files for a study
     Args:
         study_id (str): the study id
     """
@@ -114,6 +115,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     manifest = cgm_manifest.CGMManifest()
 
+    time_estimator = TimeEstimator(len(file_paths))
+
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
@@ -146,6 +149,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
+            logger.time(time_estimator.step())
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -232,7 +236,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_processor.delete_preexisting_output_files(path)
 
         for file in output_files:
-
             with open(f"{file}", "rb") as data:
 
                 file_name2 = file.split("/")[-1]
@@ -318,6 +321,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
+        logger.time(time_estimator.step())
 
         shutil.rmtree(cgm_temp_folder_path)
 

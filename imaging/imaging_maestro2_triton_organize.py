@@ -23,31 +23,46 @@ def filter_maestro2_triton_files(folder, output):
             - "Protocol" (str): The protocol applied to the files.
             - "Foldername" (str): The name of the folder processed.
     """
-    check = imaging_utils.check_critical_info_from_files_in_folder(folder)
+    filtered_list = imaging_utils.get_filtered_file_names(folder)
+    all_dicom = all(
+        imaging_classifying_rules.is_dicom_file(file) for file in filtered_list
+    )
 
-    if check == "pass":
+    if all_dicom:
 
-        expected_status = imaging_utils.topcon_check_files_expected(folder)
+        check = imaging_utils.check_critical_info_from_files_in_folder(folder)
 
-        if expected_status == "Unknown":
-            protocol = "unknown_protocol"
+        if check == "pass":
+
+            expected_status = imaging_utils.topcon_check_files_expected(folder)
+
+            if expected_status == "Unknown":
+                protocol = "unknown_protocol"
+                imaging_utils.topcon_process_folder(folder, output, protocol)
+
+            elif expected_status == "Expected":
+
+                for root, dirs, files in os.walk(folder):
+                    for file in files:
+                        if file.endswith("1.1.dcm") and file.startswith("2"):
+                            file_path = os.path.join(root, file)
+                            protocol = imaging_classifying_rules.find_rule(file_path)
+                            imaging_utils.topcon_process_folder(
+                                folder, output, protocol
+                            )
+
+        else:
+            protocol = f"{check}"
+
             imaging_utils.topcon_process_folder(folder, output, protocol)
 
-        elif expected_status == "Expected":
-
-            for root, dirs, files in os.walk(folder):
-                for file in files:
-                    if file.endswith("1.1.dcm") and file.startswith("2"):
-                        file_path = os.path.join(root, file)
-                        protocol = imaging_classifying_rules.find_rule(file_path)
-                        imaging_utils.topcon_process_folder(folder, output, protocol)
+        dic = {"Protocol": protocol, "Foldername": folder}
+        print(dic)
 
     else:
-        protocol = f"{check}"
-
+        protocol = "invalid_dicom"
         imaging_utils.topcon_process_folder(folder, output, protocol)
-
-    dic = {"Protocol": protocol, "Foldername": folder}
-    print(dic)
+        dic = {"Protocol": protocol, "Foldername": folder}
+        print(dic)
 
     return dic

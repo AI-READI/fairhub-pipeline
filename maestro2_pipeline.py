@@ -5,6 +5,7 @@ import os
 import tempfile
 import shutil
 from traceback import format_exc
+import json
 
 import imaging.imaging_maestro2_triton_root as Maestro2_Triton
 import imaging.imaging_utils as imaging_utils
@@ -16,6 +17,7 @@ import time
 import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
+from utils.time_estimator import TimeEstimator
 
 # import pprint
 
@@ -29,13 +31,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/Triton"
-    dependency_folder = f"{study_id}/dependency/Triton"
-    pipeline_workflow_log_folder = f"{study_id}/logs/Triton"
-    processed_data_output_folder = f"{study_id}/pooled-data/Triton-processed"
-    ignore_file = f"{study_id}/ignore/triton.ignore"
+    input_folder = f"{study_id}/pooled-data/Maestro2"
+    dependency_folder = f"{study_id}/dependency/Maestro2"
+    pipeline_workflow_log_folder = f"{study_id}/logs/Maestro2"
+    processed_data_output_folder = f"{study_id}/pooled-data/Maestro2-processed"
+    ignore_file = f"{study_id}/ignore/maestro2.ignore"
 
-    logger = logging.Logwatch("triton", print=True)
+    logger = logging.Logwatch("maestro2", print=True)
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -66,13 +68,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     imaging_utils.update_pydicom_dicom_dictionary()
 
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+
     for path in paths:
         t = str(path.name)
-
         original_file_name = t.split("/")[-1]
 
         # Check if the item is an .fda.zip file
-        if not original_file_name.endswith(".fda.zip"):
+        if not original_file_name.endswith(".zip"):
             continue
 
         # Get the parent folder of the file.
@@ -80,14 +83,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         parts = original_file_name.split("_")
 
-        if len(parts) != 6:
+        if len(parts) != 4:
             continue
-
         site_name = parts[0]
         data_type = parts[1]
         # site_name_2 = parts[2]
         # data_type_2 = parts[3]
-        start_date_end_date = parts[4]
+        start_date_end_date = parts[2]
 
         start_date = start_date_end_date.split("-")[0]
         end_date = start_date_end_date.split("-")[1]
@@ -102,6 +104,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "start_date": start_date,
                 "end_date": end_date,
                 "organize_error": True,
+                "organize_result": "",
                 "convert_error": True,
                 "format_error": False,
                 "output_uploaded": False,
@@ -116,17 +119,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
     total_files = len(file_paths)
 
-    device = "Triton"
+    device = "Maestro2"
+
+    time_estimator = TimeEstimator(len(file_paths))
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
         # dev
-        # if log_idx == 15:
+        # if log_idx == 12:
         #     break
 
         # Create a temporary folder on the local machine
@@ -145,9 +148,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
             continue
 
-        # get the file name from the path
-        original_file_name = path.split("/")[-1]
-
         # download the file to the temp folder
         blob_client = blob_service_client.get_blob_client(
             container="stage-1-container", blob=path
@@ -158,6 +158,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
+            logger.time(time_estimator.step())
+
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -172,6 +174,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_processor.clear_errors(path)
 
         logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
+
+        # get the file name from the path
+        original_file_name = path.split("/")[-1]
 
         step1_folder = os.path.join(temp_folder_path, "step1")
 
@@ -204,7 +209,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         imaging_utils.unzip_fda_file(download_path, step2_folder)
 
-        logger.info(
+        logger.debug(
             f"Unzipped {original_file_name} to {step2_folder} - ({log_idx}/{total_files})"
         )
 
@@ -215,17 +220,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # process the files
-        triton_instance = Maestro2_Triton.Maestro2_Triton()
+        maestro2_instance = Maestro2_Triton.Maestro2_Triton()
 
         try:
             for step2_data_folder in step2_data_folders:
-                logger.debug(step2_data_folder)
-                # organize_result = triton_instance.organize(
-                #     step2_data_folder, step3_folder
-                # )
-                triton_instance.organize(
+                organize_result = maestro2_instance.organize(
                     step2_data_folder, os.path.join(step3_folder, device)
                 )
+
+                file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
             logger.error(
                 f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
@@ -246,9 +249,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             os.makedirs(step4_folder)
 
         protocols = [
-            "triton_3d_radial_oct",
-            "triton_macula_6x6_octa",
-            "triton_macula_12x12_octa",
+            "maestro2_3d_macula_oct",
+            "maestro2_3d_wide_oct",
+            "maestro2_mac_6x6_octa",
         ]
 
         try:
@@ -263,7 +266,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 for folder in folders:
-                    triton_instance.convert(folder, output_folder_path)
+                    maestro2_instance.convert(folder, output_folder_path)
 
         except Exception:
             logger.error(
@@ -373,9 +376,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
+        logger.time(time_estimator.step())
 
         shutil.rmtree(temp_folder_path)
-
     file_processor.delete_out_of_date_output_files()
 
     file_processor.remove_seen_flag_from_map()
@@ -407,6 +410,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "start_date",
             "end_date",
             "organize_error",
+            "organize_result",
             "convert_error",
             "format_error",
             "output_uploaded",

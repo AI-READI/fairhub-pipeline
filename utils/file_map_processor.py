@@ -86,7 +86,7 @@ class FileMapProcessor:
     def add_entry(self, path, input_last_modified):
         # Add files that do not exist in the array
         entry = [entry for entry in self.file_map if entry["input_file"] == path]
-        if len(entry) == 0:
+        if not entry:
             self.file_map.append(
                 {
                     "input_file": path,

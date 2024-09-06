@@ -6,7 +6,7 @@ import os
 import tempfile
 import shutil
 
-import imaging.imaging_eidon_retinal_photography_root as EIDON
+import imaging.imaging_optomed_retinal_photography_root as Optomed
 import imaging.imaging_utils as imaging_utils
 import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
@@ -16,9 +16,9 @@ import time
 import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
+from utils.time_estimator import TimeEstimator
 from traceback import format_exc
-
-# import pprint
+import json
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -30,13 +30,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/Eidon"
-    dependency_folder = f"{study_id}/dependency/Eidon"
-    pipeline_workflow_log_folder = f"{study_id}/logs/Eidon"
-    processed_data_output_folder = f"{study_id}/pooled-data/Eidon-processed"
-    ignore_file = f"{study_id}/ignore/eidon.ignore"
+    input_folder = f"{study_id}/pooled-data/Optomed"
+    dependency_folder = f"{study_id}/dependency/Optomed"
+    pipeline_workflow_log_folder = f"{study_id}/logs/Optomed"
+    processed_data_output_folder = f"{study_id}/pooled-data/Optomed-processed"
+    ignore_file = f"{study_id}/ignore/optomed.ignore"
 
-    logger = logging.Logwatch("eidon", print=True)
+    logger = logging.Logwatch("optomed", print=True)
 
     sas_token = azureblob.generate_account_sas(
         account_name="b2aistaging",
@@ -98,6 +98,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "start_date": start_date,
                 "end_date": end_date,
                 "organize_error": True,
+                "organize_result": "",
                 "convert_error": True,
                 "format_error": True,
                 "output_uploaded": False,
@@ -113,14 +114,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp()
 
-    # Download the meta file for the pipeline
-    # file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
-
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
     total_files = len(file_paths)
+
+    time_estimator = TimeEstimator(len(file_paths))
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
@@ -156,6 +156,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
+            logger.time(time_estimator.step())
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -192,13 +193,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         step2_folder = os.path.join(temp_folder_path, "step2")
 
-        eidon_instance = EIDON.Eidon()
+
+        optomed_instance = Optomed.Optomed()
 
         try:
             # raise Exception("error line1")
             for file in filtered_file_names:
-                # organize_result = eidon_instance.organize(download_path, organize_temp_folder_path)
-                eidon_instance.organize(file, step2_folder)
+
+                organize_result = optomed_instance.organize(file, step2_folder)
+
+                file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
             logger.error(
                 f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
@@ -215,14 +219,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         step3_folder = os.path.join(temp_folder_path, "step3")
 
-        protocols = [
-            "eidon_mosaic_cfp",
-            "eidon_uwf_central_cfp",
-            "eidon_uwf_central_faf",
-            "eidon_uwf_central_ir",
-            "eidon_uwf_nasal_cfp",
-            "eidon_uwf_temporal_cfp",
-        ]
+        protocols = ["optomed_mac_or_disk_centered_cfp"]
 
         try:
             for protocol in protocols:
@@ -236,7 +233,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 for file in files:
-                    eidon_instance.convert(file, output)
+                    optomed_instance.convert(file, output)
         except Exception:
             logger.error(
                 f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
@@ -351,6 +348,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         workflow_file_dependencies.add_dependency(
             workflow_input_files, workflow_output_files
         )
+        logger.time(time_estimator.step())
 
         shutil.rmtree(temp_folder_path)
 
@@ -383,6 +381,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "start_date",
             "end_date",
             "organize_error",
+            "organize_result",
             "convert_error",
             "format_error",
             "output_uploaded",
@@ -431,12 +430,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
     shutil.rmtree(meta_temp_folder_path)
-
-    # dev
-    # move the workflow log file and the json file to the current directory
-    # shutil.move(workflow_log_file_path, "status.csv")
-    # shutil.move(json_file_path, "file_map.json")
-
 
 if __name__ == "__main__":
     pipeline("AI-READI")

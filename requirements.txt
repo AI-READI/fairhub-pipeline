@@ -7,10 +7,18 @@ pyfairdatatools
 jsonschema
 pandas
 xmltodict
+colorama
+termcolor
 
 # ecg
 sierraecg
 wfdb
+
+#flio
+beautifulsoup4
+
+# garmin
+fitparse
 
 # Azure
 azure-functions

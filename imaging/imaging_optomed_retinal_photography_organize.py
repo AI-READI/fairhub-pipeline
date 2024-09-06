@@ -3,9 +3,9 @@ import shutil
 import imaging.imaging_classifying_rules as imaging_classifying_rules
 
 
-def filter_eidon_files(file, outputfolder):
+def filter_optomed_files(file, outputfolder):
     """
-    Filter and process EIDON files based on classification rules.
+    Filter and process OPTOMED files based on classification rules.
 
     This function applies classification rules to a DICOM file, extracts relevant information,
     and copies the file to an appropriate output directory based on the classification rule.
