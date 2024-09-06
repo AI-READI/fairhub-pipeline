@@ -12,6 +12,9 @@ xmltodict
 sierraecg
 wfdb
 
+#flio
+beautifulsoup4
+
 # garmin
 fitparse
 

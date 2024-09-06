@@ -8,6 +8,7 @@ from imaging.imaging_flio_root import Flio
 import azure.storage.filedatalake as azurelake
 import config
 import time
+import json
 import csv
 import imaging.imaging_utils as imaging_utils
 import utils.dependency as deps
@@ -15,6 +16,8 @@ from traceback import format_exc
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
+
+JSON_PATH = os.path.join(os.path.dirname(__file__), "flio", "flio_uid_data.json")
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -52,25 +55,32 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     file_paths = []
 
+    logger.debug(f"Getting batch folder paths in {input_folder}")
+
+    exit_flag = False
+
     logger.debug(f"Getting file paths in {input_folder}")
 
     for batch_folder_path in batch_folder_paths:
+        if exit_flag:
+            break
+        else:
+            exit_flag = True
+
         t = str(batch_folder_path.name)
 
         batch_folder = t.split("/")[-1]
 
-        logger.debug(f"Getting files in {batch_folder}")
-
         # Check if the folder name is in the format siteName_dataType_startDate-endDate
         if len(batch_folder.split("_")) != 3:
+            logger.debug(f"Skipping {batch_folder}")
             continue
 
         site_name, data_type, start_date_end_date = batch_folder.split("_")
 
         start_date, end_date = start_date_end_date.split("-")
 
-        # For each batch folder, get the list of files in the batch folder
-
+        # For each batch folder, get the list of patient folders in the batch folder
         patient_folder_paths = file_system_client.get_paths(
             path=f"{input_folder}/{batch_folder}", recursive=False
         )
@@ -78,33 +88,30 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         for patient_folder_path in patient_folder_paths:
             q = str(patient_folder_path.name)
 
-            patient_folder_name = q.split("/")[-1]
+            patient_folder = q.split("/")[-1]
 
-            # continue if the file has an extension
-            if len(original_file_name.split(".")) > 1:
+            # Check if the folder name is in the format xx_AIREADI_patientID
+            if len(patient_folder.split("_")) != 3:
+                logger.debug(f"Skipping {patient_folder}")
                 continue
 
-            data_paths = file_system_client.get_paths(path=q, recursive=True)
-
-            for data_path in data_paths:
-                r = str(data_path.name)
-
-                file_paths.append(
-                    {
-                        "file_path": r,
-                        "status": "failed",
-                        "processed": False,
-                        "batch_folder": batch_folder,
-                        "patient_folder": patient_folder_name,
-                        "site_name": site_name,
-                        "data_type": data_type,
-                        "start_date": start_date,
-                        "end_date": end_date,
-                        "convert_error": True,
-                        "output_uploaded": False,
-                        "output_files": [],
-                    }
-                )
+            file_paths.append(
+                {
+                    "file_path": q,
+                    "status": "failed",
+                    "processed": False,
+                    "batch_folder": batch_folder,
+                    "patient_folder": patient_folder,
+                    "site_name": site_name,
+                    "data_type": data_type,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "organize_error": True,
+                    "organize_result": "",
+                    "output_uploaded": False,
+                    "output_files": [],
+                }
+            )
 
     logger.info(f"Found {len(file_paths)} items in {input_folder}")
 
@@ -132,112 +139,114 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         workflow_input_files = [path]
 
-        # get the file name from the path
-        original_file_name = path.split("/")[-1]
+        # get the patient folder name from the path
+        patient_folder_name = path.split("/")[-1]
 
         step1_folder = os.path.join(temp_folder_path, "step1")
+        os.makedirs(step1_folder, exist_ok=True)
 
-        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
-
-        if should_file_be_ignored:
-            logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
-
-            logger.time(time_estimator.step())
-            continue
-
-        file_client = file_system_client.get_file_client(file_path=path)
-
-        file_properties = file_client.get_file_properties().metadata
-
-        full_path = file_item["file_path"]
-
-        local_file_path = full_path.split(os.path.join(input_folder))[1]
-
-        local_file_path = local_file_path.lstrip("/").replace("/", "\\")
-
-        # Check if item is a directory
-        if file_properties.get("hdi_isfolder"):
-            logger.debug("file path is a directory. Creating on local system")
-            os.makedirs(os.path.join(step1_folder, local_file_path), exist_ok=True)
-
-            logger.time(time_estimator.step())
-            continue
-
-        input_last_modified = file_client.get_file_properties().last_modified
-
-        should_process = file_processor.file_should_process(path, input_last_modified)
-
-        if not should_process:
-            logger.debug(
-                f"The file {path} has not been modified since the last time it was processed",
-            )
-            logger.debug(
-                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
-            )
-
-            logger.time(time_estimator.step())
-            continue
-
-        file_processor.add_entry(path, input_last_modified)
-
-        file_processor.clear_errors(path)
-
-        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
-
-        batch_folder = file_item["batch_folder"]
-
-        download_path = os.path.join(step1_folder, original_file_name)
-
-        with open(file=download_path, mode="wb") as f:
-            f.write(file_client.download_file().readall())
-
-        logger.info(
-            f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
+        logger.debug(
+            f"Downloading {patient_folder_name} to {step1_folder} - ({log_idx}/{total_files})"
         )
 
-        spectralis_instance = Spectralis()
+        # Download the contents of the patient folder to the step1 folder
+        folder_contents = file_system_client.get_paths(path=path, recursive=True)
 
-        # Organize spectralis files by protocol
+        for item in folder_contents:
+            ip = item_path = str(item.name)
+
+            file_client = file_system_client.get_file_client(file_path=item_path)
+
+            file_properties = file_client.get_file_properties().metadata
+
+            item_path_split = item_path.split(f"{patient_folder_name}/")
+
+            if len(item_path_split) != 2:
+                continue
+            else:
+                ip = item_path_split[1]
+
+            download_path = os.path.join(step1_folder, patient_folder_name, ip)
+
+            # Check if item is a directory
+            if file_properties.get("hdi_isfolder"):
+                # Create the directory if it doesn't exist
+                if not os.path.exists(download_path):
+                    os.makedirs(download_path, exist_ok=True)
+
+                continue
+
+            logger.debug(
+                f"Downloading {item_path} to {download_path} - ({log_idx}/{total_files})"
+            )
+
+            with open(file=download_path, mode="wb") as f:
+                f.write(file_client.download_file().readall())
+
+        logger.info(
+            f"Downloaded {patient_folder_name} to {step1_folder} - ({log_idx}/{total_files})"
+        )
+
+        flio_instance = Flio()
+
+        # Organize flio files by protocol
 
         step2_folder = os.path.join(temp_folder_path, "step2")
+        os.makedirs(step2_folder, exist_ok=True)
 
-        filtered_list = imaging_utils.spectralis_get_filtered_file_names(batch_folder)
+        try:
+            organize_result = flio_instance.organize(step1_folder, step2_folder)
 
-        for file_name in filtered_list:
-            organize_result = spectralis_instance.organize(file_name, step2_folder)
+            file_item["organize_result"] = json.dumps(organize_result)
+        except Exception:
+            logger.error(
+                f"Failed to organize {patient_folder_name} - ({log_idx}/{total_files})"
+            )
 
-        # convert dicom files to nema compliant dicom files
-        protocols = [
-            "spectralis_onh_rc_hr_oct",
-            "spectralis_onh_rc_hr_retinal_photography",
-            "spectralis_ppol_mac_hr_oct",
-            "spectralis_ppol_mac_hr_oct_small",
-            "spectralis_ppol_mac_hr_retinal_photography",
-            "spectralis_ppol_mac_hr_retinal_photography_small",
-        ]
+            error_exception = "".join(format_exc().splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, path)
+
+            logger.time(time_estimator.step())
+            continue
+
+        # Print contents of step2
+        for root, dirs, files in os.walk(step2_folder):
+            for file in files:
+                print(os.path.join(root, file))
 
         step3_folder = os.path.join(temp_folder_path, "step3")
+        os.makedirs(step3_folder, exist_ok=True)
 
-        for protocol in protocols:
-            output = f".../step3/{protocol}"
-            if not os.path.exists(output):
-                os.makedirs(output)
+        flio_folderlist = imaging_utils.list_subfolders(step2_folder)
 
-            files = imaging_utils.get_filtered_file_names(f".../step2/{protocol}")
+        print("flio_folderlist", flio_folderlist)
 
-            for file in files:
-                spectralis_instance.convert(file, output)
+        for flio_folder in flio_folderlist:
+            if "flio" in flio_folder:
+                flio_instance.convert1(flio_folder, step3_folder, JSON_PATH)
 
         step4_folder = os.path.join(temp_folder_path, "step4")
-        metadata_folder = os.path.join(temp_folder_path, "metadata")
+        os.makedirs(step4_folder, exist_ok=True)
 
-        for folder in [step3_folder]:
-            filelist = imaging_utils.get_filtered_file_names(folder)
+        filtered_list = imaging_utils.get_filtered_file_names(step3_folder)
 
-            for file in filelist:
-                full_file_path = imaging_utils.format_file_path(file, step4_folder)
+        for file_name in filtered_list:
+            if "flio" in file_name:
+                flio_instance.convert2(file_name, step4_folder)
 
-                spectralis_instance.metadata(full_file_path, metadata_folder)
+        step5_folder = os.path.join(temp_folder_path, "step5")
+        os.makedirs(step5_folder, exist_ok=True)
+
+        filtered_list = imaging_utils.get_filtered_file_names(step4_folder)
+
+        for file_name in filtered_list:
+            if "flio" in file_name:
+                full_file_path = imaging_utils.format_file(file_name, step5_folder)
+
+                flio_instance.metadata(full_file_path, step5_folder)
 
         # Upload the processed files to the output folder
 
@@ -248,14 +257,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_processor.delete_preexisting_output_files(path)
 
-        for root, dirs, files in os.walk(step4_folder):
+        for root, dirs, files in os.walk(step5_folder):
             for file in files:
                 full_file_path = os.path.join(root, file)
 
-                output_file_path = os.path.join(
-                    processed_data_output_folder,
-                    file_item["batch_folder"],
-                    file,
+                f2 = full_file_path.split("/")[-4:]
+
+                combined_file_name = "/".join(f2)
+
+                output_file_path = (
+                    f"{processed_data_output_folder}/{combined_file_name}"
+                )
+
+                logger.debug(
+                    f"Uploading {combined_file_name} to {output_file_path} - ({log_idx}/{total_files})"
                 )
 
                 try:
@@ -272,34 +287,34 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     with open(full_file_path, "rb") as f:
                         file_client.upload_data(f, overwrite=True)
                 except Exception:
-                    error_exception = format_exc()
-                    e = "".join(error_exception.splitlines())
-
-                    logger.error(e)
-
                     outputs_uploaded = False
+                    logger.error(
+                        f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
+                    )
 
-                    file_processor.append_errors(e, path)
+                    error_exception = "".join(format_exc().splitlines())
+
+                    logger.error(error_exception)
+
+                    file_processor.append_errors(error_exception, path)
+                    continue
 
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
 
         # Add the new output files to the file map
-
-        file_processor.confirm_output_files(
-            path, workflow_output_files, input_last_modified
-        )
+        file_processor.confirm_output_files(path, workflow_output_files, "")
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Uploaded outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
         else:
             file_item["output_uploaded"] = upload_exception
             logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Failed to upload outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
 
         workflow_file_dependencies.add_dependency(
@@ -308,18 +323,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.time(time_estimator.step())
 
-        shutil.rmtree(metadata_folder)
+        shutil.rmtree(step5_folder)
         shutil.rmtree(step4_folder)
         shutil.rmtree(step3_folder)
         shutil.rmtree(step2_folder)
-        os.remove(download_path)
+        shutil.rmtree(step1_folder)
 
     file_processor.delete_out_of_date_output_files()
-
     file_processor.remove_seen_flag_from_map()
 
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
-
     try:
         file_processor.upload_json()
         logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
