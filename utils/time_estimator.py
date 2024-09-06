@@ -110,4 +110,4 @@ class TimeEstimator:
     def step(self):
         self.total_processed_files += 1
 
-        return f"{self.total_processed_files}/{self.total_number_of_files} [{self.total_processed_files / self.total_number_of_files * 100:.2f}%] in {human_time(self.elapsed_time)} (ETA: in about {human_time(self.eta)} or at {self.finish_time})"
+        return f"{self.total_processed_files}/{self.total_number_of_files} [{self.total_processed_files / self.total_number_of_files * 100:.2f}%] in {human_time(self.elapsed_time)} ~ {human_time(self.elapsed_time / self.total_processed_files)} per item | ETA: in about {human_time(self.eta)} or at {self.finish_time}"
