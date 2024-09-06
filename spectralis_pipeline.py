@@ -1,4 +1,4 @@
-"""Process ecg data files"""
+"""Process spectralis data files"""
 
 import contextlib
 import os
@@ -18,7 +18,9 @@ from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
 
 
-def pipeline(study_id: str):  # sourcery skip: low-code-quality
+def pipeline(
+    study_id: str,
+):  # sourcery skip: low-code-quality, move-assign, use-named-expression
     """Process spectralis data files for a study
     Args:
         study_id (str): the study id
@@ -204,7 +206,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         try:
             for file_name in filtered_list:
-                print("file_name", file_name)
+
                 organize_result = spectralis_instance.organize(file_name, step2_folder)
 
                 file_item["organize_result"] = json.dumps(organize_result)
@@ -235,6 +237,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         step3_folder = os.path.join(temp_folder_path, "step3")
         os.makedirs(step3_folder, exist_ok=True)
 
+        logger.debug(f"Converting to nema compliant dicom files")
+
         for protocol in protocols:
             output = f"{step3_folder}/{protocol}"
             if not os.path.exists(output):
@@ -243,14 +247,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             files = imaging_utils.get_filtered_file_names(f"{step2_folder}/{protocol}")
 
             for file in files:
-                convert_result = spectralis_instance.convert(file, output)
-                print("convert_result", convert_result)
+                spectralis_instance.convert(file, output)
 
         step4_folder = os.path.join(temp_folder_path, "step4")
         os.makedirs(step4_folder, exist_ok=True)
 
         metadata_folder = os.path.join(temp_folder_path, "metadata")
         os.makedirs(metadata_folder, exist_ok=True)
+
+        logger.debug(f"Formatting files and generating metadata")
 
         for folder in [step3_folder]:
             filelist = imaging_utils.get_filtered_file_names(folder)
@@ -271,21 +276,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         for root, dirs, files in os.walk(step4_folder):
             for file in files:
-
                 full_file_path = os.path.join(root, file)
 
-                print("full_file_path", full_file_path)
+                logger.debug(f"Found file {full_file_path} - ({log_idx}/{total_files})")
 
                 f2 = full_file_path.split("/")[-5:]
 
                 combined_file_name = "/".join(f2)
 
-                logger.debug(
-                    f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
-                )
-
                 output_file_path = (
                     f"{processed_data_output_folder}/{combined_file_name}"
+                )
+
+                logger.debug(
+                    f"Uploading {full_file_path} to {output_file_path} - ({log_idx}/{total_files})"
                 )
 
                 try:
@@ -300,7 +304,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         )
 
                     with open(full_file_path, "rb") as f:
-                        file_client.upload_data(f, overwrite=True)
+                        output_file_client.upload_data(f, overwrite=True)
+                        logger.info(
+                            f"Uploaded {combined_file_name} - ({log_idx}/{total_files})"
+                        )
                 except Exception:
                     outputs_uploaded = False
                     logger.error(
