@@ -264,9 +264,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             for file in files:
                 full_file_path = os.path.join(root, file)
 
-                file_name2 = full_file_path.split("/")[-5:]
+                f2 = full_file_path.split("/")[-5:]
 
-                combined_file_name = "/".join(file_name2)
+                combined_file_name = "/".join(f2)
 
                 logger.debug(
                     f"Uploading {combined_file_name} - ({log_idx}/{total_files})"

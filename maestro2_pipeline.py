@@ -1,6 +1,5 @@
-"""Process ecg data files"""
+"""Process maestro2 data files"""
 
-import datetime
 import os
 import tempfile
 import shutil
@@ -9,7 +8,6 @@ import json
 
 import imaging.imaging_maestro2_triton_root as Maestro2_Triton
 import imaging.imaging_utils as imaging_utils
-import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
@@ -23,7 +21,7 @@ from utils.time_estimator import TimeEstimator
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
-    """Process ecg data files for a study
+    """Process maestro2 data files for a study
     Args:
         study_id (str): the study id
     """
@@ -38,23 +36,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     ignore_file = f"{study_id}/ignore/maestro2.ignore"
 
     logger = logging.Logwatch("maestro2", print=True)
-
-    sas_token = azureblob.generate_account_sas(
-        account_name="b2aistaging",
-        account_key=config.AZURE_STORAGE_ACCESS_KEY,
-        resource_types=azureblob.ResourceTypes(container=True, object=True),
-        permission=azureblob.AccountSasPermissions(
-            read=True, write=True, list=True, delete=True
-        ),
-        expiry=datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=24),
-    )
-
-    # Get the blob service client
-    blob_service_client = azureblob.BlobServiceClient(
-        account_url="https://b2aistaging.blob.core.windows.net/",
-        credential=sas_token,
-    )
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -148,12 +129,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
             continue
 
-        # download the file to the temp folder
-        blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container", blob=path
-        )
+        input_file_client = file_system_client.get_file_client(file_path=path)
 
-        input_last_modified = blob_client.get_blob_properties().last_modified
+        input_last_modified = input_file_client.get_file_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
 
@@ -185,8 +163,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         download_path = os.path.join(step1_folder, original_file_name)
 
-        with open(download_path, "wb") as data:
-            blob_client.download_blob().readinto(data)
+        with open(file=download_path, mode="wb") as f:
+            f.write(input_file_client.download_file().readall())
 
         logger.info(
             f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
@@ -320,42 +298,48 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         for root, dirs, files in os.walk(destination_folder):
             for file in files:
-                file_path = os.path.join(root, file)
+                full_file_path = os.path.join(root, file)
 
-                with open(f"{file_path}", "rb") as data:
-                    file_name2 = file_path.split("/")[-5:]
+                f2 = full_file_path.split("/")[-5:]
 
-                    combined_file_name = "/".join(file_name2)
+                combined_file_name = "/".join(f2)
 
-                    logger.debug(
-                        f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
+                logger.debug(
+                    f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
+                )
+
+                output_file_path = (
+                    f"{processed_data_output_folder}/{combined_file_name}"
+                )
+
+                try:
+                    output_file_client = file_system_client.get_file_client(
+                        file_path=output_file_path
                     )
 
-                    output_file_path = (
-                        f"{processed_data_output_folder}/{combined_file_name}"
+                    # Check if the file already exists. If it does, throw an exception
+                    if output_file_client.exists():
+                        raise Exception(
+                            f"File {output_file_path} already exists. Throwing exception"
+                        )
+
+                    with open(f"{full_file_path}", "rb") as data:
+                        output_file_client.upload_data(data, overwrite=True)
+                except Exception:
+                    outputs_uploaded = False
+                    logger.error(
+                        f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
                     )
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
 
-                    try:
-                        output_blob_client = blob_service_client.get_blob_client(
-                            container="stage-1-container",
-                            blob=output_file_path,
-                        )
-                        output_blob_client.upload_blob(data)
-                    except Exception:
-                        outputs_uploaded = False
-                        logger.error(
-                            f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
-                        )
-                        error_exception = format_exc()
-                        error_exception = "".join(error_exception.splitlines())
+                    logger.error(error_exception)
 
-                        logger.error(error_exception)
+                    file_processor.append_errors(error_exception, path)
+                    continue
 
-                        file_processor.append_errors(error_exception, path)
-                        continue
-
-                    file_item["output_files"].append(output_file_path)
-                    workflow_output_files.append(output_file_path)
+                file_item["output_files"].append(output_file_path)
+                workflow_output_files.append(output_file_path)
 
         # Add the new output files to the file map
         file_processor.confirm_output_files(
@@ -430,12 +414,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
         )
 
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container",
-            blob=f"{pipeline_workflow_log_folder}/{file_name}",
+        workflow_output_file_Client = file_system_client.get_file_client(
+            file_path=f"{pipeline_workflow_log_folder}/{file_name}"
         )
 
-        output_blob_client.upload_blob(data)
+        workflow_output_file_Client.upload_data(data, overwrite=True)
 
         logger.info(
             f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
@@ -450,20 +433,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
 
     with open(json_file_path, "rb") as data:
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container",
-            blob=f"{dependency_folder}/{json_file_name}",
+        dependency_output_file_Client = file_system_client.get_file_client(
+            file_path=f"{dependency_folder}/{json_file_name}"
         )
-        output_blob_client.upload_blob(data)
+
+        dependency_output_file_Client.upload_data(data, overwrite=True)
 
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
     shutil.rmtree(temp_folder_path)
-
-    # dev
-    # move the workflow log file and the json file to the current directory
-    # shutil.move(workflow_log_file_path, "status.csv")
-    # shutil.move(json_file_path, "file_map.json")
 
 
 if __name__ == "__main__":
