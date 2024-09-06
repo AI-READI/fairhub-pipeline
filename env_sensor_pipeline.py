@@ -34,9 +34,7 @@ def pipeline(
     pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
     data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
     ignore_file = f"{study_id}/ignore/envSensor.ignore"
-    red_cap_export_file = (
-        f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Aug06_EnviroPhysSensorInfo.csv"
-    )
+    red_cap_export_file = f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep05_EnviroPhysSensorInfoNoPilot.csv"
 
     logger = logging.Logwatch("env_sensor", print=True)
 
