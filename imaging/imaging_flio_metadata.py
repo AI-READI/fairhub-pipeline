@@ -1,8 +1,7 @@
 import os
 import pydicom
-import imaging_utils
+import imaging.imaging_utils as imaging_utils
 import json
-
 
 
 def meta_data_save(filename, output_folder):
@@ -52,7 +51,7 @@ def meta_data_save(filename, output_folder):
     number_of_frames = dataset.NumberOfFrames
     sop_instance_uid = dataset.SOPInstanceUID
 
-    dic =  {
+    dic = {
         "participant_id": patient_id,
         "manufacturer": manufacturer,
         "manufacturers_model_name": device,
@@ -70,7 +69,7 @@ def meta_data_save(filename, output_folder):
     json_data = {filename: dic}
 
     print(json_data)
-    
+
     os.makedirs(f"{output_folder}/retinal_flio", exist_ok=True)
 
     with open(f"{output_folder}/retinal_flio/{filename}.json", "w") as json_file:

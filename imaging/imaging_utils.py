@@ -1,5 +1,5 @@
 import os
-import imaging_classifying_rules
+import imaging.imaging_classifying_rules as imaging_classifying_rules
 import shutil
 import pydicom
 import zipfile

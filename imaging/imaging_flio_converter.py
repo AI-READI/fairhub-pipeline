@@ -1,10 +1,10 @@
 import os
 import pydicom
 from bs4 import BeautifulSoup
-import flio_reader
+import flio.flio_reader as flio_reader
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ImplicitVRLittleEndian
-from flio_reader import get_array
+
 import numpy as np
 import json
 
@@ -269,7 +269,7 @@ def make_min_info_dicom_from_sdt(sdtpath):
     ds_long.SOPClassUID = "1.2.840.10008.5.1.4.1.1.77.1.5.2"
     ds_long.SOPInstanceUID = ""
 
-    array1, array2 = get_array(sdtpath)
+    array1, array2 = flio_reader.get_array(sdtpath)
 
     ds_short.PixelData = np.transpose(
         array1.reshape(256, 256, 1024), (2, 0, 1)

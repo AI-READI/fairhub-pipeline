@@ -1,6 +1,6 @@
 import os
 import pydicom
-import imaging_utils
+import imaging.imaging_utils as imaging_utils
 import json
 
 
@@ -185,7 +185,9 @@ def meta_data_save(filename, output_folder):
 
         os.makedirs(f"{output_folder}/retinal_photography", exist_ok=True)
 
-        with open(f"{output_folder}/retinal_photography/{filename}.json", "w") as json_file:
+        with open(
+            f"{output_folder}/retinal_photography/{filename}.json", "w"
+        ) as json_file:
             json.dump(json_data, json_file)
 
         print(json_data)

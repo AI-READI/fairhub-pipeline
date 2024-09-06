@@ -9,6 +9,7 @@ import azure.storage.filedatalake as azurelake
 import config
 import time
 import csv
+import json
 import imaging.imaging_utils as imaging_utils
 import utils.dependency as deps
 from traceback import format_exc
@@ -46,18 +47,25 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
-    batch_folder_paths = file_system_client.get_paths(path=input_folder, recursive=False)
+    batch_folder_paths = file_system_client.get_paths(
+        path=input_folder, recursive=False
+    )
 
     file_paths = []
 
-    logger.debug(f"Getting file paths in {input_folder}")
+    logger.debug(f"Getting batch folder paths in {input_folder}")
+
+    exit_flag = False
 
     for batch_folder_path in batch_folder_paths:
+        if exit_flag:
+            break
+        else:
+            exit_flag = True
+
         t = str(batch_folder_path.name)
 
         batch_folder = t.split("/")[-1]
-
-        logger.debug(f"Getting files in {batch_folder}")
 
         # Check if the folder name is in the format siteName_dataType_startDate-endDate
         if len(batch_folder.split("_")) != 3:
@@ -71,23 +79,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         dicom_folder_path = f"{input_folder}/{batch_folder}/DICOM"
 
-        dicom_folder_paths = file_system_client.get_paths(
+        dicom_file_paths = file_system_client.get_paths(
             path=dicom_folder_path, recursive=True
         )
 
-        for dicom_folder_path in dicom_folder_paths:
-            q = str(dicom_folder_path.name)
+        for dicom_file_path in dicom_file_paths:
+            q = str(dicom_file_path.name)
 
             original_file_name = q.split("/")[-1]
 
-            # continue if the file has an extension
-            if len(original_file_name.split(".")) > 1:
-                continue
-
             file_paths.append(
                 {
-                    "file_path": t,
-                    "is_directory": False,
+                    "file_path": q,
                     "status": "failed",
                     "processed": False,
                     "batch_folder": batch_folder,
@@ -95,12 +98,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     "data_type": data_type,
                     "start_date": start_date,
                     "end_date": end_date,
+                    "organize_error": True,
+                    "organize_result": "",
                     "convert_error": True,
                     "output_uploaded": False,
                     "output_files": [],
                 }
             )
-        
 
     logger.info(f"Found {len(file_paths)} items in {input_folder}")
 
@@ -118,7 +122,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     time_estimator = TimeEstimator(len(file_paths))
 
-    
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
@@ -133,6 +136,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         original_file_name = path.split("/")[-1]
 
         step1_folder = os.path.join(temp_folder_path, "step1")
+        os.makedirs(step1_folder, exist_ok=True)
 
         should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
@@ -148,7 +152,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # Check if item is a directory
         if file_properties.get("hdi_isfolder"):
-            logger.debug("file path is a directory. Skipping")
+            logger.debug(f"file path `{path}` is a directory. Skipping")
 
             logger.time(time_estimator.step())
             continue
@@ -174,9 +178,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
 
-        batch_folder = file_item["batch_folder"]
+        batch_folder = step1_folder
 
         download_path = os.path.join(step1_folder, original_file_name)
+
+        logger.debug(
+            f"Downloading {original_file_name} to {download_path} - ({log_idx}/{total_files})"
+        )
 
         with open(file=download_path, mode="wb") as f:
             f.write(file_client.download_file().readall())
@@ -187,49 +195,71 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         spectralis_instance = Spectralis()
 
-
         # Organize spectralis files by protocol
 
-        step2_folder = os.path.join(temp_folder_path, 'step2')
+        step2_folder = os.path.join(temp_folder_path, "step2")
+        os.makedirs(step2_folder, exist_ok=True)
 
         filtered_list = imaging_utils.spectralis_get_filtered_file_names(batch_folder)
 
-        for file_name in filtered_list:
-            organize_result = spectralis_instance.organize(file_name, step2_folder)
+        try:
+            for file_name in filtered_list:
+                print("file_name", file_name)
+                organize_result = spectralis_instance.organize(file_name, step2_folder)
+
+                file_item["organize_result"] = json.dumps(organize_result)
+        except Exception:
+            logger.error(
+                f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
+            )
+
+            error_exception = "".join(format_exc().splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, path)
+
+            logger.time(time_estimator.step())
+            continue
 
         # convert dicom files to nema compliant dicom files
         protocols = [
-    "spectralis_onh_rc_hr_oct",
-    "spectralis_onh_rc_hr_retinal_photography",
-    "spectralis_ppol_mac_hr_oct",
-    "spectralis_ppol_mac_hr_oct_small",
-    "spectralis_ppol_mac_hr_retinal_photography",
-    "spectralis_ppol_mac_hr_retinal_photography_small",
-]
+            "spectralis_onh_rc_hr_oct",
+            "spectralis_onh_rc_hr_retinal_photography",
+            "spectralis_ppol_mac_hr_oct",
+            "spectralis_ppol_mac_hr_oct_small",
+            "spectralis_ppol_mac_hr_retinal_photography",
+            "spectralis_ppol_mac_hr_retinal_photography_small",
+        ]
 
-        step3_folder = os.path.join(temp_folder_path, 'step3')
+        step3_folder = os.path.join(temp_folder_path, "step3")
+        os.makedirs(step3_folder, exist_ok=True)
 
         for protocol in protocols:
-            output = f".../step3/{protocol}"
+            output = f"{step3_folder}/{protocol}"
             if not os.path.exists(output):
                 os.makedirs(output)
 
-            files = imaging_utils.get_filtered_file_names(f".../step2/{protocol}")
+            files = imaging_utils.get_filtered_file_names(f"{step2_folder}/{protocol}")
 
             for file in files:
-                spectralis_instance.convert(file, output)
+                convert_result = spectralis_instance.convert(file, output)
+                print("convert_result", convert_result)
 
-        step4_folder = os.path.join(temp_folder_path, 'step4')
-        metadata_folder = os.path.join(temp_folder_path, 'metadata')
+        step4_folder = os.path.join(temp_folder_path, "step4")
+        os.makedirs(step4_folder, exist_ok=True)
+
+        metadata_folder = os.path.join(temp_folder_path, "metadata")
+        os.makedirs(metadata_folder, exist_ok=True)
 
         for folder in [step3_folder]:
             filelist = imaging_utils.get_filtered_file_names(folder)
 
             for file in filelist:
-                full_file_path = imaging_utils.format_file_path(file, step4_folder) 
+                full_file_path = imaging_utils.format_file(file, step4_folder)
 
                 spectralis_instance.metadata(full_file_path, metadata_folder)
- 
+
         # Upload the processed files to the output folder
 
         workflow_output_files = []
@@ -241,16 +271,27 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         for root, dirs, files in os.walk(step4_folder):
             for file in files:
+
                 full_file_path = os.path.join(root, file)
 
-                output_file_path = os.path.join(
-                    processed_data_output_folder,
-                    file_item["batch_folder"],
-                    file,
+                print("full_file_path", full_file_path)
+
+                f2 = full_file_path.split("/")[-5:]
+
+                combined_file_name = "/".join(f2)
+
+                logger.debug(
+                    f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
+                )
+
+                output_file_path = (
+                    f"{processed_data_output_folder}/{combined_file_name}"
                 )
 
                 try:
-                    output_file_client = file_system_client.get_file_client(output_file_path)
+                    output_file_client = file_system_client.get_file_client(
+                        output_file_path
+                    )
 
                     # Check if the file already exists. If it does, throw an exception
                     if output_file_client.exists():
@@ -260,23 +301,27 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     with open(full_file_path, "rb") as f:
                         file_client.upload_data(f, overwrite=True)
-                except Exception :
+                except Exception:
+                    outputs_uploaded = False
+                    logger.error(
+                        f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
+                    )
                     error_exception = format_exc()
                     e = "".join(error_exception.splitlines())
 
                     logger.error(e)
 
-                    outputs_uploaded = False
-                    
-
                     file_processor.append_errors(e, path)
+                    continue
 
                 file_item["output_files"].append(output_file_path)
-                workflow_output_files.append(output_file_path) 
+                workflow_output_files.append(output_file_path)
 
         # Add the new output files to the file map
 
-        file_processor.confirm_output_files(path, workflow_output_files, input_last_modified)
+        file_processor.confirm_output_files(
+            path, workflow_output_files, input_last_modified
+        )
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
@@ -352,9 +397,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         output_file_client.upload_data(data, overwrite=True)
 
-    
     deps_output = workflow_file_dependencies.write_to_file(meta_temp_folder_path)
-    
+
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
 
@@ -366,6 +410,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         output_file_client.upload_data(data, overwrite=True)
 
     shutil.rmtree(meta_temp_folder_path)
+
 
 if __name__ == "__main__":
     pipeline("AI-READI")

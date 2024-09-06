@@ -1,8 +1,8 @@
 import os
-import imaging_classifying_rules
+import imaging.imaging_classifying_rules as imaging_classifying_rules
 
 import pydicom
-from spectralis_onh_oct_converter_functional_groups import (
+from spectralis.spectralis_onh_oct_converter_functional_groups import (
     shared_functional_group_sequence,
     per_frame_functional_groups_sequence,
     dimension_index_sequence,

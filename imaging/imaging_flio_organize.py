@@ -1,5 +1,5 @@
 import shutil
-import imaging_utils
+import imaging.imaging_utils as imaging_utils
 import os
 
 

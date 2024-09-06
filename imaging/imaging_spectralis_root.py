@@ -1,7 +1,7 @@
-from imaging_standards import DataDomain
-import imaging_spectralis_converter as spectralis_conv
-import imaging_spectralis_organize as spectralis_organize
-import imaging_spectralis_metadata as spectralis_meta
+from imaging.imaging_standards import DataDomain
+import imaging.imaging_spectralis_converter as spectralis_conv
+import imaging.imaging_spectralis_organize as spectralis_organize
+import imaging.imaging_spectralis_metadata as spectralis_meta
 
 
 class Spectralis(DataDomain):

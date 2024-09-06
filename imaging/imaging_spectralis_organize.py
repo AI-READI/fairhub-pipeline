@@ -1,6 +1,6 @@
 import os
 import shutil
-import imaging_classifying_rules
+import imaging.imaging_classifying_rules as imaging_classifying_rules
 
 
 def filter_spectralis_files(file, outputfolder):
