@@ -30,7 +30,7 @@ from publish_pipeline.register_doi.register_doi import pipeline as register_doi_
 from stage_one.ecg_pipeline import pipeline as stage_one_ecg_pipeline
 from stage_one.cgm_pipeline import pipeline as stage_one_cgm_pipeline
 from stage_one.eidon_pipeline import pipeline as stage_one_eidon_pipeline
-from stage_one.env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
+from env_sensor_pipeline import pipeline as stage_one_env_sensor_pipeline
 from stage_one.img_identifier_pipeline import (
     pipeline as stage_one_img_identifier_pipeline,
 )

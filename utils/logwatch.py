@@ -17,8 +17,11 @@ class Logwatch:
         self.eidon_drain = config.FAIRHUB_EIDON_LOG_ENDPOINT
         self.ecg_drain = config.FAIRHUB_ECG_LOG_ENDPOINT
         self.cgm_drain = config.FAIRHUB_CGM_LOG_ENDPOINT
+        self.env_sensor_drain = config.FAIRHUB_ENV_SENSOR_LOG_ENDPOINT
         self.fitness_tracker_drain = config.FAIRHUB_FITNESS_TRACKER_LOG_ENDPOINT
         self.optomed_drain = config.FAIRHUB_OPTOMED_LOG_ENDPOINT
+        self.flio_drain = config.FAIRHUB_FLIO_LOG_ENDPOINT
+        self.spectralis_drain = config.FAIRHUB_SPECTRALIS_LOG_ENDPOINT
 
         if (channel == "triton") and (self.triton_drain is not None):
             self.drain = self.triton_drain
@@ -30,10 +33,16 @@ class Logwatch:
             self.drain = self.ecg_drain
         if (channel == "cgm") and (self.cgm_drain is not None):
             self.drain = self.cgm_drain
+        if (channel == "env_sensor") and (self.env_sensor_drain is not None):
+            self.drain = self.env_sensor_drain
         if (channel == "fitness_tracker") and (self.fitness_tracker_drain is not None):
             self.drain = self.fitness_tracker_drain
         if (channel == "optomed") and (self.optomed_drain is not None):
             self.drain = self.optomed_drain
+        if (channel == "flio") and (self.flio_drain is not None):
+            self.drain = self.flio_drain
+        if (channel == "spectralis") and (self.spectralis_drain is not None):
+            self.drain = self.spectralis_drain
 
     def info(self, message: str):
         """Send an info message to the logwatch server"""
