@@ -113,9 +113,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp()
 
-    # Download the meta file for the pipeline
-    # file_map_download_path = os.path.join(meta_temp_folder_path, "file_map.json")
-
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
@@ -219,7 +216,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         step3_folder = os.path.join(temp_folder_path, "step3")
 
         protocols = ["optomed_mac_or_disk_centered_cfp"]
-
 
         try:
             for protocol in protocols:
