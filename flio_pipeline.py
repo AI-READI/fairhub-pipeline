@@ -1,10 +1,9 @@
-"""Process ecg data files"""
+"""Process flio data files"""
 
 import contextlib
 import os
 import tempfile
 import shutil
-from imaging.imaging_flio_root import Flio
 import azure.storage.filedatalake as azurelake
 import config
 import time
@@ -12,8 +11,9 @@ import json
 import csv
 import imaging.imaging_utils as imaging_utils
 import utils.dependency as deps
-from traceback import format_exc
 import utils.logwatch as logging
+from imaging.imaging_flio_root import Flio
+from traceback import format_exc
 from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
 
@@ -139,6 +139,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         workflow_input_files = [path]
 
+        file_processor.add_entry(path, time.time())
+
+        file_processor.clear_errors(path)
+
         # get the patient folder name from the path
         patient_folder_name = path.split("/")[-1]
 
@@ -171,6 +175,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             # Check if item is a directory
             if file_properties.get("hdi_isfolder"):
                 # Create the directory if it doesn't exist
+                logger.debug(
+                    f"file path `{item_path}` is a directory. Creating directory {download_path}"
+                )
+
                 if not os.path.exists(download_path):
                     os.makedirs(download_path, exist_ok=True)
 
@@ -189,7 +197,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         flio_instance = Flio()
 
-        # Organize flio files by protocol
+        # Organize flio files by scan
 
         step2_folder = os.path.join(temp_folder_path, "step2")
         os.makedirs(step2_folder, exist_ok=True)
@@ -212,17 +220,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.time(time_estimator.step())
             continue
 
-        # Print contents of step2
-        for root, dirs, files in os.walk(step2_folder):
-            for file in files:
-                print(os.path.join(root, file))
-
         step3_folder = os.path.join(temp_folder_path, "step3")
         os.makedirs(step3_folder, exist_ok=True)
 
         flio_folderlist = imaging_utils.list_subfolders(step2_folder)
-
-        print("flio_folderlist", flio_folderlist)
 
         for flio_folder in flio_folderlist:
             if "flio" in flio_folder:
@@ -261,7 +262,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             for file in files:
                 full_file_path = os.path.join(root, file)
 
-                f2 = full_file_path.split("/")[-4:]
+                logger.debug(f"Found file {full_file_path} - ({log_idx}/{total_files})")
+
+                # Check if is a json metadata file
+                if full_file_path.endswith(".json"):
+                    logger.debug(
+                        f"Skipping {full_file_path} for now - ({log_idx}/{total_files})"
+                    )
+                    continue
+
+                f2 = full_file_path.split("/")[-5:]
 
                 combined_file_name = "/".join(f2)
 
@@ -270,7 +280,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 logger.debug(
-                    f"Uploading {combined_file_name} to {output_file_path} - ({log_idx}/{total_files})"
+                    f"Uploading {full_file_path} to {output_file_path} - ({log_idx}/{total_files})"
                 )
 
                 try:
@@ -285,16 +295,19 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         )
 
                     with open(full_file_path, "rb") as f:
-                        file_client.upload_data(f, overwrite=True)
+                        output_file_client.upload_data(f, overwrite=True)
+                        logger.info(
+                            f"Uploaded {combined_file_name} - ({log_idx}/{total_files})"
+                        )
                 except Exception:
                     outputs_uploaded = False
                     logger.error(
                         f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
                     )
 
-                    error_exception = "".join(format_exc().splitlines())
+                    upload_exception = "".join(format_exc().splitlines())
 
-                    logger.error(error_exception)
+                    logger.error(upload_exception)
 
                     file_processor.append_errors(error_exception, path)
                     continue
@@ -322,6 +335,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         logger.time(time_estimator.step())
+
+        logger.debug("Cleaning up temp folders - ({log_idx}/{total_files})")
 
         shutil.rmtree(step5_folder)
         shutil.rmtree(step4_folder)

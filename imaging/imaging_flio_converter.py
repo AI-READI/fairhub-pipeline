@@ -86,8 +86,10 @@ def extract_dicom_info_from_html(html_file):
     Returns:
         dict: A dictionary containing extracted DICOM metadata.
     """
+
     with open(html_file, "r") as file:
         html_content = file.read()
+
         soup = BeautifulSoup(html_content, "html.parser")
 
         # Extracting FLIO HTML table data
@@ -125,7 +127,7 @@ def extract_dicom_info_from_html(html_file):
         words = paragraph_text.split()
         first_word = words[0]
         second_word = words[1] + words[2]
-        mapping_info = first_word + " " + second_word.replace(":", "")
+        mapping_info = f"{first_word} " + second_word.replace(":", "")
         focus = lines[1].replace(" ", "")
         cam_sn = lines[3].replace(" ", "")
         pws_sn = lines[5].replace(" ", "")
