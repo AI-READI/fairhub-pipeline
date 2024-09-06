@@ -1,7 +1,7 @@
 import os
 
 import pydicom
-from imaging.maestro2_triton_oct_converter_functional_groups import (
+from maestro2_triton.maestro2_triton_oct_converter_functional_groups import (
     shared_functional_group_sequence,
     per_frame_functional_groups_sequence,
     dimension_index_sequence,

@@ -1,12 +1,11 @@
 import os
-
 import pydicom
-from imaging.maestro2_triton_volume_converter_functional_groups import (
-    acquisition_method_algorithm_sequence,
-    octb_scan_analysis_acquisition_parameters_sequence,
-    shared_functional_groups_sequence,
-    per_frame_functional_groups_sequence,
-    dimension_index_sequence,
+from maestro2_triton.maestro2_triton_enface_converter_functional_groups import (
+    source_image_sequence,
+    derivation_algorithm_sequence,
+    enface_volume_descriptor_sequence,
+    referenced_series_sequence,
+    ophthalmic_image_type_code_sequence,
 )
 
 KEEP = 0
@@ -93,6 +92,14 @@ class HeaderElement:
     """
 
     def __init__(self, name, tag, vr):
+        """
+        Initializes a HeaderElement instance.
+
+        Args:
+            name (str): The name of the header element.
+            tag (str): The tag associated with the header element.
+            vr (str): The value representation of the header element.
+        """
         self.name = name
         self.tag = tag
         self.vr = vr
@@ -100,20 +107,30 @@ class HeaderElement:
 
 class Element:
     """
-    Represents an individual data element.
+    Represents an element in a dataset.
 
-    This class defines an individual data element with attributes such as its name, tag,
-    value representation (vr), decision, and harmonized value.
+    This class defines an element with attributes such as its name, tag, value representation (vr),
+    decision, and harmonized value.
 
     Attributes:
-        name (str): The name of the data element.
-        tag (str): The tag associated with the data element.
-        vr (str): The value representation of the data element.
-        decision (int): The decision related to the data element (default is 0).
-        harmonized_value (int): The harmonized value of the data element (default is 0).
+        name (str): The name of the element.
+        tag (str): The tag associated with the element.
+        vr (str): The value representation of the element.
+        decision (int, optional): The decision value associated with the element. Default is 0.
+        harmonized_value (int, optional): The harmonized value of the element. Default is 0.
     """
 
     def __init__(self, name, tag, vr, decision=0, harmonized_value=0):
+        """
+        Initializes an Element instance.
+
+        Args:
+            name (str): The name of the element.
+            tag (str): The tag associated with the element.
+            vr (str): The value representation of the element.
+            decision (int, optional): The decision value associated with the element. Default is 0.
+            harmonized_value (int, optional): The harmonized value of the element. Default is 0.
+        """
         self.name = name
         self.tag = tag
         self.vr = vr
@@ -123,20 +140,30 @@ class Element:
 
 class Sequence:
     """
-    Represents a sequence of data elements in a dataset.
+    Represents a sequence in a dataset.
 
-    This class defines a sequence of data elements with attributes such as its name, tag,
-    value representation (vr), and associated element lists and sub-sequences.
+    This class defines a sequence with attributes such as its name, tag, value representation (vr),
+    and a list of elements or nested sequences.
 
     Attributes:
         name (str): The name of the sequence.
         tag (str): The tag associated with the sequence.
         vr (str): The value representation of the sequence.
-        element_lists (list): List of ElementList instances representing element lists.
-        sequences (list): List of nested Sequence instances.
+        element_lists (list): The list of elements associated with the sequence.
+        sequences (list, optional): The list of nested sequences within the sequence. Default is an empty list.
     """
 
     def __init__(self, name, tag, vr, *element_lists, sequences=None):
+        """
+        Initializes a Sequence instance.
+
+        Args:
+            name (str): The name of the sequence.
+            tag (str): The tag associated with the sequence.
+            vr (str): The value representation of the sequence.
+            *element_lists (list): Variable length argument list of elements associated with the sequence.
+            sequences (list, optional): The list of nested sequences within the sequence. Default is None.
+        """
         self.name = name
         self.tag = tag
         self.vr = vr
@@ -144,8 +171,8 @@ class Sequence:
         self.sequences = sequences if sequences is not None else []
 
 
-octa_volume = ConversionRule(
-    "OCTA Volume",
+enface = ConversionRule(
+    "En Face",
     [
         HeaderElement("FileMetaInformationGroupLength", "00020000", "UL"),
         HeaderElement("FileMetaInformationVersion", "00020001", "OB"),
@@ -166,18 +193,22 @@ octa_volume = ConversionRule(
         Element("ReferringPhysicianName", "00080090", "PN", BLANK),
         Element("StudyID", "00200010", "SH", BLANK),
         Element("AccessionNumber", "00080050", "SH", BLANK),
+        Element("Modality", "00080060", "CS"),
         Element("SeriesInstanceUID", "0020000E", "UI"),
         Element("SeriesNumber", "00200011", "IS"),
-        Element("Modality", "00080060", "CS"),
         Element("FrameofReferenceUID", "00200052", "UI"),
         Element("PositionReferenceIndicator", "00201040", "LO"),
         Element("Manufacturer", "00080070", "LO"),
         Element("ManufacturerModelName", "00081090", "LO"),
         Element("DeviceSerialNumber", "00181000", "LO"),
         Element("SoftwareVersions", "00181020", "LO"),
-        Element("SamplePerPixel", "00280002", "US"),
-        Element("PhotometricInterpretation", "00280004", "CS"),
+        Element("InstanceNumber", "00200013", "IS"),
+        Element("PatientOrientation", "00200020", "CS"),
+        Element("BurnedInAnnotation", "00280301", "CS"),
+        Element("ImageComments", "00204000", "LT"),
+        Element("SamplesPerPixel", "00280002", "US"),
         Element("Rows", "00280010", "US"),
+        Element("PhotometricInterpretation", "00280004", "CS"),
         Element("Columns", "00280011", "US"),
         Element("BitsAllocated", "00280100", "US"),
         Element("BitsStored", "00280101", "US"),
@@ -185,40 +216,54 @@ octa_volume = ConversionRule(
         Element("PixelRepresentation", "00280103", "US"),
         Element("ImageType", "00080008", "CS"),
         Element("InstanceNumber", "00200013", "IS"),
-        Element("ContentDate", "00080023", "DA"),
+        Element("PixelSpacing", "00280030", "DS"),
         Element("ContentTime", "00080033", "TM"),
-        Element("BitsAllocated", "00280100", "US"),
-        Element("BitsStored", "00280101", "US"),
-        Element("HighBit", "00280102", "US"),
-        Element("SamplesPerPixel", "00280002", "US"),
-        Element("PhotometricInterpretation", "00280004", "CS"),
-        Element("PixelRepresentation", "00280103", "US"),
-        Element("PresentationLUTShape", "20500020", "CS"),
+        Element("ContentDate", "00080023", "DA"),
+        Element("OphthalmicImageTypeDescription", "00221616", "LO"),
+        Element("WindowCenter", "00281050", "DS"),
+        Element("WindowWidth", "00281051", "DS"),
         Element("LossyImageCompression", "00282110", "CS"),
         Element("LossyImageCompressionRatio", "00282112", "DS"),
         Element("LossyImageCompressionMethod", "00282114", "CS"),
-        Element("BurnedInAnnotation", "00280301", "CS"),
+        Element("PresentationLUTShape", "20500020", "CS"),
         Element("RecognizableVisualFeatures", "00280302", "CS"),
-        Element("ConcatenationFrameOffsetNumber", "00209228", "UL"),
-        Element("InConcatenationNumber", "00209162", "US"),
-        Element("InConcatenationTotalNumber", "00209163", "US"),
-        Element("InstanceNumber", "00200013", "IS"),
-        Element("ContentDate", "00080023", "DA"),
-        Element("ContentTime", "00080033", "TM"),
-        Element("NumberOfFrames", "00280008", "IS"),
+        Element("ImageLaterality", "00200062", "CS"),
+        Element("OphthalmicAnatomicReferencePointXCoordinate", "00221624", "FL"),
+        Element("OphthalmicAnatomicReferencePointYCoordinate", "00221626", "FL"),
         Element("SOPClassUID", "00080016", "UI"),
         Element("SOPInstanceUID", "00080018", "UI"),
-        Element("SpecificCharacterSet", "00080005", "CS"),
-        Element("ImageLaterality", "00200062", "CS"),
-        Element("PresentationIntentType ", "00080068", "CS"),
-        Element("Series Description", "0008103E", "LO"),
+        Element("SpecificCharacter Set", "00080005", "CS"),
     ],
     [
         Sequence(
-            "DimensionOrganizationSequence",
-            "00209221",
+            "AnatomicRegionSequence",
+            "00082218",
             "SQ",
-            [Element("DimensionOrganizationUID", "00209164", "UI")],
+            [
+                Element("CodeValue", "00080100", "SH", HARMONIZE, "5665001"),
+                Element("CodingSchemeDesignator", "00080102", "SH", HARMONIZE, "SCT"),
+                Element("CodeMeaning", "00080104", "LO", HARMONIZE, "Retina"),
+            ],
+        ),
+        Sequence(
+            "PrimaryAnatomicStructureSequence",
+            "00082228",
+            "SQ",
+            [
+                Element("CodeValue", "00080100", "SH"),
+                Element("CodingSchemeDesignator", "00080102", "SH"),
+                Element("CodeMeaning", "00080104", "LO"),
+            ],
+        ),
+        Sequence(
+            "RelativeImagePositionCodeSequence",
+            "0022001D",
+            "SQ",
+            [
+                Element("CodeValue", "00080100", "SH"),
+                Element("CodingSchemeDesignator", "00080102", "SH"),
+                Element("CodeMeaning", "00080104", "LO"),
+            ],
         ),
     ],
 )
@@ -258,46 +303,52 @@ def process_tags(tags, dicom):
 
 class DicomEntry:
     """
-    Represents an entry containing DICOM tag information.
+    Represents a DICOM entry in a dataset.
 
-    This class defines an entry containing attributes such as the DICOM tag, its name,
-    value representation (vr), and the associated value.
+    This class defines a DICOM entry with attributes such as its tag, name, value representation (vr),
+    and value. It also includes a method to check if the value is empty.
 
     Attributes:
-        tag (str): The DICOM tag associated with the entry.
-        name (str): The name of the DICOM tag.
-        vr (str): The value representation of the DICOM tag.
-        value (Any): The value associated with the DICOM tag.
-
-    Methods:
-        is_empty(): Checks if the value of the DICOM entry is empty.
+        tag (str): The tag associated with the DICOM entry.
+        name (str): The name of the DICOM entry.
+        vr (str): The value representation of the DICOM entry.
+        value (str): The value of the DICOM entry.
     """
 
     def __init__(self, tag, name, vr, value):
+        """
+        Initializes a DicomEntry instance.
+
+        Args:
+            tag (str): The tag associated with the DICOM entry.
+            name (str): The name of the DICOM entry.
+            vr (str): The value representation of the DICOM entry.
+            value (str): The value of the DICOM entry.
+        """
         self.tag = tag
         self.name = name
         self.vr = vr
         self.value = value
 
     def is_empty(self):
+
         return len(self.value) == 0
 
 
 def extract_dicom_dict(file, tags):
     """
-    Extract DICOM information from a file and create a structured dictionary.
-
-    This function reads a DICOM file, extracts relevant header and data information,
-    and creates a structured dictionary containing header elements, metadata,
-    and processed DICOM tag information.
+    Extracts DICOM metadata and specified tags from a DICOM file.
 
     Args:
-        file (str): Path to the DICOM file.
-        tags (list): List of DICOM tags to be processed.
+        file (str): The path to the DICOM file.
+        tags (list): A list of tags to extract from the DICOM file.
 
     Returns:
-        tuple: A tuple containing the structured dictionary, transfer syntax information,
-               and pixel data of the DICOM file.
+        tuple: A tuple containing the extracted metadata dictionary, transfer syntax information,
+               and pixel data (if present).
+
+    Raises:
+        FileNotFoundError: If the specified file does not exist.
     """
     if not os.path.exists(file):
         raise FileNotFoundError(f"File {file} not found.")
@@ -306,6 +357,7 @@ def extract_dicom_dict(file, tags):
     output["filepath"] = file
 
     dataset = pydicom.dcmread(file)
+    dataset.PatientOrientation = ["L", "F"]
 
     header_elements = {
         "00020000": {
@@ -345,24 +397,33 @@ def extract_dicom_dict(file, tags):
     output = process_tags(tags, dicom)
 
     transfersyntax = [dataset.is_little_endian, dataset.is_implicit_VR]
-    pixeldata = dataset.PixelData
+    if "PixelData" in dataset:
+        pixel_data = dataset.PixelData
+    elif "FloatPixelData" in dataset:
+        pixel_data = dataset.FloatPixelData
+    else:
+        pixel_data = None
 
-    return output, transfersyntax, pixeldata
+    return output, transfersyntax, pixel_data
 
 
-def write_dicom(protocol, dicom_dict_list, file_path):
+def write_dicom(protocol, dicom_dict_list, seg, vol, opt, op, file_path):
     """
-    Write DICOM data based on the given protocol and dictionary.
+    Writes a DICOM file based on a specified protocol and input data.
 
-    This function takes a conversion protocol, processed DICOM data dictionary, and an output
-    file path. It writes the DICOM data to the specified output file using the provided protocol
-    and dictionary.
+    This function constructs a new DICOM file using metadata and pixel data from the input dictionary
+    and according to the rules defined in the provided protocol.
 
     Args:
-        protocol (ConversionRule): The conversion protocol specifying the structure of the DICOM data.
-        dicom_dict_list (tuple): A tuple containing the structured DICOM dictionary,
-                                transfer syntax information, and pixel data.
-        file_path (str): Path to the output DICOM file.
+        protocol (object): An object that defines the rules for DICOM file creation, including
+                           header tags, tags, sequence tags, and elements.
+        dicom_dict_list (list): A list containing metadata dictionaries, transfer syntax information,
+                                and pixel data.
+        seg (dict): Dictionary containing segmentation data.
+        vol (dict): Dictionary containing volume data.
+        opt (dict): Dictionary containing optical data.
+        op (dict): Dictionary containing operational data.
+        file_path (str): The path where the output DICOM file will be saved.
     """
     headertags = protocol.header_tags()
     tags = protocol.tags()
@@ -479,35 +540,56 @@ def write_dicom(protocol, dicom_dict_list, file_path):
 
             setattr(dataset, element_name, value)
 
-        acquisition_method_algorithm_sequence(dataset, dicom_dict_list)
-        octb_scan_analysis_acquisition_parameters_sequence(dataset, dicom_dict_list)
-        shared_functional_groups_sequence(dataset, dicom_dict_list)
-        per_frame_functional_groups_sequence(dataset, dicom_dict_list)
-        dimension_index_sequence(dataset, dicom_dict_list)
+        source_image_sequence(dataset, dicom_dict_list)
+        ophthalmic_image_type_code_sequence(dataset, dicom_dict_list)
+        referenced_series_sequence(dataset, dicom_dict_list, seg, vol, opt, op)
+        derivation_algorithm_sequence(dataset, dicom_dict_list)
+        enface_volume_descriptor_sequence(dataset, dicom_dict_list, seg)
 
     pydicom.filewriter.write_file(file_path, dataset, write_like_original=False)
 
 
-def convert_dicom(input, output):
+def convert_dicom(
+    inputenface, inputseg, inputvol, inputopt, inputop, output
+):  # inputseg, inputoct, inputop,
     """
     Convert DICOM data using a specific conversion rule.
 
-    This function takes an input DICOM file, applies the conversion rule specified in the variable
+    This function takes multiple input DICOM files, applies the conversion rule specified in the variable
     'conversion_rule', and writes the converted DICOM data to the output file.
 
     Args:
-        input (str): Path to the input DICOM file.
-        output (str): Path to the output DICOM file.
+        inputenface (str): Path to the input enface DICOM file.
+        inputseg (str): Path to the input segmentation DICOM file.
+        inputvol (str): Path to the input volume DICOM file.
+        inputopt (str): Path to the input optical DICOM file.
+        inputop (str): Path to the input operational DICOM file.
+        output (str): Path to the output DICOM file directory.
     """
-    conversion_rule = octa_volume
+    conversion_rule = enface
     tags = (
         conversion_rule.header_tags()
         + conversion_rule.tags()
         + list(conversion_rule.sequence_tags().keys())
-        + ["00221423", "00221640", "52009229", "52009230"]
+        + [
+            "00082112",
+            "0066002F",
+            "00221612",
+            "00221620",
+            "00660036",
+            "00660031",
+            "00081115",
+            "00221615",
+        ]
     )
-    x = extract_dicom_dict(input, tags)
+    enf = extract_dicom_dict(inputenface, tags)
+    seg = extract_dicom_dict(inputseg, ["0020000D", "0020000E", "00080016", "00080018"])
+    vol = extract_dicom_dict(inputvol, ["0020000D", "0020000E", "00080016", "00080018"])
+    opt = extract_dicom_dict(inputopt, ["0020000D", "0020000E", "00080016", "00080018"])
+    op = extract_dicom_dict(inputop, ["0020000D", "0020000E", "00080016", "00080018"])
 
-    filename = input.split("/")[-1]
+    filename = inputenface.split("/")[-1]
 
-    write_dicom(conversion_rule, x, f"{output}/converted_{filename}")
+    write_dicom(
+        conversion_rule, enf, seg, vol, opt, op, f"{output}/converted_{filename}"
+    )

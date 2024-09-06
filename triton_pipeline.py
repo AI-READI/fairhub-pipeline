@@ -17,7 +17,7 @@ import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
 
-# import pprint
+from pydicom.datadict import DicomDictionary, keyword_dict
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -43,11 +43,43 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_system_name="stage-1-container",
     )
 
+    # Define items as (VR, VM, description, is_retired flag, keyword)
+    #   Leave is_retired flag blank.
+    new_dict_items = {
+        0x0022EEE0: (
+            "SQ",
+            "1",
+            "En Face Volume Descriptor Sequence",
+            "",
+            "EnFaceVolumeDescriptorSequence",
+        ),
+        0x0022EEE1: (
+            "CS",
+            "1",
+            "En Face Volume Descriptor Scope",
+            "",
+            "EnFaceVolumeDescriptorScope",
+        ),
+        0x0022EEE2: (
+            "SQ",
+            "1",
+            "Referenced Segmentation Sequence",
+            "",
+            "ReferencedSegmentationSequence",
+        ),
+        0x0022EEE3: ("FL", "1", "Surface Offset", "", "SurfaceOffset"),
+    }
+
+    # Update the dictionary itself
+    DicomDictionary.update(new_dict_items)
+
+    # Update the reverse mapping from name to tag
+    new_names_dict = dict([(val[4], tag) for tag, val in new_dict_items.items()])
+    keyword_dict.update(new_names_dict)
+
     paths = file_system_client.get_paths(path=input_folder)
 
     file_paths = []
-
-    imaging_utils.update_pydicom_dicom_dictionary()
 
     for path in paths:
         t = str(path.name)
@@ -59,18 +91,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             continue
 
         # Get the parent folder of the file.
-        # The name of this file is in the format siteName_dataType_siteName_dataType_startDate-endDate_*.fda.zip
+        # The name of this file is in the format siteName_dataType_startDate-endDate_*.fda.zip
 
         parts = original_file_name.split("_")
 
-        if len(parts) != 6:
+        if len(parts) != 4:
             continue
-
         site_name = parts[0]
         data_type = parts[1]
-        # site_name_2 = parts[2]
-        # data_type_2 = parts[3]
-        start_date_end_date = parts[4]
+
+        start_date_end_date = parts[2]
 
         start_date = start_date_end_date.split("-")[0]
         end_date = start_date_end_date.split("-")[1]
@@ -164,6 +194,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             os.makedirs(step1_folder)
 
         download_path = os.path.join(step1_folder, original_file_name)
+
+        logger.debug(
+            f"Downloading {original_file_name} to {download_path} - ({log_idx}/{total_files})"
+        )
 
         with open(file=download_path, mode="wb") as f:
             f.write(input_file_client.download_file().readall())

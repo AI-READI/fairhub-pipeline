@@ -17,6 +17,9 @@ import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
 
+from pydicom.datadict import DicomDictionary, keyword_dict
+
+
 # import pprint
 
 
@@ -47,7 +50,39 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     file_paths = []
 
-    imaging_utils.update_pydicom_dicom_dictionary()
+    # Define items as (VR, VM, description, is_retired flag, keyword)
+    #   Leave is_retired flag blank.
+    new_dict_items = {
+        0x0022EEE0: (
+            "SQ",
+            "1",
+            "En Face Volume Descriptor Sequence",
+            "",
+            "EnFaceVolumeDescriptorSequence",
+        ),
+        0x0022EEE1: (
+            "CS",
+            "1",
+            "En Face Volume Descriptor Scope",
+            "",
+            "EnFaceVolumeDescriptorScope",
+        ),
+        0x0022EEE2: (
+            "SQ",
+            "1",
+            "Referenced Segmentation Sequence",
+            "",
+            "ReferencedSegmentationSequence",
+        ),
+        0x0022EEE3: ("FL", "1", "Surface Offset", "", "SurfaceOffset"),
+    }
+
+    # Update the dictionary itself
+    DicomDictionary.update(new_dict_items)
+
+    # Update the reverse mapping from name to tag
+    new_names_dict = dict([(val[4], tag) for tag, val in new_dict_items.items()])
+    keyword_dict.update(new_names_dict)
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
@@ -60,7 +95,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             continue
 
         # Get the parent folder of the file.
-        # The name of this file is in the format siteName_dataType_siteName_dataType_startDate-endDate_*.fda.zip
+        # The name of this file is in the format siteName_dataType_startDate-endDate_*.fda.zip
 
         parts = original_file_name.split("_")
 
@@ -68,8 +103,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             continue
         site_name = parts[0]
         data_type = parts[1]
-        # site_name_2 = parts[2]
-        # data_type_2 = parts[3]
+
         start_date_end_date = parts[2]
 
         start_date = start_date_end_date.split("-")[0]
@@ -325,6 +359,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     with open(f"{full_file_path}", "rb") as data:
                         output_file_client.upload_data(data, overwrite=True)
+                        logger.info(
+                            f"Uploaded {combined_file_name} - ({log_idx}/{total_files})"
+                        )
                 except Exception:
                     outputs_uploaded = False
                     logger.error(
