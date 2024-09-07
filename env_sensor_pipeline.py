@@ -201,6 +201,10 @@ def pipeline(
 
             output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{patient_id}/{f2}"
 
+            logger.debug(
+                f"Uploading {output_file} to {output_file_path} - ({log_idx}/{total_files})"
+            )
+
             try:
                 output_file_client = file_system_client.get_file_client(
                     file_path=output_file_path
@@ -213,6 +217,8 @@ def pipeline(
                     )
 
                 output_file_client.upload_data(data, overwrite=True)
+
+                logger.info(f"Uploaded {output_file_path} - ({log_idx}/{total_files})")
             except Exception:
                 outputs_uploaded = False
                 logger.error(
