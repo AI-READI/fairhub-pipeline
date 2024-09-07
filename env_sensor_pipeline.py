@@ -1,7 +1,6 @@
 """Process env sensor data files"""
 
 import contextlib
-import datetime
 import os
 import tempfile
 import shutil
@@ -46,6 +45,9 @@ def pipeline(
 
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(data_plot_output_folder)
 
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
@@ -181,6 +183,9 @@ def pipeline(
             logger.error(error_exception)
 
             file_processor.append_errors(error_exception, path)
+
+            logger.time(time_estimator.step())
+
             continue
 
         logger.info(f"Converted {patient_folder_name} - ({log_idx}/{total_files})")
@@ -231,6 +236,9 @@ def pipeline(
                 logger.error(error_exception)
 
                 file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+
                 continue
 
             file_item["output_files"].append(output_file_path)
