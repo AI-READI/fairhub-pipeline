@@ -189,6 +189,7 @@ def pipeline(
             f"Uploading outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
         output_file = conversion_dict["output_file"]
+        pid = conversion_dict["r"]["pppp"]
 
         workflow_output_files = []
 
@@ -199,7 +200,7 @@ def pipeline(
         with open(f"{output_file}", "rb") as data:
             f2 = output_file.split("/")[-1]
 
-            output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{patient_id}/{f2}"
+            output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{pid}/{f2}"
 
             logger.debug(
                 f"Uploading {output_file} to {output_file_path} - ({log_idx}/{total_files})"
