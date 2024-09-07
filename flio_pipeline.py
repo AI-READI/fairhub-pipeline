@@ -190,6 +190,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             with open(file=download_path, mode="wb") as f:
                 f.write(file_client.download_file().readall())
+                logger.debug(
+                    f"Downloaded {item_path} to {download_path} - ({log_idx}/{total_files})"
+                )
 
         logger.info(
             f"Downloaded {patient_folder_name} to {step1_folder} - ({log_idx}/{total_files})"

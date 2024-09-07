@@ -1,4 +1,4 @@
-"""Process ecg data files"""
+"""Process env sensor data files"""
 
 import contextlib
 import datetime
@@ -6,7 +6,6 @@ import os
 import tempfile
 import shutil
 import env_sensor.es_root as es
-import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
@@ -15,6 +14,7 @@ import csv
 from traceback import format_exc
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
+from utils.time_estimator import TimeEstimator
 
 
 def pipeline(
@@ -38,78 +38,44 @@ def pipeline(
 
     logger = logging.Logwatch("env_sensor", print=True)
 
-    sas_token = azureblob.generate_account_sas(
-        account_name="b2aistaging",
-        account_key=config.AZURE_STORAGE_ACCESS_KEY,
-        resource_types=azureblob.ResourceTypes(container=True, object=True),
-        permission=azureblob.AccountSasPermissions(
-            read=True, write=True, list=True, delete=True
-        ),
-        expiry=datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=24),
-    )
-
-    # Get the blob service client
-    blob_service_client = azureblob.BlobServiceClient(
-        account_url="https://b2aistaging.blob.core.windows.net/",
-        credential=sas_token,
-    )
-
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
 
-    # Dev only
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
 
     with contextlib.suppress(Exception):
-        file_system_client.delete_directory(data_plot_output_folder)
+        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
-    paths = file_system_client.get_paths(path=input_folder)
+    patient_folder_paths = file_system_client.get_paths(
+        path=input_folder, recursive=False
+    )
 
     file_paths = []
 
-    # Create a unique set of patient ids
-    patient_ids = set()
+    logger.debug(f"Getting folder paths in {input_folder}")
 
-    file_count = 0
+    for patient_folder_path in patient_folder_paths:
+        t = str(patient_folder_path.name)
 
-    for path in paths:
-        t = str(path.name)
+        patient_folder = t.split("/")[-1]
 
-        file_count += 1
-
-        if (file_count % 100) == 0:
-            logger.debug(f"Processed {file_count} files")
-
-        if file_count > 1000:
-            break
-
-        original_file_name = t.split("/")[-1]
-
-        # Check if the item is a xml file
-        if original_file_name.split(".")[-1] != "csv":
+        # Check if the folder name is in the format dataType-patientID-someOtherID
+        if len(patient_folder.split("-")) != 3:
+            logger.debug(f"Skipping {patient_folder}")
             continue
 
-        # Get the parent folder of the file.
-        # The name of this folder is in the format ENV-patientID-someOtherID
-        patientFolder = t.split("/")[-2]
-
-        # Check if the folder name is in the format ENV-patientID-someOtherID
-        if len(patientFolder.split("-")) != 3:
-            continue
-
-        _, patient_id, _ = patientFolder.split("-")
+        patient_id = patient_folder.split("-")[1]
 
         file_paths.append(
             {
                 "file_path": t,
                 "status": "failed",
                 "processed": False,
-                "patient_folder": patientFolder,
+                "patient_folder": patient_folder,
                 "patient_id": patient_id,
                 "convert_error": True,
                 "output_uploaded": False,
@@ -117,107 +83,97 @@ def pipeline(
             }
         )
 
-        patient_ids.add(patient_id)
-
-    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
+    # Create a temporary folder on the local machine
+    temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_")
 
     # Create a temporary folder on the local machine
-    temp_folder_path = tempfile.mkdtemp()
-
-    # Create the output folder
-    file_system_client.create_directory(processed_data_output_folder)
-
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp()
-
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
-    total_files = len(patient_ids)
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_meta_")
 
     # Download the redcap export file
     red_cap_export_file_path = os.path.join(meta_temp_folder_path, "redcap_export.csv")
 
-    blob_client = blob_service_client.get_blob_client(
-        container="stage-1-container", blob=red_cap_export_file
+    red_cap_export_file_client = file_system_client.get_file_client(
+        file_path=red_cap_export_file
     )
 
     with open(red_cap_export_file_path, "wb") as data:
-        blob_client.download_blob().readinto(data)
+        red_cap_export_file_client.download_file().readinto(data)
 
-    # for idx, file_item in enumerate(file_paths):
-    for idx, patient_id in enumerate(patient_ids):
+    total_files = len(file_paths)
+
+    logger.info(f"Found {total_files} items in {input_folder}")
+
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
+
+    time_estimator = TimeEstimator(total_files)
+
+    for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
 
-        # if log_idx == 2:
+        # if log_idx == 5:
         #     break
 
-        # Get all the files for the patient
-        patient_files = [
-            file_item
-            for file_item in file_paths
-            if file_item["patient_id"] == patient_id
-        ]
+        path = file_item["file_path"]
 
-        # Verify that all the files are from the same patient folder
-        patient_folders = set(
-            [file_item["patient_folder"] for file_item in patient_files]
+        workflow_input_files = [path]
+
+        file_processor.add_entry(path, time.time())
+
+        file_processor.clear_errors(path)
+
+        # get the patient folder name from the path
+        patient_folder_name = file_item["patient_folder"]
+
+        input_folder = os.path.join(temp_folder_path, patient_folder_name)
+        os.makedirs(input_folder, exist_ok=True)
+
+        logger.debug(
+            f"Downloading {patient_folder_name} to {input_folder} - ({log_idx}/{total_files})"
         )
 
-        if len(patient_folders) != 1:
-            logger.error("Patient files are not from the same patient folder")
-            continue
+        folder_contents = file_system_client.get_paths(path=path, recursive=True)
 
-        patient_folder = patient_folders.pop()
+        for item in folder_contents:
+            item_path = str(item.name)
 
-        # Recreate the patient folder
-        temp_patient_folder_path = os.path.join(temp_folder_path, patient_folder)
+            file_name = item_path.split("/")[-1]
 
-        os.mkdir(temp_patient_folder_path)
+            if not file_name.endswith(".csv"):
+                continue
 
-        workflow_input_files = []
+            input_file_client = file_system_client.get_file_client(file_path=item_path)
 
-        logger.debug(f"Processing {patient_folder} - ({log_idx}/{total_files})")
+            download_path = os.path.join(input_folder, file_name)
 
-        logger.debug(f"found {len(patient_files)} files for {patient_folder}")
+            with open(file=download_path, mode="wb") as f:
+                f.write(input_file_client.download_file().readall())
+                logger.debug(
+                    f"Downloaded {file_name} to {input_folder} - ({log_idx}/{total_files})"
+                )
 
-        for file_idx, file_item in enumerate(patient_files):
-            path = file_item["file_path"]
+        logger.info(
+            f"Downloaded {patient_folder_name} to {input_folder} - ({log_idx}/{total_files})"
+        )
 
-            workflow_input_files.append(path)
-
-            original_file_name = path.split("/")[-1]
-
-            logger.debug(f"Downloading {path} - ({file_idx}/{len(patient_files)})")
-
-            download_path = os.path.join(temp_patient_folder_path, original_file_name)
-
-            blob_client = blob_service_client.get_blob_client(
-                container="stage-1-container", blob=path
-            )
-
-            with open(download_path, "wb") as data:
-                blob_client.download_blob().readinto(data)
-
-            file_item["download_path"] = download_path
-
-        env_sensor_temp_folder_path = tempfile.mkdtemp()
+        output_folder = os.path.join(temp_folder_path, "output")
+        os.makedirs(output_folder, exist_ok=True)
 
         env_sensor = es.EnvironmentalSensor()
 
+        logger.debug(f"Converting {patient_folder_name} - ({log_idx}/{total_files})")
+
         try:
             conversion_dict = env_sensor.convert(
-                temp_patient_folder_path,
-                env_sensor_temp_folder_path,
+                input_folder,
+                output_folder,
                 visit_file=red_cap_export_file_path,
             )
 
-            print(f"Keys: {conversion_dict.keys()}")
-            print(f'Participant ID: {conversion_dict["r"]["pppp"]}')
-            print(f'Success: {conversion_dict["conversion_success"]}')
-            print(f'Output file: {conversion_dict["output_file"]}')
         except Exception:
             logger.error(
-                f"Failed to convert {patient_folder} - ({log_idx}/{total_files})"
+                f"Failed to convert {patient_folder_name} - ({log_idx}/{total_files})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -227,66 +183,142 @@ def pipeline(
             file_processor.append_errors(error_exception, path)
             continue
 
-        logger.debug(f"Converted {patient_folder} - ({log_idx}/{total_files})")
+        logger.info(f"Converted {patient_folder_name} - ({log_idx}/{total_files})")
 
+        logger.debug(
+            f"Uploading outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+        )
         output_file = conversion_dict["output_file"]
 
-        # get file size in mb
-        file_size = os.path.getsize(output_file) / (1024 * 1024)
+        workflow_output_files = []
 
-        logger.debug(f"File size: {file_size} MB")
+        outputs_uploaded = True
 
-        if conversion_dict["conversion_success"]:
-            meta_dict = env_sensor.metadata(output_file)
-
-            for k, v in meta_dict.items():
-                print(f"{k}\t:  {v}")
-
-            # Optionally make a plot for visual QA
-            # dataplot_dict = env_sensor.dataplot(
-            #     conversion_dict, data_plot_output_folder
-            # )
-
-        logger.debug(f"Uploading {output_file} - ({log_idx}/{total_files})")
+        file_processor.delete_preexisting_output_files(path)
 
         with open(f"{output_file}", "rb") as data:
-            file_name2 = output_file.split("/")[-1]
+            f2 = output_file.split("/")[-1]
 
-            output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{patient_id}/{file_name2}"
+            output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{patient_id}/{f2}"
 
             try:
-                output_blob_client = blob_service_client.get_blob_client(
-                    container="stage-1-container",
-                    blob=output_file_path,
+                output_file_client = file_system_client.get_file_client(
+                    file_path=output_file_path
                 )
-                output_blob_client.upload_blob(data)
+
+                # Check if the file already exists. If it does, throw an exception
+                if output_file_client.exists():
+                    raise Exception(
+                        f"File {output_file_path} already exists. Throwing exception"
+                    )
+
+                output_file_client.upload_data(data, overwrite=True)
             except Exception:
+                outputs_uploaded = False
                 logger.error(
-                    f"Failed to upload {output_file} - ({log_idx}/{total_files})"
+                    f"Failed to upload {output_file_path} - ({log_idx}/{total_files})"
                 )
                 error_exception = format_exc()
                 error_exception = "".join(error_exception.splitlines())
 
                 logger.error(error_exception)
 
+                file_processor.append_errors(error_exception, path)
                 continue
 
             file_item["output_files"].append(output_file_path)
+            workflow_output_files.append(output_file_path)
 
-        logger.debug(f"Uploaded {output_file} - ({log_idx}/{total_files})")
+        file_processor.confirm_output_files(path, workflow_output_files, "")
 
-        file_item["convert_error"] = False
-        file_item["processed"] = True
+        if outputs_uploaded:
+            file_item["output_uploaded"] = True
+            file_item["status"] = "success"
+            logger.info(
+                f"Uploaded outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
+        else:
+            logger.error(
+                f"Failed to upload outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            )
 
-        shutil.rmtree(env_sensor_temp_folder_path)
-        shutil.rmtree(temp_patient_folder_path)
+        workflow_file_dependencies.add_dependency(
+            workflow_input_files, workflow_output_files
+        )
 
+        logger.time(time_estimator.step())
+
+        print(f"Cleaning up temp folders - ({log_idx}/{total_files})")
+        shutil.rmtree(output_folder)
+        shutil.rmtree(input_folder)
+
+    file_processor.delete_out_of_date_output_files()
+    file_processor.remove_seen_flag_from_map()
+
+    logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
     try:
-        # file_processor.upload_json()
+        file_processor.upload_json()
         logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
     except Exception as e:
         logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
         raise e
+
+    # Write the workflow log to a file
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    file_name = f"status_report_{timestr}.csv"
+    workflow_log_file_path = os.path.join(meta_temp_folder_path, file_name)
+
+    with open(workflow_log_file_path, mode="w") as f:
+        fieldnames = [
+            "file_path",
+            "status",
+            "processed",
+            "patient_folder",
+            "patient_id",
+            "convert_error",
+            "output_uploaded",
+            "output_files",
+        ]
+
+        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=",")
+
+        for file_item in file_paths:
+            file_item["output_files"] = ";".join(file_item["output_files"])
+
+        writer.writeheader()
+        writer.writerows(file_paths)
+
+        logger.debug(
+            f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
+
+    with open(workflow_log_file_path, mode="rb") as data:
+        workflow_output_file_Client = file_system_client.get_file_client(
+            file_path=f"{pipeline_workflow_log_folder}/{file_name}"
+        )
+
+        workflow_output_file_Client.upload_data(data, overwrite=True)
+
+        logger.info(
+            f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
+
+    # Write the dependencies to a file
+    deps_output = workflow_file_dependencies.write_to_file(meta_temp_folder_path)
+
+    json_file_path = deps_output["file_path"]
+    json_file_name = deps_output["file_name"]
+
+    logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
+
+    with open(json_file_path, "rb") as data:
+        dependency_output_file_Client = file_system_client.get_file_client(
+            file_path=f"{dependency_folder}/{json_file_name}"
+        )
+
+        dependency_output_file_Client.upload_data(data, overwrite=True)
+
+        logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
     shutil.rmtree(meta_temp_folder_path)
 
