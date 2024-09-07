@@ -5,6 +5,7 @@ import os
 import tempfile
 import shutil
 import env_sensor.es_root as es
+import env_sensor.es_metadata as es_metadata
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
@@ -28,6 +29,7 @@ def pipeline(
         raise ValueError("study_id is required")
 
     input_folder = f"{study_id}/pooled-data/EnvSensor"
+    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual"
     processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed"
     dependency_folder = f"{study_id}/dependency/EnvSensor"
     pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
@@ -52,6 +54,9 @@ def pipeline(
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
+    with contextlib.suppress(Exception):
+        file_system_client.delete_file(f"{dependency_folder}/manifest.tsv")
+
     patient_folder_paths = file_system_client.get_paths(
         path=input_folder, recursive=False
     )
@@ -60,8 +65,14 @@ def pipeline(
 
     logger.debug(f"Getting folder paths in {input_folder}")
 
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+
     for patient_folder_path in patient_folder_paths:
         t = str(patient_folder_path.name)
+
+        if file_processor.is_file_ignored_by_path(t):
+            logger.debug(f"Skipping {t}")
+            continue
 
         patient_folder = t.split("/")[-1]
 
@@ -105,9 +116,9 @@ def pipeline(
 
     logger.info(f"Found {total_files} items in {input_folder}")
 
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
     workflow_file_dependencies = deps.WorkflowFileDependencies()
+
+    manifest = es_metadata.ESManifest()
 
     time_estimator = TimeEstimator(total_files)
 
@@ -139,6 +150,10 @@ def pipeline(
 
         for item in folder_contents:
             item_path = str(item.name)
+
+            if file_processor.is_file_ignored_by_path(item_path):
+                logger.debug(f"Skipping {item_path}")
+                continue
 
             file_name = item_path.split("/")[-1]
 
@@ -190,11 +205,60 @@ def pipeline(
 
         logger.info(f"Converted {patient_folder_name} - ({log_idx}/{total_files})")
 
+        data_plot_folder = os.path.join(temp_folder_path, "data_plot")
+        os.makedirs(data_plot_folder, exist_ok=True)
+
+        output_file = conversion_dict["output_file"]
+        pid = conversion_dict["r"]["pppp"]
+
+        if conversion_dict["conversion_success"]:
+            meta_dict = env_sensor.metadata(conversion_dict["output_file"])
+
+            output_file_path = f"{data_plot_output_folder}/environmental_sensor/leelab_anura/{pid}/{output_file.split('/')[-1]}"
+
+            manifest.add_metadata(meta_dict, output_file_path)
+
+            dataplot_dict = env_sensor.dataplot(conversion_dict, data_plot_folder)
+
+            dataplot_output_file = dataplot_dict["output_file"]
+
+            uploaded_dataplot_output_file = (
+                f"{data_plot_output_folder}/{dataplot_output_file.split('/')[-1]}"
+            )
+
+            dataplot_file_client = file_system_client.get_file_client(
+                file_path=uploaded_dataplot_output_file
+            )
+
+            logger.debug(
+                f"Uploading {dataplot_output_file} to {uploaded_dataplot_output_file}"
+            )
+
+            with open(dataplot_output_file, "rb") as data:
+                dataplot_file_client.upload_data(data, overwrite=True)
+
+            logger.info(
+                f"Uploaded {dataplot_output_file} to {uploaded_dataplot_output_file}"
+            )
+
+        else:
+            logger.error(
+                f"Failed to convert {patient_folder_name} - ({log_idx}/{total_files})"
+            )
+            error_exception = format_exc()
+            error_exception = "".join(error_exception.splitlines())
+
+            logger.error(error_exception)
+
+            file_processor.append_errors(error_exception, path)
+
+            logger.time(time_estimator.step())
+
+            continue
+
         logger.debug(
             f"Uploading outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
-        output_file = conversion_dict["output_file"]
-        pid = conversion_dict["r"]["pppp"]
 
         workflow_output_files = []
 
@@ -264,11 +328,90 @@ def pipeline(
         logger.time(time_estimator.step())
 
         print(f"Cleaning up temp folders - ({log_idx}/{total_files})")
+        shutil.rmtree(data_plot_folder)
         shutil.rmtree(output_folder)
         shutil.rmtree(input_folder)
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
+
+    # Write the manifest to a file
+    manifest_file_path = os.path.join(temp_folder_path, "manifest.tsv")
+
+    manifest.write_tsv(manifest_file_path)
+
+    logger.debug(f"Uploading manifest file to {dependency_folder}/manifest.tsv")
+
+    # Upload the manifest file
+    with open(manifest_file_path, "rb") as data:
+        manifest_output_file_client = file_system_client.get_file_client(
+            file_path=f"{processed_data_output_folder}/manifest.tsv"
+        )
+
+        manifest_output_file_client.upload_data(data, overwrite=True)
+
+    os.remove(manifest_file_path)
+
+    logger.info(f"Uploaded manifest file to {dependency_folder}/manifest.tsv")
+
+    # Move any manual files to the destination folder
+    logger.debug(f"Getting manual file paths in {manual_input_folder}")
+
+    manual_input_folder_contents = file_system_client.get_paths(
+        path=manual_input_folder, recursive=True
+    )
+
+    manual_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_manual_")
+
+    for item in manual_input_folder_contents:
+        item_path = str(item.name)
+
+        file_name = item_path.split("/")[-1]
+
+        clipped_path = item_path.split(f"{manual_input_folder}/")[-1]
+
+        manual_input_file_client = file_system_client.get_file_client(
+            file_path=item_path
+        )
+
+        file_properties = manual_input_file_client.get_file_properties().metadata
+
+        # Check if the file is a directory
+        if file_properties.get("hdi_isfolder"):
+            continue
+
+        logger.debug(f"Moving {item_path} to {processed_data_output_folder}")
+
+        # Download the file to the temp folder
+        download_path = os.path.join(manual_temp_folder_path, file_name)
+
+        logger.debug(f"Downloading {item_path} to {download_path}")
+
+        with open(file=download_path, mode="wb") as f:
+            f.write(manual_input_file_client.download_file().readall())
+
+        # Upload the file to the processed data output folder
+        upload_path = f"{processed_data_output_folder}/{clipped_path}"
+
+        logger.debug(f"Uploading {item_path} to {upload_path}")
+
+        output_file_client = file_system_client.get_file_client(
+            file_path=upload_path,
+        )
+
+        # Check if the file already exists. If it does, throw an exception
+        if output_file_client.exists():
+            raise Exception(f"File {upload_path} already exists. Throwing exception")
+
+        with open(file=download_path, mode="rb") as f:
+
+            output_file_client.upload_data(f, overwrite=True)
+
+            logger.info(f"Copied {item_path} to {upload_path}")
+
+        os.remove(download_path)
+
+    shutil.rmtree(manual_temp_folder_path)
 
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
     try:
@@ -308,11 +451,11 @@ def pipeline(
         )
 
     with open(workflow_log_file_path, mode="rb") as data:
-        workflow_output_file_Client = file_system_client.get_file_client(
+        workflow_output_file_client = file_system_client.get_file_client(
             file_path=f"{pipeline_workflow_log_folder}/{file_name}"
         )
 
-        workflow_output_file_Client.upload_data(data, overwrite=True)
+        workflow_output_file_client.upload_data(data, overwrite=True)
 
         logger.info(
             f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
@@ -340,3 +483,7 @@ def pipeline(
 
 if __name__ == "__main__":
     pipeline("AI-READI")
+
+    # delete the ecg.log file
+    if os.path.exists("es.log"):
+        os.remove("es.log")

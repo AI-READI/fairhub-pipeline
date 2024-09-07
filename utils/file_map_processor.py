@@ -2,11 +2,13 @@ import contextlib
 import datetime
 import os
 import tempfile
-
 import azure.storage.blob as azureblob
 import config
 import shutil
 
+from fnmatch import fnmatch
+import pathlib
+import glob
 import json
 
 
@@ -181,4 +183,12 @@ class FileMapProcessor:
         shutil.rmtree(self.meta_temp_folder_path)
 
     def is_file_ignored(self, file_name, path) -> bool:
+
         return file_name in self.ignore_files or path in self.ignore_files
+
+    def is_file_ignored_by_path(self, path) -> bool:
+        for pattern in self.ignore_files:
+            if pathlib.Path(path).match(pattern):
+                return True
+
+        return False
