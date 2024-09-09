@@ -15,6 +15,7 @@ from traceback import format_exc
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
+import zipfile
 
 
 def pipeline(
@@ -57,47 +58,47 @@ def pipeline(
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/manifest.tsv")
 
-    patient_folder_paths = file_system_client.get_paths(
-        path=input_folder, recursive=False
-    )
+    paths = file_system_client.get_paths(path=input_folder, recursive=False)
 
     file_paths = []
 
-    logger.debug(f"Getting folder paths in {input_folder}")
+    logger.debug(f"Getting file paths in {input_folder}")
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
-    for patient_folder_path in patient_folder_paths:
-        t = str(patient_folder_path.name)
+    for path in paths:
+        t = str(path.name)
 
         if file_processor.is_file_ignored_by_path(t):
             logger.debug(f"Skipping {t}")
             continue
 
-        patient_folder = t.split("/")[-1]
+        file_name = t.split("/")[-1]
 
-        # Check if the folder name is in the format dataType-patientID-someOtherID
-        if len(patient_folder.split("-")) != 3:
-            logger.debug(f"Skipping {patient_folder}")
+        # Check if the file name is in the format dataType-patientID-someOtherID.zip
+        if not file_name.endswith(".zip"):
+            logger.debug(f"Skipping {file_name}")
             continue
 
-        patient_id = patient_folder.split("-")[1]
+        if len(file_name.split("-")) != 3:
+            logger.debug(f"Skipping {file_name}")
+            continue
+
+        patient_id = file_name.split("-")[1]
+        patient_folder_name = file_name.split(".")[0]
 
         file_paths.append(
             {
                 "file_path": t,
                 "status": "failed",
                 "processed": False,
-                "patient_folder": patient_folder,
+                "patient_folder": patient_folder_name,
                 "patient_id": patient_id,
                 "convert_error": True,
                 "output_uploaded": False,
                 "output_files": [],
             }
         )
-
-    # Create a temporary folder on the local machine
-    temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_")
 
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_meta_")
@@ -128,51 +129,65 @@ def pipeline(
         # if log_idx == 5:
         #     break
 
+        # Create a temporary folder on the local machine
+        temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_")
+
         path = file_item["file_path"]
+        patient_folder_name = file_item["patient_folder"]
 
         workflow_input_files = [path]
+
+        # get the file name from the path
+        file_name = path.split("/")[-1]
+
+        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
+
+        if should_file_be_ignored:
+            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            continue
+
+        # download the file to the temp folder
+        input_file_client = file_system_client.get_file_client(file_path=path)
+
+        input_last_modified = input_file_client.get_file_properties().last_modified
+
+        should_process = file_processor.file_should_process(path, input_last_modified)
+
+        if not should_process:
+            logger.time(time_estimator.step())
+
+            logger.debug(
+                f"The file {path} has not been modified since the last time it was processed",
+            )
+            logger.debug(
+                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
+            )
+
+            continue
 
         file_processor.add_entry(path, time.time())
 
         file_processor.clear_errors(path)
 
-        # get the patient folder name from the path
-        patient_folder_name = file_item["patient_folder"]
+        temp_input_folder = os.path.join(temp_folder_path, patient_folder_name)
+        os.makedirs(temp_input_folder, exist_ok=True)
 
-        input_folder = os.path.join(temp_folder_path, patient_folder_name)
-        os.makedirs(input_folder, exist_ok=True)
+        download_path = os.path.join(temp_input_folder, file_name)
 
         logger.debug(
-            f"Downloading {patient_folder_name} to {input_folder} - ({log_idx}/{total_files})"
+            f"Downloading {file_name} to {temp_input_folder} - ({log_idx}/{total_files})"
         )
 
-        folder_contents = file_system_client.get_paths(path=path, recursive=True)
-
-        for item in folder_contents:
-            item_path = str(item.name)
-
-            if file_processor.is_file_ignored_by_path(item_path):
-                logger.debug(f"Skipping {item_path}")
-                continue
-
-            file_name = item_path.split("/")[-1]
-
-            if not file_name.endswith(".csv"):
-                continue
-
-            input_file_client = file_system_client.get_file_client(file_path=item_path)
-
-            download_path = os.path.join(input_folder, file_name)
-
-            with open(file=download_path, mode="wb") as f:
-                f.write(input_file_client.download_file().readall())
-                logger.debug(
-                    f"Downloaded {file_name} to {input_folder} - ({log_idx}/{total_files})"
-                )
+        with open(file=download_path, mode="wb") as f:
+            f.write(input_file_client.download_file().readall())
 
         logger.info(
-            f"Downloaded {patient_folder_name} to {input_folder} - ({log_idx}/{total_files})"
+            f"Downloaded {file_name} to {temp_input_folder} - ({log_idx}/{total_files})"
         )
+
+        # unzip the file into the temp folder
+        with zipfile.ZipFile(download_path, "r") as zip_ref:
+            zip_ref.extractall(temp_input_folder)
 
         output_folder = os.path.join(temp_folder_path, "output")
         os.makedirs(output_folder, exist_ok=True)
@@ -183,7 +198,7 @@ def pipeline(
 
         try:
             conversion_dict = env_sensor.convert(
-                input_folder,
+                temp_input_folder,
                 output_folder,
                 visit_file=red_cap_export_file_path,
             )
@@ -330,7 +345,9 @@ def pipeline(
         print(f"Cleaning up temp folders - ({log_idx}/{total_files})")
         shutil.rmtree(data_plot_folder)
         shutil.rmtree(output_folder)
-        shutil.rmtree(input_folder)
+        os.remove(download_path)
+        shutil.rmtree(temp_input_folder)
+        shutil.rmtree(temp_folder_path)
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
