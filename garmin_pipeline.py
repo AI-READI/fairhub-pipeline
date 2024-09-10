@@ -218,7 +218,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_modality = file_item["modality"]
 
             logger.debug(
-                f"Downloading {path} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                f"Downloading {path} - ({patient_idx}/{total_patients})"
             )
 
             download_path = os.path.join(
@@ -235,7 +235,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 blob_client.download_file().readinto(data)
 
             logger.info(
-                f"Downloaded {original_file_name} to {download_path} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                f"Downloaded {original_file_name} to {download_path} - ({patient_idx}/{total_patients})"
             )
 
             converted_output_folder_path = os.path.join(
@@ -243,7 +243,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
 
             logger.info(
-                f"Converting {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                f"Converting {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
             )
 
             if file_modality == "Sleep":
@@ -253,7 +253,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
 
                     logger.info(
-                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Converted {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                     )
 
                     for root, dirs, files in os.walk(converted_output_folder_path):
@@ -265,7 +265,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             )
                 except Exception:
                     logger.error(
-                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Failed to convert {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                     )
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
@@ -281,12 +281,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
 
                     logger.info(
-                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Converted {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                     )
 
                 except Exception:
                     logger.error(
-                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Failed to convert {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                     )
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
@@ -297,7 +297,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     continue
             else:
                 logger.info(
-                    f"Skipping {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                    f"Skipping {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                 )
                 continue
 
@@ -699,7 +699,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 except Exception:
                     outputs_uploaded = False
-                    logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
+                    logger.error(f"Failed to upload {file}")
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
 
@@ -719,11 +719,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
             )
         else:
             logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
             )
 
         workflow_file_dependencies.add_dependency(

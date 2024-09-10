@@ -116,7 +116,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
         if should_file_be_ignored:
-            logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
+            logger.info(f"Ignoring {original_file_name}")
             continue
 
         file_name_only = original_file_name.split(".")[0]
@@ -135,7 +135,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 f"The file {path} has not been modified since the last time it was processed",
             )
             logger.debug(
-                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
+                f"Skipping {path} - File has not been modified"
             )
 
             continue
@@ -144,8 +144,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_processor.clear_errors(path)
 
-        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
-
         # File should be downloaded as DEX_{patient_id}.csv
         download_path = os.path.join(temp_folder_path, f"DEX-{patient_id}.csv")
 
@@ -153,7 +151,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             input_file_client.download_file().readinto(data)
 
         logger.info(
-            f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
+            f"Downloaded {original_file_name} to {download_path}"
         )
 
         cgm_path = download_path
@@ -189,7 +187,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
         except Exception:
             logger.error(
-                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+                f"Failed to convert {original_file_name}"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -203,7 +201,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_item["processed"] = True
 
         logger.debug(
-            f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            f"Uploading outputs of {original_file_name} to {processed_data_output_folder}"
         )
 
         # file is converted successfully. Upload the output file
@@ -221,8 +219,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 file_name2 = file.split("/")[-1]
 
-                logger.debug(f"Uploading {file} - ({log_idx}/{total_files})")
-
                 output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{file_name2}"
 
                 try:
@@ -231,7 +227,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     output_blob_client.upload_data(data, overwrite=True)
                 except Exception:
                     outputs_uploaded = False
-                    logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
+                    logger.error(f"Failed to upload {file}")
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
 
@@ -257,7 +253,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # upload the QC file
         logger.debug(
-            f"Uploading QC file for {original_file_name} - ({log_idx}/{total_files})"
+            f"Uploading QC file for {original_file_name}"
         )
         output_qc_file_path = f"{processed_data_qc_folder}/{patient_id}/QC_results.txt"
 
@@ -269,7 +265,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         except Exception:
             file_item["qc_uploaded"] = False
             logger.error(
-                f"Failed to format {original_file_name} - ({log_idx}/{total_files})"
+                f"Failed to format {original_file_name})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -281,18 +277,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             continue
 
         logger.debug(
-            f"Uploaded QC file for {original_file_name} - ({log_idx}/{total_files})"
+            f"Uploaded QC file for {original_file_name}"
         )
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
             )
         else:
             logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder})"
             )
 
         workflow_file_dependencies.add_dependency(

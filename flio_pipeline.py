@@ -150,7 +150,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         os.makedirs(step1_folder, exist_ok=True)
 
         logger.debug(
-            f"Downloading {patient_folder_name} to {step1_folder} - ({log_idx}/{total_files})"
+            f"Downloading {patient_folder_name} to {step1_folder}"
         )
 
         # Download the contents of the patient folder to the step1 folder
@@ -185,17 +185,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 continue
 
             logger.debug(
-                f"Downloading {item_path} to {download_path} - ({log_idx}/{total_files})"
+                f"Downloading {item_path} to {download_path}"
             )
 
             with open(file=download_path, mode="wb") as f:
                 f.write(file_client.download_file().readall())
                 logger.debug(
-                    f"Downloaded {item_path} to {download_path} - ({log_idx}/{total_files})"
+                    f"Downloaded {item_path} to {download_path}"
                 )
 
         logger.info(
-            f"Downloaded {patient_folder_name} to {step1_folder} - ({log_idx}/{total_files})"
+            f"Downloaded {patient_folder_name} to {step1_folder}"
         )
 
         flio_instance = Flio()
@@ -211,7 +211,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
             logger.error(
-                f"Failed to organize {patient_folder_name} - ({log_idx}/{total_files})"
+                f"Failed to organize {patient_folder_name}"
             )
 
             error_exception = "".join(format_exc().splitlines())
@@ -265,12 +265,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             for file in files:
                 full_file_path = os.path.join(root, file)
 
-                logger.debug(f"Found file {full_file_path} - ({log_idx}/{total_files})")
+                logger.debug(f"Found file {full_file_path}")
 
                 # Check if is a json metadata file
                 if full_file_path.endswith(".json"):
                     logger.debug(
-                        f"Skipping {full_file_path} for now - ({log_idx}/{total_files})"
+                        f"Skipping {full_file_path} for now"
                     )
                     continue
 
@@ -283,7 +283,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 logger.debug(
-                    f"Uploading {full_file_path} to {output_file_path} - ({log_idx}/{total_files})"
+                    f"Uploading {full_file_path} to {output_file_path}"
                 )
 
                 try:
@@ -300,12 +300,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     with open(full_file_path, "rb") as f:
                         output_file_client.upload_data(f, overwrite=True)
                         logger.info(
-                            f"Uploaded {combined_file_name} - ({log_idx}/{total_files})"
+                            f"Uploaded {combined_file_name}"
                         )
                 except Exception:
                     outputs_uploaded = False
                     logger.error(
-                        f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
+                        f"Failed to upload {combined_file_name}"
                     )
 
                     upload_exception = "".join(format_exc().splitlines())
@@ -325,12 +325,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Uploaded outputs of {patient_folder_name} to {processed_data_output_folder}"
             )
         else:
             file_item["output_uploaded"] = upload_exception
             logger.error(
-                f"Failed to upload outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Failed to upload outputs of {patient_folder_name} to {processed_data_output_folder}"
             )
 
         workflow_file_dependencies.add_dependency(
@@ -339,7 +339,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.time(time_estimator.step())
 
-        logger.debug("Cleaning up temp folders - ({log_idx}/{total_files})")
+        logger.debug("Cleaning up temp folders")
 
         shutil.rmtree(step5_folder)
         shutil.rmtree(step4_folder)
