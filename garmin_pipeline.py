@@ -75,22 +75,22 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     logger = logging.Logwatch("fitness_tracker", print=True)
 
-    sas_token = azureblob.generate_account_sas(
-        account_name="b2aistaging",
-        account_key=config.AZURE_STORAGE_ACCESS_KEY,
-        resource_types=azureblob.ResourceTypes(container=True, object=True),
-        permission=azureblob.AccountSasPermissions(
-            read=True, write=True, list=True, delete=True
-        ),
-        expiry=datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=24),
-    )
+    # sas_token = azureblob.generate_account_sas(
+    #     account_name="b2aistaging",
+    #     account_key=config.AZURE_STORAGE_ACCESS_KEY,
+    #     resource_types=azureblob.ResourceTypes(container=True, object=True),
+    #     permission=azureblob.AccountSasPermissions(
+    #         read=True, write=True, list=True, delete=True
+    #     ),
+    #     expiry=datetime.datetime.now(datetime.timezone.utc)
+    #     + datetime.timedelta(hours=24),
+    # )
 
     # Get the blob service client
-    blob_service_client = azureblob.BlobServiceClient(
-        account_url="https://b2aistaging.blob.core.windows.net/",
-        credential=sas_token,
-    )
+    # blob_service_client = azureblob.BlobServiceClient(
+    #     account_url="https://b2aistaging.blob.core.windows.net/",
+    #     credential=sas_token,
+    # )
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -245,12 +245,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             # Create the directory if it does not exist
             os.makedirs(os.path.dirname(download_path), exist_ok=True)
 
-            blob_client = blob_service_client.get_blob_client(
-                container="stage-1-container", blob=path
-            )
+            blob_client = file_system_client.get_file_client(file_path=path)
+
 
             with open(download_path, "wb") as data:
-                blob_client.download_blob().readinto(data)
+                blob_client.download_file().readinto(data)
 
             logger.info(
                 f"Downloaded {original_file_name} to {download_path} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
@@ -712,11 +711,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 output_file_path = file["uploaded_file_path"]
 
                 try:
-                    output_blob_client = blob_service_client.get_blob_client(
-                        container="stage-1-container",
-                        blob=output_file_path,
-                    )
-                    output_blob_client.upload_blob(data)
+                    output_blob_client = file_system_client.get_file_client(file_path=output_file_path)
+                    output_blob_client.download_file(data)
+
                 except Exception:
                     outputs_uploaded = False
                     logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
@@ -829,11 +826,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
 
     with open(json_file_path, "rb") as data:
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container",
-            blob=f"{dependency_folder}/{json_file_name}",
-        )
-        output_blob_client.upload_blob(data)
+
+        output_blob_client = file_system_client.get_file_client(file_path=f"{dependency_folder}/{json_file_name}")
+
+        output_blob_client.upload_data(data)
 
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 

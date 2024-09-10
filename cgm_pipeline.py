@@ -47,23 +47,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     logger = logging.Logwatch("cgm", print=True)
 
-    sas_token = azureblob.generate_account_sas(
-        account_name="b2aistaging",
-        account_key=config.AZURE_STORAGE_ACCESS_KEY,
-        resource_types=azureblob.ResourceTypes(container=True, object=True),
-        permission=azureblob.AccountSasPermissions(
-            read=True, write=True, list=True, delete=True
-        ),
-        expiry=datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=24),
-    )
-
-    # Get the blob service client
-    blob_service_client = azureblob.BlobServiceClient(
-        account_url="https://b2aistaging.blob.core.windows.net/",
-        credential=sas_token,
-    )
-
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
@@ -140,11 +123,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         patient_id = file_name_only.split("_")[3]
 
         # download the file to the temp folder
-        blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container", blob=path
-        )
+        input_file_client = file_system_client.get_file_client(file_path=path)
 
-        input_last_modified = blob_client.get_blob_properties().last_modified
+        input_last_modified = input_file_client.get_file_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
 
@@ -169,7 +150,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         download_path = os.path.join(temp_folder_path, f"DEX-{patient_id}.csv")
 
         with open(download_path, "wb") as data:
-            blob_client.download_blob().readinto(data)
+            input_file_client.download_file().readinto(data)
 
         logger.info(
             f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
@@ -245,11 +226,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{file_name2}"
 
                 try:
-                    output_blob_client = blob_service_client.get_blob_client(
-                        container="stage-1-container",
-                        blob=output_file_path,
-                    )
-                    output_blob_client.upload_blob(data)
+                    output_blob_client = file_system_client.get_file_client(file_path=output_file_path)
+
+                    output_blob_client.upload_data(data, overwrite=True)
                 except Exception:
                     outputs_uploaded = False
                     logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
@@ -284,11 +263,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         try:
             with open(cgm_final_output_qc_file_path, "rb") as data:
-                output_blob_client = blob_service_client.get_blob_client(
-                    container="stage-1-container",
-                    blob=output_qc_file_path,
-                )
-                output_blob_client.upload_blob(data)
+                output_blob_client = file_system_client.get_file_client(file_path=output_qc_file_path)
+
+                output_blob_client.upload_data(data, overwrite=True)
         except Exception:
             file_item["qc_uploaded"] = False
             logger.error(
@@ -347,16 +324,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     # Upload the manifest file
     with open(manifest_file_path, "rb") as data:
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container",
-            blob=f"{manifest_folder}/manifest_cgm_v2.tsv",
-        )
+
+        output_blob_client = file_system_client.get_file_client(file_path=f"{manifest_folder}/manifest_cgm_v2.tsv")
 
         # Delete the manifest file if it exists
         # with contextlib.suppress(Exception):
-        output_blob_client.delete_blob()
-
-        output_blob_client.upload_blob(data)
+        if output_blob_client.exists():
+            raise Exception(
+                f"File {output_file_path} already exists. Throwing exception"
+            )
+        output_blob_client.upload_data(data, overwrite=True)
 
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -386,12 +363,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
         )
 
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container",
-            blob=f"{pipeline_workflow_log_folder}/{file_name}",
-        )
+        output_blob_client = file_system_client.get_file_client(file_path=f"{pipeline_workflow_log_folder}/{file_name}")
 
-        output_blob_client.upload_blob(data)
+        output_blob_client.upload_data(data, overwrite=True)
 
     deps_output = workflow_file_dependencies.write_to_file(temp_folder_path)
 
@@ -399,11 +373,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     json_file_name = deps_output["file_name"]
 
     with open(json_file_path, "rb") as data:
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container",
-            blob=f"{dependency_folder}/{json_file_name}",
-        )
-        output_blob_client.upload_blob(data)
+        output_blob_client = file_system_client.get_file_client(file_path=f"{dependency_folder}/{json_file_name}")
+
+        output_blob_client.upload_data(data, overwrite=True)
 
     shutil.rmtree(temp_folder_path)
 
