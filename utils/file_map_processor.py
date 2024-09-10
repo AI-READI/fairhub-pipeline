@@ -163,7 +163,7 @@ class FileMapProcessor:
             with contextlib.suppress(Exception):
                 output_blob_client.delete_file()
 
-            output_blob_client.upload_data(data)
+            output_blob_client.upload_data(data, overwrite=True)
         shutil.rmtree(self.meta_temp_folder_path)
 
     def is_file_ignored(self, file_name, path) -> bool:
