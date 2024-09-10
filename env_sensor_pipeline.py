@@ -36,7 +36,7 @@ def pipeline(
     pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
     data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
     ignore_file = f"{study_id}/ignore/envSensor.ignore"
-    red_cap_export_file = f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep05_EnviroPhysSensorInfoNoPilot.csv"
+    red_cap_export_file = f"{study_id}/pooled-data/REDCap/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("env_sensor", print=True)
 
@@ -345,7 +345,6 @@ def pipeline(
         print(f"Cleaning up temp folders - ({log_idx}/{total_files})")
         shutil.rmtree(data_plot_folder)
         shutil.rmtree(output_folder)
-        os.remove(download_path)
         shutil.rmtree(temp_input_folder)
         shutil.rmtree(temp_folder_path)
 
@@ -353,7 +352,7 @@ def pipeline(
     file_processor.remove_seen_flag_from_map()
 
     # Write the manifest to a file
-    manifest_file_path = os.path.join(temp_folder_path, "manifest.tsv")
+    manifest_file_path = os.path.join(meta_temp_folder_path, "manifest.tsv")
 
     manifest.write_tsv(manifest_file_path)
 
