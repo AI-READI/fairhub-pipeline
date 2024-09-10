@@ -143,7 +143,7 @@ def pipeline(
         should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
         if should_file_be_ignored:
-            logger.info(f"Ignoring {file_name}")
+            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
             continue
 
         # download the file to the temp folder
@@ -160,7 +160,7 @@ def pipeline(
                 f"The file {path} has not been modified since the last time it was processed",
             )
             logger.debug(
-                f"Skipping {path} - File has not been modified"
+                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
             )
 
             continue
@@ -175,14 +175,14 @@ def pipeline(
         download_path = os.path.join(temp_input_folder, file_name)
 
         logger.debug(
-            f"Downloading {file_name} to {temp_input_folder}"
+            f"Downloading {file_name} to {temp_input_folder} - ({log_idx}/{total_files})"
         )
 
         with open(file=download_path, mode="wb") as f:
             f.write(input_file_client.download_file().readall())
 
         logger.info(
-            f"Downloaded {file_name} to {temp_input_folder}"
+            f"Downloaded {file_name} to {temp_input_folder} - ({log_idx}/{total_files})"
         )
 
         # unzip the file into the temp folder
@@ -194,7 +194,7 @@ def pipeline(
 
         env_sensor = es.EnvironmentalSensor()
 
-        logger.debug(f"Converting {patient_folder_name}")
+        logger.debug(f"Converting {patient_folder_name} - ({log_idx}/{total_files})")
 
         try:
             conversion_dict = env_sensor.convert(
@@ -205,7 +205,7 @@ def pipeline(
 
         except Exception:
             logger.error(
-                f"Failed to convert {patient_folder_name}"
+                f"Failed to convert {patient_folder_name} - ({log_idx}/{total_files})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -218,7 +218,7 @@ def pipeline(
 
             continue
 
-        logger.info(f"Converted {patient_folder_name}")
+        logger.info(f"Converted {patient_folder_name} - ({log_idx}/{total_files})")
 
         data_plot_folder = os.path.join(temp_folder_path, "data_plot")
         os.makedirs(data_plot_folder, exist_ok=True)
@@ -258,7 +258,7 @@ def pipeline(
 
         else:
             logger.error(
-                f"Failed to convert {patient_folder_name}"
+                f"Failed to convert {patient_folder_name} - ({log_idx}/{total_files})"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -272,7 +272,7 @@ def pipeline(
             continue
 
         logger.debug(
-            f"Uploading outputs of {patient_folder_name} to {processed_data_output_folder}"
+            f"Uploading outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
         )
 
         workflow_output_files = []
@@ -287,7 +287,7 @@ def pipeline(
             output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{pid}/{f2}"
 
             logger.debug(
-                f"Uploading {output_file} to {output_file_path}"
+                f"Uploading {output_file} to {output_file_path} - ({log_idx}/{total_files})"
             )
 
             try:
@@ -303,11 +303,11 @@ def pipeline(
 
                 output_file_client.upload_data(data, overwrite=True)
 
-                logger.info(f"Uploaded {output_file_path}")
+                logger.info(f"Uploaded {output_file_path} - ({log_idx}/{total_files})")
             except Exception:
                 outputs_uploaded = False
                 logger.error(
-                    f"Failed to upload {output_file_path}"
+                    f"Failed to upload {output_file_path} - ({log_idx}/{total_files})"
                 )
                 error_exception = format_exc()
                 error_exception = "".join(error_exception.splitlines())
@@ -329,11 +329,11 @@ def pipeline(
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {patient_folder_name} to {processed_data_output_folder}"
+                f"Uploaded outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
         else:
             logger.error(
-                f"Failed to upload outputs of {patient_folder_name} to {processed_data_output_folder}"
+                f"Failed to upload outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
             )
 
         workflow_file_dependencies.add_dependency(
@@ -342,7 +342,7 @@ def pipeline(
 
         logger.time(time_estimator.step())
 
-        logger.debug("Cleaning up temp folders")
+        print(f"Cleaning up temp folders - ({log_idx}/{total_files})")
         shutil.rmtree(data_plot_folder)
         shutil.rmtree(output_folder)
         shutil.rmtree(temp_input_folder)
