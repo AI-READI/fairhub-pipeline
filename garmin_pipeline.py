@@ -75,23 +75,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     logger = logging.Logwatch("fitness_tracker", print=True)
 
-    # sas_token = azureblob.generate_account_sas(
-    #     account_name="b2aistaging",
-    #     account_key=config.AZURE_STORAGE_ACCESS_KEY,
-    #     resource_types=azureblob.ResourceTypes(container=True, object=True),
-    #     permission=azureblob.AccountSasPermissions(
-    #         read=True, write=True, list=True, delete=True
-    #     ),
-    #     expiry=datetime.datetime.now(datetime.timezone.utc)
-    #     + datetime.timedelta(hours=24),
-    # )
-
-    # Get the blob service client
-    # blob_service_client = azureblob.BlobServiceClient(
-    #     account_url="https://b2aistaging.blob.core.windows.net/",
-    #     credential=sas_token,
-    # )
-
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
@@ -806,12 +789,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
         )
 
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container",
-            blob=f"{pipeline_workflow_log_folder}/{file_name}",
-        )
+        output_blob_client = file_system_client.get_file_client(file_path=f"{pipeline_workflow_log_folder}/{file_name}")
 
-        output_blob_client.upload_blob(data)
+        output_blob_client.upload_data(data)
 
         logger.info(
             f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
