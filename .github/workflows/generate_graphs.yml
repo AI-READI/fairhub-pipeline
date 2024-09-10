@@ -23,8 +23,8 @@ jobs:
       - name: Delete package-lock.json
         run: rm package-lock.json && rm package.json
 
-      - name: Commit and push if changed
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore: generate mermaid diagrams"
-          commit_options: "--no-verify --signoff"
+      # - name: Commit and push if changed
+      #   uses: stefanzweifel/git-auto-commit-action@v5
+      #   with:
+      #     commit_message: "chore: generate mermaid diagrams"
+      #     commit_options: "--no-verify --signoff"
