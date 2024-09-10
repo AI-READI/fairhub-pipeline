@@ -172,6 +172,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         uuid = f"AIREADI-{patient_id}"
 
+        timezone = "pst"
+
+        # if patient id starts with a 7xxx(UAB), set the timezone to "cst"
+        if patient_id.startswith("7"):
+            timezone = "cst"
+
         try:
             cgm.convert(
                 input_path=cgm_path,
@@ -183,7 +189,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 transmitter_time=5,
                 transmitter_id=6,
                 uuid=uuid,
-                timezone="pst",
+                timezone=timezone,
             )
         except Exception:
             logger.error(
