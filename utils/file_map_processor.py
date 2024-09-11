@@ -6,7 +6,6 @@ import azure.storage.blob as azureblob
 import config
 import shutil
 
-from fnmatch import fnmatch
 import pathlib
 import glob
 import json
@@ -192,3 +191,14 @@ class FileMapProcessor:
                 return True
 
         return False
+
+    def files_to_ignore(self, input_folder) -> bool:
+        files_to_ignore = []
+
+        # Using glob to get all files that match the ignore pattern
+        for pattern in self.ignore_files:
+            glob_pattern = os.path.join(input_folder, pattern)
+
+            files_to_ignore.extend(glob.glob(glob_pattern))
+
+        return files_to_ignore

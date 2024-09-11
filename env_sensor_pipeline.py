@@ -36,7 +36,8 @@ def pipeline(
     pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
     data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
     ignore_file = f"{study_id}/ignore/envSensor.ignore"
-    red_cap_export_file = f"{study_id}/pooled-data/REDCap/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    red_cap_export_file = f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep05_EnviroPhysSensorInfoALL.csv"
+    participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("env_sensor", print=True)
 
@@ -61,17 +62,45 @@ def pipeline(
     paths = file_system_client.get_paths(path=input_folder, recursive=False)
 
     file_paths = []
+    participant_filter_list = []
+
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_meta_")
 
     logger.debug(f"Getting file paths in {input_folder}")
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
-    for path in paths:
-        t = str(path.name)
+    # Get the participant filter list file
+    with contextlib.suppress(Exception):
+        file_client = file_system_client.get_file_client(
+            file_path=participant_filter_list_file
+        )
 
-        if file_processor.is_file_ignored_by_path(t):
-            logger.debug(f"Skipping {t}")
-            continue
+        temp_participant_filter_list_file = os.path.join(
+            meta_temp_folder_path, "filter_file.csv"
+        )
+
+        with open(file=temp_participant_filter_list_file, mode="wb") as f:
+            f.write(file_client.download_file().readall())
+
+        with open(file=temp_participant_filter_list_file, mode="r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                participant_filter_list.append(row[0])
+
+        # remove the first row
+        participant_filter_list.pop(0)
+
+    exit_flag = False
+
+    for path in paths:
+        if exit_flag:
+            break
+        else:
+            exit_flag = True
+
+        t = str(path.name)
 
         file_name = t.split("/")[-1]
 
@@ -84,7 +113,20 @@ def pipeline(
             logger.debug(f"Skipping {file_name}")
             continue
 
+        cleaned_file_name = t.replace(".zip", "")
+
+        if file_processor.is_file_ignored_by_path(cleaned_file_name):
+            logger.debug(f"Skipping {t}")
+            continue
+
         patient_id = file_name.split("-")[1]
+
+        if str(patient_id) not in participant_filter_list:
+            logger.debug(
+                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+            )
+            continue
+
         patient_folder_name = file_name.split(".")[0]
 
         file_paths.append(
@@ -99,9 +141,6 @@ def pipeline(
                 "output_files": [],
             }
         )
-
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_meta_")
 
     # Download the redcap export file
     red_cap_export_file_path = os.path.join(meta_temp_folder_path, "redcap_export.csv")
@@ -172,22 +211,38 @@ def pipeline(
         temp_input_folder = os.path.join(temp_folder_path, patient_folder_name)
         os.makedirs(temp_input_folder, exist_ok=True)
 
-        download_path = os.path.join(temp_input_folder, file_name)
+        download_path = os.path.join(temp_folder_path, "raw_data.zip")
 
         logger.debug(
-            f"Downloading {file_name} to {temp_input_folder} - ({log_idx}/{total_files})"
+            f"Downloading {file_name} to {download_path} - ({log_idx}/{total_files})"
         )
 
         with open(file=download_path, mode="wb") as f:
             f.write(input_file_client.download_file().readall())
 
         logger.info(
-            f"Downloaded {file_name} to {temp_input_folder} - ({log_idx}/{total_files})"
+            f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})"
         )
+
+        logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
 
         # unzip the file into the temp folder
         with zipfile.ZipFile(download_path, "r") as zip_ref:
             zip_ref.extractall(temp_input_folder)
+
+        logger.info(f"Unzipped {download_path} to {temp_input_folder}")
+
+        # Count the number of files in the temp_input_folder recursively
+        # One liner form https://stackoverflow.com/questions/16910330/return-total-number-of-files-in-directory-and-subdirectories
+        num_files = sum([len(files) for r, d, files in os.walk(temp_input_folder)])
+        logger.debug(f"Number of files in {temp_input_folder}: {num_files}")
+
+        files_to_ignore = file_processor.files_to_ignore(temp_folder_path)
+
+        # Delete the files that match the ignore pattern
+        for file_to_ignore in files_to_ignore:
+            os.remove(file_to_ignore)
+            logger.debug(f"Deleted {file_to_ignore} due to ignore pattern")
 
         output_folder = os.path.join(temp_folder_path, "output")
         os.makedirs(output_folder, exist_ok=True)
