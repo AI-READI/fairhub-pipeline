@@ -75,23 +75,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     logger = logging.Logwatch("fitness_tracker", print=True)
 
-    sas_token = azureblob.generate_account_sas(
-        account_name="b2aistaging",
-        account_key=config.AZURE_STORAGE_ACCESS_KEY,
-        resource_types=azureblob.ResourceTypes(container=True, object=True),
-        permission=azureblob.AccountSasPermissions(
-            read=True, write=True, list=True, delete=True
-        ),
-        expiry=datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=24),
-    )
-
-    # Get the blob service client
-    blob_service_client = azureblob.BlobServiceClient(
-        account_url="https://b2aistaging.blob.core.windows.net/",
-        credential=sas_token,
-    )
-
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
@@ -190,7 +173,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     for idx, patient_id in enumerate(patient_ids):
         patient_idx = idx + 1
-
+        # if patient_idx == 3:
+        #     break
         logger.debug(f"Processing {patient_id} - ({patient_idx}/{total_patients})")
 
         patient_files = [
@@ -235,7 +219,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_modality = file_item["modality"]
 
             logger.debug(
-                f"Downloading {path} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                f"Downloading {path} - ({patient_idx}/{total_patients})"
             )
 
             download_path = os.path.join(
@@ -245,15 +229,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             # Create the directory if it does not exist
             os.makedirs(os.path.dirname(download_path), exist_ok=True)
 
-            blob_client = blob_service_client.get_blob_client(
-                container="stage-1-container", blob=path
-            )
+            blob_client = file_system_client.get_file_client(file_path=path)
+
 
             with open(download_path, "wb") as data:
-                blob_client.download_blob().readinto(data)
+                blob_client.download_file().readinto(data)
 
             logger.info(
-                f"Downloaded {original_file_name} to {download_path} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                f"Downloaded {original_file_name} to {download_path} - ({patient_idx}/{total_patients})"
             )
 
             converted_output_folder_path = os.path.join(
@@ -261,7 +244,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
 
             logger.info(
-                f"Converting {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                f"Converting {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
             )
 
             if file_modality == "Sleep":
@@ -271,7 +254,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
 
                     logger.info(
-                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Converted {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                     )
 
                     for root, dirs, files in os.walk(converted_output_folder_path):
@@ -283,7 +266,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             )
                 except Exception:
                     logger.error(
-                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Failed to convert {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                     )
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
@@ -299,12 +282,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
 
                     logger.info(
-                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Converted {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                     )
 
                 except Exception:
                     logger.error(
-                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                        f"Failed to convert {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                     )
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
@@ -315,7 +298,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     continue
             else:
                 logger.info(
-                    f"Skipping {file_modality}/{original_file_name} - ({file_idx}/{total_files}) - ({patient_idx}/{total_patients})"
+                    f"Skipping {file_modality}/{original_file_name} - ({patient_idx}/{total_patients})"
                 )
                 continue
 
@@ -712,14 +695,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 output_file_path = file["uploaded_file_path"]
 
                 try:
-                    output_blob_client = blob_service_client.get_blob_client(
-                        container="stage-1-container",
-                        blob=output_file_path,
-                    )
-                    output_blob_client.upload_blob(data)
+                    output_blob_client = file_system_client.get_file_client(file_path=output_file_path)
+                    output_blob_client.download_file(data)
+
                 except Exception:
                     outputs_uploaded = False
-                    logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
+                    logger.error(f"Failed to upload {file}")
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
 
@@ -739,11 +720,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
             )
         else:
             logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
             )
 
         workflow_file_dependencies.add_dependency(
@@ -809,12 +790,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
         )
 
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container",
-            blob=f"{pipeline_workflow_log_folder}/{file_name}",
-        )
+        output_blob_client = file_system_client.get_file_client(file_path=f"{pipeline_workflow_log_folder}/{file_name}")
 
-        output_blob_client.upload_blob(data)
+        output_blob_client.upload_data(data, overwrite=True)
 
         logger.info(
             f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
@@ -829,11 +807,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
 
     with open(json_file_path, "rb") as data:
-        output_blob_client = blob_service_client.get_blob_client(
-            container="stage-1-container",
-            blob=f"{dependency_folder}/{json_file_name}",
-        )
-        output_blob_client.upload_blob(data)
+
+        output_blob_client = file_system_client.get_file_client(file_path=f"{dependency_folder}/{json_file_name}")
+
+        output_blob_client.upload_data(data, overwrite=True)
 
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 

@@ -127,7 +127,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
         if should_file_be_ignored:
-            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            logger.info(f"Ignoring {file_name}")
             continue
 
         # download the file to the temp folder
@@ -144,7 +144,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 f"The file {path} has not been modified since the last time it was processed",
             )
             logger.debug(
-                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
+                f"Skipping {path} - File has not been modified"
             )
 
             continue
@@ -153,7 +153,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_processor.clear_errors(path)
 
-        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
+        logger.debug(f"Processing {path}")
 
         # get the file name from the path
         original_file_name = path.split("/")[-1]
@@ -169,7 +169,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             input_file_client.download_file().readinto(data)
 
         logger.info(
-            f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})"
+            f"Downloaded {file_name} to {download_path}"
         )
 
         filtered_file_names = imaging_utils.get_filtered_file_names(step1_folder)
@@ -187,7 +187,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
             logger.error(
-                f"Failed to organize {original_file_name} - ({log_idx}/{total_files})"
+                f"Failed to organize {original_file_name}"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -225,7 +225,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     eidon_instance.convert(file, output)
         except Exception:
             logger.error(
-                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+                f"Failed to convert {original_file_name}"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -249,7 +249,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     imaging_utils.format_file(file, destination_folder)
         except Exception:
             logger.error(
-                f"Failed to format {original_file_name} - ({log_idx}/{total_files})"
+                f"Failed to format {original_file_name}"
             )
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
@@ -263,7 +263,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_item["processed"] = True
 
         logger.debug(
-            f"Uploading outputs of {file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            f"Uploading outputs of {file_name} to {processed_data_output_folder}"
         )
 
         workflow_output_files = []
@@ -281,7 +281,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 combined_file_name = "/".join(f2)
 
                 logger.debug(
-                    f"Uploading {combined_file_name} - ({log_idx}/{total_files})"
+                    f"Uploading {combined_file_name}"
                 )
 
                 output_file_path = (
@@ -304,7 +304,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 except Exception:
                     outputs_uploaded = False
                     logger.error(
-                        f"Failed to upload {combined_file_name} - ({log_idx}/{total_files})"
+                        f"Failed to upload {combined_file_name}"
                     )
                     error_exception = format_exc()
                     e = "".join(error_exception.splitlines())
@@ -326,11 +326,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
             )
         else:
             logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
             )
 
         workflow_file_dependencies.add_dependency(

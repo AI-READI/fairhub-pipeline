@@ -154,7 +154,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
 
         if should_file_be_ignored:
-            logger.info(f"Ignoring {original_file_name} - ({log_idx}/{total_files})")
+            logger.info(f"Ignoring {original_file_name}")
 
             logger.time(time_estimator.step())
             continue
@@ -171,7 +171,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 f"The file {path} has not been modified since the last time it was processed",
             )
             logger.debug(
-                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
+                f"Skipping {path} - File has not been modified"
             )
 
             logger.time(time_estimator.step())
@@ -181,7 +181,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         file_processor.clear_errors(path)
 
-        logger.debug(f"Processing {path} - ({log_idx}/{total_files})")
+        logger.debug(f"Processing {path}")
 
         download_path = os.path.join(temp_folder_path, original_file_name)
 
@@ -189,7 +189,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f.write(file_client.download_file().readall())
 
         logger.info(
-            f"Downloaded {original_file_name} to {download_path} - ({log_idx}/{total_files})"
+            f"Downloaded {original_file_name} to {download_path}"
         )
 
         ecg_path = download_path
@@ -208,7 +208,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             if participant_id not in participant_filter_list:
                 logger.warn(
-                    f"Participant ID {participant_id} not in the allowed list. Skipping {original_file_name} - ({log_idx}/{total_files})"
+                    f"Participant ID {participant_id} not in the allowed list. Skipping {original_file_name}"
                 )
 
                 file_processor.append_errors(
@@ -220,7 +220,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 continue
         except Exception:
             logger.error(
-                f"Failed to convert {original_file_name} - ({log_idx}/{total_files})"
+                f"Failed to convert {original_file_name}"
             )
             error_exception = format_exc()
             e = "".join(error_exception.splitlines())
@@ -235,13 +235,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_item["convert_error"] = False
         file_item["processed"] = True
 
-        logger.debug(f"Converted {original_file_name} - ({log_idx}/{total_files})")
+        logger.debug(f"Converted {original_file_name}")
 
         output_files = conv_retval_dict["output_files"]
         participant_id = conv_retval_dict["participantID"]
 
         logger.debug(
-            f"Uploading outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            f"Uploading outputs of {original_file_name} to {processed_data_output_folder}"
         )
 
         # file is in the format 1001_ecg_25aafb4b.dat
@@ -272,7 +272,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     output_file_client.upload_data(data, overwrite=True)
                 except Exception:
-                    logger.error(f"Failed to upload {file} - ({log_idx}/{total_files})")
+                    logger.error(f"Failed to upload {file}")
                     error_exception = format_exc()
                     e = "".join(error_exception.splitlines())
 
@@ -296,12 +296,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             file_item["output_uploaded"] = True
             file_item["status"] = "success"
             logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
             )
         else:
             file_item["output_uploaded"] = upload_exception
             logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
             )
 
         workflow_file_dependencies.add_dependency(
@@ -309,16 +309,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # Do the data plot
-        # logger.debug(f"Data plotting {original_file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Data plotting {original_file_name}")
 
         # dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
 
-        # logger.debug(f"Data plotted {original_file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Data plotted {original_file_name}")
 
         # dataplot_pngs = dataplot_retval_dict["output_files"]
 
         # logger.debug(
-        #     f"Uploading {original_file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
+        #     f"Uploading {original_file_name} to {data_plot_output_folder}"
         # )
 
         # for file in dataplot_pngs:
@@ -331,12 +331,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         #         output_blob_client.upload_blob(data)
 
         # logger.debug(
-        #     f"Uploaded {original_file_name} to {data_plot_output_folder} - ({log_idx}/{total_files}"
+        #     f"Uploaded {original_file_name} to {data_plot_output_folder}"
         # )
 
         # Create the file metadata
 
-        # logger.debug(f"Creating metadata for {original_file_name} - ({log_idx}/{total_files})")
+        # logger.debug(f"Creating metadata for {original_file_name}")
 
         # Generate the metadata
 
@@ -353,7 +353,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             manifest.add_metadata(hea_metadata, output_hea_file, output_dat_file)
 
         logger.debug(
-            f"Metadata created for {original_file_name} - ({log_idx}/{total_files})"
+            f"Metadata created for {original_file_name}"
         )
 
         logger.time(time_estimator.step())
@@ -443,12 +443,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         output_file_client.upload_data(data, overwrite=True)
 
     shutil.rmtree(meta_temp_folder_path)
-
-    # dev
-    # move the workflow log file and the json file to the current directory
-    # shutil.move(workflow_log_file_path, "status.csv")
-    # shutil.move(json_file_path, "file_map.json")
-
 
 if __name__ == "__main__":
     pipeline("AI-READI")

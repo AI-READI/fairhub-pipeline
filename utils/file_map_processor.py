@@ -1,13 +1,10 @@
 import contextlib
-import datetime
 import os
 import tempfile
-import azure.storage.blob as azureblob
 import config
 import shutil
-
+import azure.storage.filedatalake as azurelake
 import pathlib
-import glob
 import json
 
 
@@ -20,25 +17,6 @@ class FileMapProcessor:
         # where actually ignored files are stored in the array
         self.ignore_files = []
         self.dependency_folder = dependency_folder
-        # ignored file path on the azure
-
-        # Establish azure connection
-        sas_token = azureblob.generate_account_sas(
-            account_name="b2aistaging",
-            account_key=config.AZURE_STORAGE_ACCESS_KEY,
-            resource_types=azureblob.ResourceTypes(container=True, object=True),
-            permission=azureblob.AccountSasPermissions(
-                read=True, write=True, list=True, delete=True
-            ),
-            expiry=datetime.datetime.now(datetime.timezone.utc)
-            + datetime.timedelta(hours=24),
-        )
-
-        # Get the blob service client
-        self.blob_service_client = azureblob.BlobServiceClient(
-            account_url="https://b2aistaging.blob.core.windows.net/",
-            credential=sas_token,
-        )
 
         # Create a temporary folder on the local machine
         self.meta_temp_folder_path = tempfile.mkdtemp()
@@ -47,9 +25,15 @@ class FileMapProcessor:
             self.meta_temp_folder_path, "file_map.json"
         )
 
-        meta_blob_client = self.blob_service_client.get_blob_client(
-            container="stage-1-container", blob=f"{dependency_folder}/file_map.json"
+        self.file_system_client = azurelake.FileSystemClient.from_connection_string(
+            config.AZURE_STORAGE_CONNECTION_STRING,
+            file_system_name="stage-1-container",
         )
+
+        meta_blob_client = self.file_system_client.get_file_client(
+            file_path=f"{dependency_folder}/file_map.json"
+        )
+
         if ignore_file:
             # ignore File name coming from the ignore file path
             ignored_file_name = ignore_file.split("/")[-1]
@@ -57,13 +41,13 @@ class FileMapProcessor:
             ignore_file_download_path = os.path.join(
                 self.meta_temp_folder_path, ignored_file_name
             )
-            ignore_meta_blob_client = self.blob_service_client.get_blob_client(
-                container="stage-1-container", blob=ignore_file
+            ignore_meta_blob_client = self.file_system_client.get_file_client(
+                 file_path=ignore_file
             )
             # Download the meta file for the pipeline
             with contextlib.suppress(Exception):
                 with open(ignore_file_download_path, "wb") as data:
-                    ignore_meta_blob_client.download_blob().readinto(data)
+                    ignore_meta_blob_client.download_file().readinto(data)
 
                 # Read the ignore file
                 with open(ignore_file_download_path, "r") as f:
@@ -71,10 +55,12 @@ class FileMapProcessor:
             # Save trimmed file names
             self.ignore_files = [x.strip() for x in self.ignore_files]
 
+        shutil.rmtree(self.meta_temp_folder_path)
+
         # Downloading file map
         with contextlib.suppress(Exception):
             with open(file_map_download_path, "wb") as data:
-                meta_blob_client.download_blob().readinto(data)
+                meta_blob_client.download_file().readinto(data)
 
             # Load the meta file
             with open(file_map_download_path, "r") as f:
@@ -128,10 +114,10 @@ class FileMapProcessor:
             if entry["input_file"] == input_path:
                 for output_file in entry["output_files"]:
                     with contextlib.suppress(Exception):
-                        output_blob_client = self.blob_service_client.get_blob_client(
-                            container="stage-1-container", blob=output_file
+                        output_blob_client = self.file_system_client.get_file_client(
+                            file_path=output_file
                         )
-                        output_blob_client.delete_blob()
+                        output_blob_client.delete_file()
                 break
 
     def delete_out_of_date_output_files(self):
@@ -140,10 +126,11 @@ class FileMapProcessor:
             if not entry["seen"]:
                 for output_file in entry["output_files"]:
                     with contextlib.suppress(Exception):
-                        output_blob_client = self.blob_service_client.get_blob_client(
-                            container="stage-1-container", blob=output_file
+                        output_blob_client = self.file_system_client.get_file_client(
+                            file_path=output_file
                         )
-                        output_blob_client.delete_blob()
+
+                        output_blob_client.delete_file()
 
     def append_errors(self, error_exception, path):
         # This function appends errors to the json
@@ -165,24 +152,25 @@ class FileMapProcessor:
 
     def upload_json(self):
         # Write the file map to a file
-        file_map_file_path = os.path.join(self.meta_temp_folder_path, "file_map.json")
+        meta_temp_folder_path = tempfile.mkdtemp()
+
+        file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
         with open(file_map_file_path, "w") as f:
             json.dump(self.file_map, f, indent=4, sort_keys=True, default=str)
         with open(file_map_file_path, "rb") as data:
-            output_blob_client = self.blob_service_client.get_blob_client(
-                container="stage-1-container",
-                blob=f"{self.dependency_folder}/file_map.json",
+            output_blob_client = self.file_system_client.get_file_client(
+                file_path=f"{self.dependency_folder}/file_map.json",
             )
-            # delete the existing file map
-            with contextlib.suppress(Exception):
-                output_blob_client.delete_blob()
 
-            output_blob_client.upload_blob(data)
-        shutil.rmtree(self.meta_temp_folder_path)
+            # # delete the existing file map
+            with contextlib.suppress(Exception):
+                output_blob_client.delete_file()
+
+            output_blob_client.upload_data(data, overwrite=True)
+        shutil.rmtree(meta_temp_folder_path)
 
     def is_file_ignored(self, file_name, path) -> bool:
-
         return file_name in self.ignore_files or path in self.ignore_files
 
     def is_file_ignored_by_path(self, path) -> bool:
