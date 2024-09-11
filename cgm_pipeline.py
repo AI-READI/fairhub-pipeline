@@ -1,7 +1,6 @@
 """Process ecg data files"""
 
 import contextlib
-import datetime
 import os
 import tempfile
 import shutil
@@ -9,7 +8,6 @@ from traceback import format_exc
 
 import cgm.cgm as cgm
 import cgm.cgm_manifest as cgm_manifest
-import azure.storage.blob as azureblob
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
@@ -98,10 +96,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     manifest = cgm_manifest.CGMManifest()
 
-    time_estimator = TimeEstimator(len(file_paths))
+    time_estimator = TimeEstimator(total_files)
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
+
+        print("log_idx", log_idx)
 
         # if log_idx == 3:
         #     break
@@ -134,9 +134,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
-            logger.debug(
-                f"Skipping {path} - File has not been modified"
-            )
+            logger.debug(f"Skipping {path} - File has not been modified")
 
             continue
 
@@ -150,9 +148,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         with open(download_path, "wb") as data:
             input_file_client.download_file().readinto(data)
 
-        logger.info(
-            f"Downloaded {original_file_name} to {download_path}"
-        )
+        logger.info(f"Downloaded {original_file_name} to {download_path}")
 
         cgm_path = download_path
 
@@ -192,9 +188,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 timezone=timezone,
             )
         except Exception:
-            logger.error(
-                f"Failed to convert {original_file_name}"
-            )
+            logger.error(f"Failed to convert {original_file_name}")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -228,7 +222,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{file_name2}"
 
                 try:
-                    output_blob_client = file_system_client.get_file_client(file_path=output_file_path)
+                    output_blob_client = file_system_client.get_file_client(
+                        file_path=output_file_path
+                    )
 
                     output_blob_client.upload_data(data, overwrite=True)
                 except Exception:
@@ -258,21 +254,19 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # upload the QC file
-        logger.debug(
-            f"Uploading QC file for {original_file_name}"
-        )
+        logger.debug(f"Uploading QC file for {original_file_name}")
         output_qc_file_path = f"{processed_data_qc_folder}/{patient_id}/QC_results.txt"
 
         try:
             with open(cgm_final_output_qc_file_path, "rb") as data:
-                output_blob_client = file_system_client.get_file_client(file_path=output_qc_file_path)
+                output_blob_client = file_system_client.get_file_client(
+                    file_path=output_qc_file_path
+                )
 
                 output_blob_client.upload_data(data, overwrite=True)
         except Exception:
             file_item["qc_uploaded"] = False
-            logger.error(
-                f"Failed to format {original_file_name})"
-            )
+            logger.error(f"Failed to format {original_file_name})")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -282,9 +276,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             continue
 
-        logger.debug(
-            f"Uploaded QC file for {original_file_name}"
-        )
+        logger.debug(f"Uploaded QC file for {original_file_name}")
 
         if outputs_uploaded:
             file_item["output_uploaded"] = True
@@ -327,11 +319,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Upload the manifest file
     with open(manifest_file_path, "rb") as data:
 
-        output_blob_client = file_system_client.get_file_client(file_path=f"{manifest_folder}/manifest_cgm_v2.tsv")
-
-        # Delete the manifest file if it exists
-        # with contextlib.suppress(Exception):
-        output_blob_client.delete_file()
+        output_blob_client = file_system_client.get_file_client(
+            file_path=f"{manifest_folder}/manifest_cgm_v2.tsv"
+        )
 
         output_blob_client.upload_data(data, overwrite=True)
 
@@ -363,7 +353,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
         )
 
-        output_blob_client = file_system_client.get_file_client(file_path=f"{pipeline_workflow_log_folder}/{file_name}")
+        output_blob_client = file_system_client.get_file_client(
+            file_path=f"{pipeline_workflow_log_folder}/{file_name}"
+        )
 
         output_blob_client.upload_data(data, overwrite=True)
 
@@ -373,7 +365,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     json_file_name = deps_output["file_name"]
 
     with open(json_file_path, "rb") as data:
-        output_blob_client = file_system_client.get_file_client(file_path=f"{dependency_folder}/{json_file_name}")
+        output_blob_client = file_system_client.get_file_client(
+            file_path=f"{dependency_folder}/{json_file_name}"
+        )
 
         output_blob_client.upload_data(data, overwrite=True)
 

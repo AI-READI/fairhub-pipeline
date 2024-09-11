@@ -122,10 +122,12 @@ def pipeline(
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-    time_estimator = TimeEstimator(len(file_paths))
+    time_estimator = TimeEstimator(total_files)
 
     for idx, file_item in enumerate(file_paths):
         log_idx = idx + 1
+
+        print("log_idx", log_idx)
 
         # if log_idx == 5:
         #     break
@@ -167,9 +169,7 @@ def pipeline(
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
-            logger.debug(
-                f"Skipping {path} - File has not been modified"
-            )
+            logger.debug(f"Skipping {path} - File has not been modified")
 
             logger.time(time_estimator.step())
             continue
@@ -184,16 +184,12 @@ def pipeline(
 
         download_path = os.path.join(step1_folder, original_file_name)
 
-        logger.debug(
-            f"Downloading {original_file_name} to {download_path}"
-        )
+        logger.debug(f"Downloading {original_file_name} to {download_path}")
 
         with open(file=download_path, mode="wb") as f:
             f.write(file_client.download_file().readall())
 
-        logger.info(
-            f"Downloaded {original_file_name} to {download_path}"
-        )
+        logger.info(f"Downloaded {original_file_name} to {download_path}")
 
         spectralis_instance = Spectralis()
 
@@ -211,9 +207,7 @@ def pipeline(
 
                 file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
-            logger.error(
-                f"Failed to organize {original_file_name}"
-            )
+            logger.error(f"Failed to organize {original_file_name}")
 
             error_exception = "".join(format_exc().splitlines())
 
@@ -237,7 +231,7 @@ def pipeline(
         step3_folder = os.path.join(temp_folder_path, "step3")
         os.makedirs(step3_folder, exist_ok=True)
 
-        logger.debug(f"Converting to nema compliant dicom files")
+        logger.debug("Converting to nema compliant dicom files")
 
         for protocol in protocols:
             output = f"{step3_folder}/{protocol}"
@@ -255,7 +249,7 @@ def pipeline(
         metadata_folder = os.path.join(temp_folder_path, "metadata")
         os.makedirs(metadata_folder, exist_ok=True)
 
-        logger.debug(f"Formatting files and generating metadata")
+        logger.debug("Formatting files and generating metadata")
 
         for folder in [step3_folder]:
             filelist = imaging_utils.get_filtered_file_names(folder)
@@ -288,9 +282,7 @@ def pipeline(
                     f"{processed_data_output_folder}/{combined_file_name}"
                 )
 
-                logger.debug(
-                    f"Uploading {full_file_path} to {output_file_path}"
-                )
+                logger.debug(f"Uploading {full_file_path} to {output_file_path}")
 
                 try:
                     output_file_client = file_system_client.get_file_client(
@@ -305,14 +297,10 @@ def pipeline(
 
                     with open(full_file_path, "rb") as f:
                         output_file_client.upload_data(f, overwrite=True)
-                        logger.info(
-                            f"Uploaded {combined_file_name}"
-                        )
+                        logger.info(f"Uploaded {combined_file_name}")
                 except Exception:
                     outputs_uploaded = False
-                    logger.error(
-                        f"Failed to upload {combined_file_name}"
-                    )
+                    logger.error(f"Failed to upload {combined_file_name}")
                     error_exception = format_exc()
                     e = "".join(error_exception.splitlines())
 

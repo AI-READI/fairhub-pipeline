@@ -8,14 +8,14 @@ import shutil
 import azure.storage.filedatalake as azurelake  # type: ignore
 import config
 
-completed_folders_file = "completed_folders_env_sensor.json"
+completed_folders_file = "completed_folders_garmin.json"
 
 
 def main():  # sourcery skip: low-code-quality
     project_name = "AI-READI"
     site_names = ["UW", "UAB", "UCSD"]
     # site_names = ["UAB"]
-    device = "EnvSensor"
+    device = "FitnessTracker"
 
     # create datalake clients
     source_service_client = azurelake.FileSystemClient.from_connection_string(
@@ -56,44 +56,54 @@ def main():  # sourcery skip: low-code-quality
             print(f"Processing folder {batch_folder_name}")
 
             source_folder_file_paths = source_service_client.get_paths(
-                path=full_folder_path, recursive=False
+                path=full_folder_path, recursive=True
             )
 
             # Create temporary folders on the local machine
-            temp_source_folder_path = tempfile.mkdtemp(prefix="env_sensor_source_")
-
-            temp_folder_path = os.path.join(temp_source_folder_path, batch_folder_name)
-            if not os.path.exists(temp_folder_path):
-                os.makedirs(temp_folder_path)
+            temp_source_folder_path = tempfile.mkdtemp(prefix="garmin_source_")
 
             # Download all files in the folder
             for file in source_folder_file_paths:
-                full_file_path = file.name
+                full_file_path = str(file.name)
                 file_name = os.path.basename(file.name)
 
+                local_file_path = full_file_path.split(full_folder_path)[1]
+
                 temp_file_path = os.path.join(
-                    temp_folder_path,
-                    file_name,
-                )
+                    temp_source_folder_path,
+                    local_file_path.lstrip("/").replace("/", "\\"),
+                )  # Windows path
 
                 file_client = source_service_client.get_file_client(
-                    file_path=full_file_path
+                    file_path=full_file_path,
                 )
+
+                file_properties = file_client.get_file_properties().metadata
+
+                # Check if item is a directory
+                if file_properties.get("hdi_isfolder"):
+                    print("file path is a directory. Creating directory")
+                    print(f"Creating directory {temp_file_path}")
+                    # Create the directory
+                    os.makedirs(temp_file_path, exist_ok=True)
+                    continue
 
                 print(f"Downloading file {file_name} to {temp_file_path}")
 
                 with open(file=temp_file_path, mode="wb") as f:
                     f.write(file_client.download_file().readall())
 
-            # Create a zip file
-            zip_file_base_name = f"{batch_folder_name}.zip"
+            temp_output_folder_path = tempfile.mkdtemp(prefix="garmin_output_")
 
-            print(f"Creating zip file {zip_file_base_name}")
+            # Create a zip file of the folder
+            zip_file_path = os.path.join(
+                temp_output_folder_path, batch_folder_name + ".zip"
+            )
+
+            print(f"Creating zip file {zip_file_path}")
 
             with zipfile.ZipFile(
-                file=zip_file_base_name,
-                mode="w",
-                compression=zipfile.ZIP_DEFLATED,
+                file=zip_file_path, mode="w", compression=zipfile.ZIP_DEFLATED
             ) as archive:
                 for dir_path, dir_name, file_list in os.walk(temp_source_folder_path):
                     for file in file_list:
@@ -101,7 +111,9 @@ def main():  # sourcery skip: low-code-quality
                         archive.write(filename=file_path, arcname=file)
 
             # Upload the zip file to the destination container
-            print(f"Uploading zip file {zip_file_base_name}")
+            print(f"Uploading zip file {zip_file_path}")
+
+            zip_file_base_name = os.path.basename(zip_file_path)
 
             destination_file_path = f"{destination_directory}/{zip_file_base_name}"
 
@@ -109,12 +121,12 @@ def main():  # sourcery skip: low-code-quality
                 file_path=destination_file_path
             )
 
-            with open(file=zip_file_base_name, mode="rb") as f:
+            with open(file=zip_file_path, mode="rb") as f:
                 destination_container_client.upload_data(f, overwrite=True)
 
             # Clean up
             print("Cleaning up")
-            os.remove(zip_file_base_name)
+            shutil.rmtree(temp_output_folder_path)
             shutil.rmtree(temp_source_folder_path)
 
             # Update the completed folders list
