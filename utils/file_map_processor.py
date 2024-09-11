@@ -55,6 +55,8 @@ class FileMapProcessor:
             # Save trimmed file names
             self.ignore_files = [x.strip() for x in self.ignore_files]
 
+        shutil.rmtree(self.meta_temp_folder_path)
+
         # Downloading file map
         with contextlib.suppress(Exception):
             with open(file_map_download_path, "wb") as data:
@@ -150,7 +152,9 @@ class FileMapProcessor:
 
     def upload_json(self):
         # Write the file map to a file
-        file_map_file_path = os.path.join(self.meta_temp_folder_path, "file_map.json")
+        meta_temp_folder_path = tempfile.mkdtemp()
+
+        file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
         with open(file_map_file_path, "w") as f:
             json.dump(self.file_map, f, indent=4, sort_keys=True, default=str)
@@ -164,7 +168,7 @@ class FileMapProcessor:
                 output_blob_client.delete_file()
 
             output_blob_client.upload_data(data, overwrite=True)
-        shutil.rmtree(self.meta_temp_folder_path)
+        shutil.rmtree(meta_temp_folder_path)
 
     def is_file_ignored(self, file_name, path) -> bool:
         return file_name in self.ignore_files or path in self.ignore_files

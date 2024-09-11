@@ -173,7 +173,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     for idx, patient_id in enumerate(patient_ids):
         patient_idx = idx + 1
-
+        # if patient_idx == 3:
+        #     break
         logger.debug(f"Processing {patient_id} - ({patient_idx}/{total_patients})")
 
         patient_files = [
@@ -791,7 +792,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         output_blob_client = file_system_client.get_file_client(file_path=f"{pipeline_workflow_log_folder}/{file_name}")
 
-        output_blob_client.upload_data(data)
+        output_blob_client.upload_data(data, overwrite=True)
 
         logger.info(
             f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
@@ -809,7 +810,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         output_blob_client = file_system_client.get_file_client(file_path=f"{dependency_folder}/{json_file_name}")
 
-        output_blob_client.upload_data(data)
+        output_blob_client.upload_data(data, overwrite=True)
 
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
