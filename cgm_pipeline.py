@@ -331,10 +331,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # Delete the manifest file if it exists
         # with contextlib.suppress(Exception):
-        if output_blob_client.exists():
-            raise Exception(
-                f"File {output_file_path} already exists. Throwing exception"
-            )
+        output_blob_client.delete_file()
+
         output_blob_client.upload_data(data, overwrite=True)
 
     # Write the workflow log to a file
