@@ -5,6 +5,7 @@ import os
 import tempfile
 import shutil
 from traceback import format_exc
+import zipfile
 
 import garmin.Garmin_Read_Sleep as garmin_read_sleep
 import garmin.Garmin_Read_Activity as garmin_read_activity
@@ -70,6 +71,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/FitnessTracker"
     dependency_folder = f"{study_id}/dependency/FitnessTracker"
     ignore_file = f"{study_id}/ignore/fitnessTracker.ignore"
+    red_cap_export_file = f"{study_id}/pooled-data/REDCap/AIREADI-Garmin.tsv"
+    participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("fitness_tracker", print=True)
 
@@ -85,57 +88,72 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
+    file_paths = []
+    participant_filter_list = []
+
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="garmin_pipeline_meta_")
+
+    # Get the participant filter list file
+    with contextlib.suppress(Exception):
+        file_client = file_system_client.get_file_client(
+            file_path=participant_filter_list_file
+        )
+
+        temp_participant_filter_list_file = os.path.join(
+            meta_temp_folder_path, "filter_file.csv"
+        )
+
+        with open(file=temp_participant_filter_list_file, mode="wb") as f:
+            f.write(file_client.download_file().readall())
+
+        with open(file=temp_participant_filter_list_file, mode="r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                participant_filter_list.append(row[0])
+
+        # remove the first row
+        participant_filter_list.pop(0)
+
     paths = file_system_client.get_paths(path=input_folder)
 
-    file_paths = []
+    logger.debug(f"Getting file paths in {input_folder}")
 
-    # dev limit
-    dev_limit = 1000
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
-    file_count = 0
-    added_file_count = 0
-
-    # Create a unique set of patient ids
-    patient_ids = set()
+    exit_flag = False
 
     for path in paths:
-        file_count += 1
-
-        if file_count % 1000 == 0:
-            logger.debug(f"Found {file_count} files...")
+        if exit_flag:
+            break
+        else:
+            exit_flag = True
 
         t = str(path.name)
 
-        original_file_name = t.split("/")[-1]
+        file_name = t.split("/")[-1]
 
-        # Check if the item is a .fit or .FIT file
-        if original_file_name.split(".")[-1].lower() != "fit":
+        # Check if the file name is in the format FIT-patientID.zip
+        if not file_name.endswith(".zip"):
+            logger.debug(f"Skipping {file_name}")
             continue
 
-        added_file_count += 1
-
-        # dev limit
-        if added_file_count > dev_limit:
-            break
-
-        if added_file_count % 1000 == 0:
-            logger.info(f"Added {added_file_count} files to the processing queue...")
-
-        parts = t.split("/")
-
-        if len(parts) != 7:
+        if len(file_name.split("-")) != 2:
+            logger.debug(f"Skipping {file_name}")
             continue
 
-        patient_identifier = parts[3]
-        patient_id_parts = patient_identifier.split("-")
-        if len(patient_id_parts) != 2:
+        cleaned_file_name = file_name.replace(".zip", "")
+
+        if file_processor.is_file_ignored_by_path(cleaned_file_name):
+            logger.debug(f"Skipping {file_name}")
             continue
 
-        patient_id = patient_id_parts[1]
+        patient_id = cleaned_file_name.split("-")[1]
 
-        modality = parts[5]
-
-        if modality not in ["Activity", "Monitor", "Sleep"]:
+        if str(patient_id) not in participant_filter_list:
+            logger.debug(
+                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+            )
             continue
 
         file_paths.append(
@@ -146,65 +164,92 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "convert_error": True,
                 "output_uploaded": False,
                 "output_files": [],
+                "patient_folder": cleaned_file_name,
                 "patient_id": patient_id,
-                "modality": modality,
-                "file_name": original_file_name,
             }
         )
 
-        patient_ids.add(patient_id)
+    # Download the redcap export file
+    red_cap_export_file_path = os.path.join(meta_temp_folder_path, "redcap_export.tsv")
 
-    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
+    red_cap_export_file_client = file_system_client.get_file_client(
+        file_path=red_cap_export_file
+    )
+
+    with open(red_cap_export_file_path, "wb") as data:
+        red_cap_export_file_client.download_file().readinto(data)
 
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="garmin_pipeline_meta_")
-
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+    total_files = len(file_paths)
 
-    total_patients = len(patient_ids)
+    logger.info(f"Found {total_files} items in {input_folder}")
 
-    time_estimator = TimeEstimator(total_patients)
+    time_estimator = TimeEstimator(total_files)
 
-    for idx, patient_id in enumerate(patient_ids):
-        patient_idx = idx + 1
-
-        print("patient_idx", patient_idx)
-
-        # if patient_idx == 3:
-        #     break
+    for file_item in enumerate(file_paths):
+        patient_id = file_item["patient_id"]
 
         logger.info(f"Processing {patient_id}")
-
-        patient_files = [
-            file_item
-            for file_item in file_paths
-            if file_item["patient_id"] == patient_id
-        ]
-
-        logger.debug(f"Found {len(patient_files)} files for {patient_id}")
 
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp(prefix="garmin_pipeline_")
 
-        # Recreate the patient folder
-        temp_patient_folder_path = os.path.join(temp_folder_path, patient_id)
+        path = file_item["file_path"]
+        patient_folder_name = file_item["patient_folder"]
 
-        os.makedirs(temp_patient_folder_path, exist_ok=True)
+        workflow_input_files = [path]
 
-        workflow_input_files = []
+        # get the file name from the path
+        file_name = path.split("/")[-1]
 
-        file_processor.add_entry(patient_id, "")
+        # download the file to the temp folder
+        input_file_client = file_system_client.get_file_client(file_path=path)
 
-        file_processor.clear_errors(patient_id)
+        input_last_modified = input_file_client.get_file_properties().last_modified
+
+        should_process = file_processor.file_should_process(path, input_last_modified)
+
+        if not should_process:
+            logger.debug(
+                f"The file {path} has not been modified since the last time it was processed",
+            )
+            logger.debug(f"Skipping {path} - File has not been modified")
+
+            logger.time(time_estimator.step())
+            continue
+
+        file_processor.add_entry(path, input_last_modified)
+        file_processor.clear_errors(path)
+
+        temp_input_folder = os.path.join(temp_folder_path, patient_folder_name)
+        os.makedirs(temp_input_folder, exist_ok=True)
+
+        download_path = os.path.join(temp_input_folder, "raw_data.zip")
+
+        logger.debug(f"Downloading {file_name} to {download_path}")
+
+        with open(file=download_path, mode="wb") as f:
+            f.write(input_file_client.download_file().readall())
+
+        logger.info(f"Downloaded {file_name} to {download_path}")
+
+        logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
+
+        with zipfile.ZipFile(download_path, "r") as zip_ref:
+            zip_ref.extractall(temp_input_folder)
+
+        logger.info(f"Unzipped {download_path} to {temp_input_folder}")
+
+        # Count the number of files in the temp_input_folder recursively
+        # One liner form https://stackoverflow.com/questions/16910330/return-total-number-of-files-in-directory-and-subdirectories
+        num_files = sum(len(files) for r, d, files in os.walk(temp_input_folder))
+        logger.debug(f"Number of files in {temp_input_folder}: {num_files}")
 
         temp_conversion_output_folder_path = os.path.join(temp_folder_path, "converted")
-
-        total_files = len(patient_files)
 
         logger.debug(f"Begin download and conversion of all files for {patient_id}")
 
@@ -728,10 +773,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         shutil.rmtree(temp_folder_path)
 
-    # file_processor.delete_out_of_date_output_files()
-
-    # file_processor.remove_seen_flag_from_map()
-
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
     try:
@@ -802,7 +843,3 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     # Clean up the temporary folder
     shutil.rmtree(meta_temp_folder_path)
-
-
-if __name__ == "__main__":
-    pipeline("AI-READI")

@@ -119,7 +119,7 @@ def pipeline(
             logger.debug(f"Skipping {t}")
             continue
 
-        patient_id = file_name.split("-")[1]
+        patient_id = cleaned_file_name.split("-")[1]
 
         if str(patient_id) not in participant_filter_list:
             logger.debug(
@@ -193,8 +193,6 @@ def pipeline(
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
-            logger.time(time_estimator.step())
-
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
@@ -202,6 +200,7 @@ def pipeline(
                 f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
             )
 
+            logger.time(time_estimator.step())
             continue
 
         file_processor.add_entry(path, time.time())

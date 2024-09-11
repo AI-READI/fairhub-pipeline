@@ -97,18 +97,19 @@ def main():  # sourcery skip: low-code-quality
 
             # Create a zip file of the folder
             zip_file_path = os.path.join(
-                temp_output_folder_path, batch_folder_name + ".zip"
+                temp_output_folder_path, f"{batch_folder_name}.zip"
             )
 
             print(f"Creating zip file {zip_file_path}")
 
-            with zipfile.ZipFile(
-                file=zip_file_path, mode="w", compression=zipfile.ZIP_DEFLATED
-            ) as archive:
+            with zipfile.ZipFile(file=zip_file_path, mode="w") as archive:
                 for dir_path, dir_name, file_list in os.walk(temp_source_folder_path):
                     for file in file_list:
                         file_path = os.path.join(dir_path, file)
-                        archive.write(filename=file_path, arcname=file)
+                        archive_path = os.path.relpath(
+                            file_path, temp_source_folder_path
+                        )
+                        archive.write(filename=file_path, arcname=archive_path)
 
             # Upload the zip file to the destination container
             print(f"Uploading zip file {zip_file_path}")
