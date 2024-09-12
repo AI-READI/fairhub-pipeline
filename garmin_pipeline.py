@@ -705,9 +705,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             f_path = file["file_to_upload"]
             f_name = f_path.split("/")[-1]
 
-            logger.info(f"Uploading {f_name} - ({log_idx}/{total_output_files})")
-
             output_file_path = file["uploaded_file_path"]
+
+            logger.debug(
+                f"Uploading {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
+            )
 
             try:
                 # Check if the file exists on the file system
@@ -728,7 +730,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 with open(f_path, "rb") as data:
                     output_file_client.upload_data(data, overwrite=True)
 
-                    logger.info(f"Uploaded {f_name} - ({log_idx}/{total_output_files})")
+                    logger.info(
+                        f"Uploaded {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
+                    )
 
             except Exception:
                 outputs_uploaded = False
