@@ -743,7 +743,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             workflow_output_files.append(output_file_path)
 
         file_processor.confirm_output_files(
-            patient_id, [file["uploaded_file_path"] for file in output_files], ""
+            patient_folder_path,
+            [file["uploaded_file_path"] for file in output_files],
+            "",
         )
 
         if outputs_uploaded:
