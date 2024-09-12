@@ -798,9 +798,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "convert_error",
             "output_uploaded",
             "output_files",
+            "patient_folder_name",
             "patient_id",
-            "modality",
-            "file_name",
         ]
 
         writer = csv.DictWriter(f, fieldnames=fieldnames)
