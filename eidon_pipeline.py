@@ -105,15 +105,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     total_files = len(file_paths)
 
-    time_estimator = TimeEstimator(len(file_paths))
+    time_estimator = TimeEstimator(total_files)
 
-    for idx, file_item in enumerate(file_paths):
-        log_idx = idx + 1
-
-        # dev
-        # if log_idx == 10:
-        #     break
-
+    for file_item in file_paths:
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
 
@@ -143,9 +137,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
-            logger.debug(
-                f"Skipping {path} - File has not been modified"
-            )
+            logger.debug(f"Skipping {path} - File has not been modified")
 
             continue
 
@@ -168,9 +160,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         with open(download_path, "wb") as data:
             input_file_client.download_file().readinto(data)
 
-        logger.info(
-            f"Downloaded {file_name} to {download_path}"
-        )
+        logger.info(f"Downloaded {file_name} to {download_path}")
 
         filtered_file_names = imaging_utils.get_filtered_file_names(step1_folder)
 
@@ -186,9 +176,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
-            logger.error(
-                f"Failed to organize {original_file_name}"
-            )
+            logger.error(f"Failed to organize {original_file_name}")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -224,9 +212,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 for file in files:
                     eidon_instance.convert(file, output)
         except Exception:
-            logger.error(
-                f"Failed to convert {original_file_name}"
-            )
+            logger.error(f"Failed to convert {original_file_name}")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -248,9 +234,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 for file in filelist:
                     imaging_utils.format_file(file, destination_folder)
         except Exception:
-            logger.error(
-                f"Failed to format {original_file_name}"
-            )
+            logger.error(f"Failed to format {original_file_name}")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -280,9 +264,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 combined_file_name = "/".join(f2)
 
-                logger.debug(
-                    f"Uploading {combined_file_name}"
-                )
+                logger.debug(f"Uploading {combined_file_name}")
 
                 output_file_path = (
                     f"{processed_data_output_folder}/{combined_file_name}"
@@ -303,9 +285,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         output_file_client.upload_data(data, overwrite=True)
                 except Exception:
                     outputs_uploaded = False
-                    logger.error(
-                        f"Failed to upload {combined_file_name}"
-                    )
+                    logger.error(f"Failed to upload {combined_file_name}")
                     error_exception = format_exc()
                     e = "".join(error_exception.splitlines())
 
