@@ -5,381 +5,411 @@ from datetime import datetime
 import math
 from collections import defaultdict
 
-# Initialize a dictionary to store all participant data incrementally
-participants_data = defaultdict(dict)
-redcap_data = {}  # To store the wrist_worn_on and dominant_hand data from REDCap.tsv
 
+class GarminManifest:
+    def __init__(self, processed_data_output_folder):
+        self.processed_data_output_folder = processed_data_output_folder
+        self.participants_data = defaultdict(dict)
+        self.redcap_data = (
+            {}
+        )  # To store the wrist_worn_on and dominant_hand data from REDCap.tsv
 
-def read_redcap_file(file_path):
-    """
-    Reads the REDCap.tsv file and stores wrist_worn_on and dominant_hand for each participant.
-    """
-    with open(file_path, mode="r") as file:
-        reader = csv.DictReader(file, delimiter="\t")
-        for row in reader:
-            participant_id = row["participant_id"]
-            wrist_worn_on = row["wrist_worn_on"]
-            dominant_hand = row["dominant_hand"]
-            redcap_data[participant_id] = {
-                "wrist_worn_on": wrist_worn_on or None,  # Assign None if missing
-                "dominant_hand": dominant_hand or None,  # Assign None if missing
-            }
+    def read_redcap_file(self, file_path):
+        """
+        Reads the REDCap.tsv file and stores wrist_worn_on and dominant_hand for each participant.
+        """
+        with open(file_path, mode="r") as file:
+            reader = csv.DictReader(file, delimiter="\t")
+            for row in reader:
+                participant_id = row["participant_id"]
+                wrist_worn_on = row["wrist_worn_on"]
+                dominant_hand = row["dominant_hand"]
+                self.redcap_data[participant_id] = {
+                    "wrist_worn_on": wrist_worn_on or None,  # Assign None if missing
+                    "dominant_hand": dominant_hand or None,  # Assign None if missing
+                }
 
+    def add_to_participant_data(
+        self, participant_id, key_prefix, file_path, record_count, average_value
+    ):
+        """
+        Adds data to the participant's dictionary with average_value rounded to 2 decimal places.
+        """
+        self.participants_data[participant_id][f"{key_prefix}_filepath"] = file_path
+        self.participants_data[participant_id][
+            f"{key_prefix}_record_count"
+        ] = record_count
+        self.participants_data[participant_id][
+            f"average_{key_prefix}"
+        ] = f"{average_value:.2f}"
 
-def add_to_participant_data(
-    participant_id, key_prefix, file_path, record_count, average_value
-):
-    """
-    Adds data to the participant's dictionary with average_value rounded to 2 decimal places.
-    """
-    participants_data[participant_id][f"{key_prefix}_filepath"] = file_path
-    participants_data[participant_id][f"{key_prefix}_record_count"] = record_count
-    participants_data[participant_id][f"average_{key_prefix}"] = f"{average_value:.2f}"
-
-
-def calculate_sampling_extent(
-    directory, key, subkey, value_key, date_key, key_prefix, is_nan_check=False
-):
-    date_format = "%Y-%m-%dT%H:%M:%SZ"
-    for root, dirs, files in sorted(os.walk(directory)):
-        dirs.sort()
-        for file in sorted(files):
-            if file.endswith(".json"):
-                file_path = os.path.join(root, file)
-                try:
-                    with open(file_path, "r") as json_file:
-                        data = json.load(json_file)
-                        if key in data and subkey in data[key]:
-                            records = data[key][subkey]
-                            if not records:
-                                continue
-                            records = sorted(
-                                records,
-                                key=lambda x: datetime.strptime(
-                                    x[date_key]["date_time"], date_format
-                                ),
-                            )
-                            total_value, num_records = 0, 0
-                            for record in records:
-                                if value_key in record and "value" in record[value_key]:
-                                    record_value = record[value_key]["value"]
-                                    if is_nan_check and math.isnan(record_value):
-                                        continue
-                                    total_value += record_value
-                                    num_records += 1
-                            average_value = (
-                                total_value / num_records if num_records > 0 else 0
-                            )
-                            participant_id = os.path.basename(root)
-                            add_to_participant_data(
-                                participant_id,
-                                key_prefix,
-                                file_path,
-                                num_records,
-                                average_value,
-                            )
-                except Exception as e:
-                    print(f"Error processing file {file_path}: {e}")
-
-
-def process_heart_rate(directory):
-    calculate_sampling_extent(
+    def calculate_sampling_extent(
+        self,
         directory,
-        "body",
-        "heart_rate",
-        "heart_rate",
-        "effective_time_frame",
-        "heart_rate",
-    )
+        key,
+        subkey,
+        value_key,
+        date_key,
+        key_prefix,
+        is_nan_check=False,
+    ):
+        date_format = "%Y-%m-%dT%H:%M:%SZ"
+        for root, dirs, files in sorted(os.walk(directory)):
+            dirs.sort()
+            for file in sorted(files):
+                if file.endswith(".json"):
+                    file_path = os.path.join(root, file)
+                    try:
+                        with open(file_path, "r") as json_file:
+                            data = json.load(json_file)
+                            if key in data and subkey in data[key]:
+                                records = data[key][subkey]
+                                if not records:
+                                    continue
+                                records = sorted(
+                                    records,
+                                    key=lambda x: datetime.strptime(
+                                        x[date_key]["date_time"], date_format
+                                    ),
+                                )
+                                total_value, num_records = 0, 0
+                                for record in records:
+                                    if (
+                                        value_key in record
+                                        and "value" in record[value_key]
+                                    ):
+                                        record_value = record[value_key]["value"]
+                                        if is_nan_check and math.isnan(record_value):
+                                            continue
+                                        total_value += record_value
+                                        num_records += 1
+                                average_value = (
+                                    total_value / num_records if num_records > 0 else 0
+                                )
+                                participant_id = os.path.basename(root)
 
+                                output_file_path = f"{self.processed_data_output_folder}/{key_prefix}/garmin_vivosmart5/{participant_id}/{file}"
 
-def process_calories(directory):
-    """
-    Processes calorie-related JSON files, calculates total and average calories burned.
-    """
-    # date_format = "%Y-%m-%dT%H:%M:%SZ"
-    for root, dirs, files in sorted(os.walk(directory)):
-        dirs.sort()
-        for file in sorted(files):
-            if file.endswith(".json"):
-                file_path = os.path.join(root, file)
-                participant_id = os.path.basename(root)
-                try:
-                    with open(file_path, "r") as json_file:
-                        data = json.load(json_file)
-                        if "body" in data and "activity" in data["body"]:
-                            calorie_data = data["body"]["activity"]
-                            total_calories = 0
-                            valid_records = 0
-                            for record in calorie_data:
-                                if (
-                                    "duration" in record
-                                    and "value" in record["duration"]
-                                ):
-                                    calorie_value = record["duration"]["value"]
-                                    if isinstance(
-                                        calorie_value, (int, float)
-                                    ):  # Ensure it's a valid number
-                                        total_calories += calorie_value
-                                        valid_records += 1
-                            average_calories = (
-                                total_calories / valid_records
-                                if valid_records > 0
-                                else 0
-                            )
-                            add_to_participant_data(
-                                participant_id,
-                                "active_calories",
-                                file_path,
-                                valid_records,
-                                average_calories,
-                            )
-                except Exception as e:
-                    print(f"Error processing file {file_path}: {e}")
+                                self.add_to_participant_data(
+                                    participant_id,
+                                    key_prefix,
+                                    output_file_path,
+                                    num_records,
+                                    average_value,
+                                )
+                    except Exception as e:
+                        print(f"Error processing file {file_path}: {e}")
 
+    def process_heart_rate(self, directory):
+        self.calculate_sampling_extent(
+            directory,
+            "body",
+            "heart_rate",
+            "heart_rate",
+            "effective_time_frame",
+            "heart_rate",
+        )
 
-def process_sleep(directory):
-    """
-    Processes sleep JSON files, calculates total and average sleep duration.
-    """
-    # date_format = "%Y-%m-%dT%H:%M:%SZ"
-    for root, dirs, files in sorted(os.walk(directory)):
-        dirs.sort()
-        for file in sorted(files):
-            if file.endswith(".json"):
-                file_path = os.path.join(root, file)
-                participant_id = os.path.basename(root)
-                try:
-                    with open(file_path, "r") as json_file:
-                        data = json.load(json_file)
-                        if "body" in data and "sleep" in data["body"]:
-                            sleep_data = data["body"]["sleep"]
-                            sleep_sorted = sorted(
-                                sleep_data,
-                                key=lambda x: x["effective_time_frame"][
-                                    "time_interval"
-                                ]["start_date_time"],
-                            )
-                            total_sleep_duration = sum(
-                                item["sleep_duration"]["value"] for item in sleep_sorted
-                            )
-                            average_sleep_duration = (
-                                total_sleep_duration / len(sleep_sorted)
-                                if sleep_sorted
-                                else 0
-                            )
-                            add_to_participant_data(
-                                participant_id,
-                                "sleep",
-                                file_path,
-                                len(sleep_sorted),
-                                average_sleep_duration,
-                            )
-                except Exception as e:
-                    print(f"Error processing file {file_path}: {e}")
+    def process_calories(self, directory):
+        """
+        Processes calorie-related JSON files, calculates total and average calories burned.
+        """
+        # date_format = "%Y-%m-%dT%H:%M:%SZ"
+        for root, dirs, files in sorted(os.walk(directory)):
+            dirs.sort()
+            for file in sorted(files):
+                if file.endswith(".json"):
+                    file_path = os.path.join(root, file)
+                    participant_id = os.path.basename(root)
+                    try:
+                        with open(file_path, "r") as json_file:
+                            data = json.load(json_file)
+                            if "body" in data and "activity" in data["body"]:
+                                calorie_data = data["body"]["activity"]
+                                total_calories = 0
+                                valid_records = 0
+                                for record in calorie_data:
+                                    if (
+                                        "duration" in record
+                                        and "value" in record["duration"]
+                                    ):
+                                        calorie_value = record["duration"]["value"]
+                                        if isinstance(
+                                            calorie_value, (int, float)
+                                        ):  # Ensure it's a valid number
+                                            total_calories += calorie_value
+                                            valid_records += 1
+                                average_calories = (
+                                    total_calories / valid_records
+                                    if valid_records > 0
+                                    else 0
+                                )
 
+                                output_file_path = f"{self.processed_data_output_folder}/physical_activity_calorie/garmin_vivosmart5/{participant_id}/{file}"
 
-def process_activity(directory):
-    """
-    Processes activity-related JSON files, calculates total steps and average steps per unique day.
-    """
-    date_format = "%Y-%m-%dT%H:%M:%SZ"
-    for root, dirs, files in sorted(os.walk(directory)):
-        dirs.sort()
-        for file in sorted(files):
-            if file.endswith(".json"):
-                file_path = os.path.join(root, file)
-                participant_id = os.path.basename(root)
-                try:
-                    with open(file_path, "r") as json_file:
-                        data = json.load(json_file)
-                        if "body" in data and "activity" in data["body"]:
-                            steps_data = data["body"]["activity"]
-                            steps_sorted = sorted(
-                                steps_data,
-                                key=lambda x: x["effective_time_frame"][
-                                    "time_interval"
-                                ]["start_date_time"],
-                            )
+                                self.add_to_participant_data(
+                                    participant_id,
+                                    "active_calories",
+                                    output_file_path,
+                                    valid_records,
+                                    average_calories,
+                                )
+                    except Exception as e:
+                        print(f"Error processing file {file_path}: {e}")
 
-                            total_steps = 0
-                            unique_days = set()  # Set to track unique days
+    def process_sleep(self, directory):
+        """
+        Processes sleep JSON files, calculates total and average sleep duration.
+        """
+        # date_format = "%Y-%m-%dT%H:%M:%SZ"
+        for root, dirs, files in sorted(os.walk(directory)):
+            dirs.sort()
+            for file in sorted(files):
+                if file.endswith(".json"):
+                    file_path = os.path.join(root, file)
+                    participant_id = os.path.basename(root)
+                    try:
+                        with open(file_path, "r") as json_file:
+                            data = json.load(json_file)
+                            if "body" in data and "sleep" in data["body"]:
+                                sleep_data = data["body"]["sleep"]
 
-                            for record in steps_sorted:
-                                step_value = record["base_movement_quantity"]["value"]
-                                # Parse the date of the record
-                                date_time_str = record["effective_time_frame"][
-                                    "time_interval"
-                                ]["start_date_time"]
-                                date_obj = datetime.strptime(
-                                    date_time_str, date_format
-                                ).date()  # Extract only the date
+                                print(sleep_data)
 
-                                # Add the date to the set of unique days
-                                unique_days.add(date_obj)
+                                sleep_sorted = sorted(
+                                    sleep_data,
+                                    key=lambda x: x["effective_time_frame"][
+                                        "time_interval"
+                                    ]["start_date_time"],
+                                )
+                                total_sleep_duration = sum(
+                                    item["sleep_duration"]["value"]
+                                    for item in sleep_sorted
+                                )
+                                average_sleep_duration = (
+                                    total_sleep_duration / len(sleep_sorted)
+                                    if sleep_sorted
+                                    else 0
+                                )
 
-                                # Check if the value is valid (integer or a string that can be converted to an integer)
-                                if isinstance(step_value, str) and step_value.isdigit():
-                                    step_value = int(step_value)
-                                elif not isinstance(step_value, int):
-                                    step_value = 0  # Treat invalid values as 0
+                                output_file_path = f"{self.processed_data_output_folder}/sleep/garmin_vivosmart5/{participant_id}/{file}"
 
-                                total_steps += step_value
+                                self.add_to_participant_data(
+                                    participant_id,
+                                    "sleep",
+                                    output_file_path,
+                                    len(sleep_sorted),
+                                    average_sleep_duration,
+                                )
+                    except Exception as e:
+                        print(f"Error processing file {file_path}: {e}")
 
-                            # Calculate the number of unique days
-                            num_unique_days = len(unique_days)
+    def process_activity(self, directory):
+        """
+        Processes activity-related JSON files, calculates total steps and average steps per unique day.
+        """
+        date_format = "%Y-%m-%dT%H:%M:%SZ"
+        for root, dirs, files in sorted(os.walk(directory)):
+            dirs.sort()
+            for file in sorted(files):
+                if file.endswith(".json"):
+                    file_path = os.path.join(root, file)
+                    participant_id = os.path.basename(root)
+                    try:
+                        with open(file_path, "r") as json_file:
+                            data = json.load(json_file)
+                            if "body" in data and "activity" in data["body"]:
+                                steps_data = data["body"]["activity"]
+                                steps_sorted = sorted(
+                                    steps_data,
+                                    key=lambda x: x["effective_time_frame"][
+                                        "time_interval"
+                                    ]["start_date_time"],
+                                )
 
-                            # Calculate the average steps per unique day
-                            average_steps_per_day = (
-                                total_steps / num_unique_days
-                                if num_unique_days > 0
-                                else 0
-                            )
+                                total_steps = 0
+                                unique_days = set()  # Set to track unique days
 
-                            # Store the average and other details in the participant's data dictionary
-                            # print ("num_unique_days:" + str(num_unique_days))
-                            add_to_participant_data(
-                                participant_id,
-                                "physical_activity",
-                                file_path,
-                                num_unique_days,
-                                average_steps_per_day,
-                            )
-                except Exception as e:
-                    print(f"Error processing file {file_path}: {e}")
+                                for record in steps_sorted:
+                                    step_value = record["base_movement_quantity"][
+                                        "value"
+                                    ]
+                                    # Parse the date of the record
+                                    date_time_str = record["effective_time_frame"][
+                                        "time_interval"
+                                    ]["start_date_time"]
+                                    date_obj = datetime.strptime(
+                                        date_time_str, date_format
+                                    ).date()  # Extract only the date
 
+                                    # Add the date to the set of unique days
+                                    unique_days.add(date_obj)
 
-def process_oxygen_saturation(directory):
-    calculate_sampling_extent(
-        directory,
-        "body",
-        "breathing",
-        "oxygen_saturation",
-        "effective_time_frame",
-        "oxygen_saturation",
-        True,
-    )
+                                    # Check if the value is valid (integer or a string that can be converted to an integer)
+                                    if (
+                                        isinstance(step_value, str)
+                                        and step_value.isdigit()
+                                    ):
+                                        step_value = int(step_value)
+                                    elif not isinstance(step_value, int):
+                                        step_value = 0  # Treat invalid values as 0
 
+                                    total_steps += step_value
 
-def process_respiratory_rate(directory):
-    calculate_sampling_extent(
-        directory,
-        "body",
-        "breathing",
-        "respiratory_rate",
-        "effective_time_frame",
-        "respiratory_rate",
-        True,
-    )
+                                # Calculate the number of unique days
+                                num_unique_days = len(unique_days)
 
+                                # Calculate the average steps per unique day
+                                average_steps_per_day = (
+                                    total_steps / num_unique_days
+                                    if num_unique_days > 0
+                                    else 0
+                                )
 
-def process_stress(directory):
-    calculate_sampling_extent(
-        directory, "body", "stress", "stress", "effective_time_frame", "stress"
-    )
+                                output_file_path = f"{self.processed_data_output_folder}/physical_activity/garmin_vivosmart5/{participant_id}/{file}"
 
+                                # Store the average and other details in the participant's data dictionary
+                                # print ("num_unique_days:" + str(num_unique_days))
+                                self.add_to_participant_data(
+                                    participant_id,
+                                    "physical_activity",
+                                    output_file_path,
+                                    num_unique_days,
+                                    average_steps_per_day,
+                                )
+                    except Exception as e:
+                        print(f"Error processing file {file_path}: {e}")
 
-def calculate_sensor_sampling_duration(heart_rate_directory):
-    """
-    Calculates the number of unique days for heart rate data and adds this information to the dictionary.
-    """
-    date_format = "%Y-%m-%dT%H:%M:%SZ"
-    for root, dirs, files in sorted(os.walk(heart_rate_directory)):
-        dirs.sort()
-        for file in sorted(files):
-            if file.endswith(".json"):
-                file_path = os.path.join(root, file)
-                participant_id = os.path.basename(root)
-                try:
-                    with open(file_path, "r") as json_file:
-                        data = json.load(json_file)
-                        if "body" in data and "heart_rate" in data["body"]:
-                            records = data["body"]["heart_rate"]
-                            unique_days = set()
-                            for record in records:
-                                date_time = record["effective_time_frame"]["date_time"]
-                                date_obj = datetime.strptime(
-                                    date_time, date_format
-                                ).date()  # Add only the date part
-                                unique_days.add(date_obj)
-                            participants_data[participant_id][
-                                "sensor_sampling_duration_days"
-                            ] = len(unique_days)
-                except Exception as e:
-                    print(
-                        f"Error calculating sensor sampling duration for {file_path}: {e}"
-                    )
+    def process_oxygen_saturation(self, directory):
+        self.calculate_sampling_extent(
+            directory,
+            "body",
+            "breathing",
+            "oxygen_saturation",
+            "effective_time_frame",
+            "oxygen_saturation",
+            True,
+        )
 
+    def process_respiratory_rate(self, directory):
+        self.calculate_sampling_extent(
+            directory,
+            "body",
+            "breathing",
+            "respiratory_rate",
+            "effective_time_frame",
+            "respiratory_rate",
+            True,
+        )
 
-def write_tsv(output_file, data):
+    def process_stress(self, directory):
+        self.calculate_sampling_extent(
+            directory, "body", "stress", "stress", "effective_time_frame", "stress"
+        )
 
-    # Define the required column order
-    headers = [
-        "participant_id",
-        "wrist_worn_on",
-        "dominant_hand",
-        "heart_rate_filepath",
-        "heart_rate_record_count",
-        "average_heart_rate",
-        "oxygen_saturation_filepath",
-        "oxygen_saturation_record_count",
-        "average_oxygen_saturation",
-        "stress_level_filepath",
-        "stress_level_record_count",
-        "average_stress",
-        "sleep_filepath",
-        "sleep_record_count",
-        "average_sleep",
-        "respiratory_rate_filepath",
-        "respiratory_rate_record_count",
-        "average_respiratory_rate",
-        "physical_activity_filepath",
-        "physical_activity_num_days",
-        "average_physical_activity",
-        "active_calories_filepath",
-        "active_calories_record_count",
-        "average_active_calories",
-        "sensor_sampling_duration_days",
-        "manufacturer",
-        "manufacturer_model_name",
-    ]
+    def calculate_sensor_sampling_duration(self, heart_rate_directory):
+        """
+        Calculates the number of unique days for heart rate data and adds this information to the dictionary.
+        """
+        date_format = "%Y-%m-%dT%H:%M:%SZ"
+        for root, dirs, files in sorted(os.walk(heart_rate_directory)):
+            dirs.sort()
+            for file in sorted(files):
+                if file.endswith(".json"):
+                    file_path = os.path.join(root, file)
+                    participant_id = os.path.basename(root)
+                    try:
+                        with open(file_path, "r") as json_file:
+                            data = json.load(json_file)
+                            if "body" in data and "heart_rate" in data["body"]:
+                                records = data["body"]["heart_rate"]
+                                unique_days = set()
+                                for record in records:
+                                    date_time = record["effective_time_frame"][
+                                        "date_time"
+                                    ]
+                                    date_obj = datetime.strptime(
+                                        date_time, date_format
+                                    ).date()  # Add only the date part
+                                    unique_days.add(date_obj)
+                                self.participants_data[participant_id][
+                                    "sensor_sampling_duration_days"
+                                ] = len(unique_days)
+                    except Exception as e:
+                        print(
+                            f"Error calculating sensor sampling duration for {file_path}: {e}"
+                        )
 
-    with open(output_file, mode="w", newline="") as file:
-        writer = csv.writer(file, delimiter="\t")
-        # Write header
-        writer.writerow(headers)
-        # Sort the participants by ID and write their data
-        for participant_id in sorted(data.keys()):
-            row = [
-                participant_id,
-                redcap_data.get(participant_id, {}).get("wrist_worn_on", None),
-                redcap_data.get(participant_id, {}).get("dominant_hand", None),
-                data[participant_id].get("heart_rate_filepath", None),
-                data[participant_id].get("heart_rate_record_count", None),
-                data[participant_id].get("average_heart_rate", None),
-                data[participant_id].get("oxygen_saturation_filepath", None),
-                data[participant_id].get("oxygen_saturation_record_count", None),
-                data[participant_id].get("average_oxygen_saturation", None),
-                data[participant_id].get("stress_filepath", None),
-                data[participant_id].get("stress_record_count", None),
-                data[participant_id].get("average_stress", None),
-                data[participant_id].get("sleep_filepath", None),
-                data[participant_id].get("sleep_record_count", None),
-                data[participant_id].get("average_sleep", None),
-                data[participant_id].get("respiratory_rate_filepath", None),
-                data[participant_id].get("respiratory_rate_record_count", None),
-                data[participant_id].get("average_respiratory_rate", None),
-                data[participant_id].get("physical_activity_filepath", None),
-                data[participant_id].get("physical_activity_record_count", None),
-                data[participant_id].get("average_physical_activity", None),
-                data[participant_id].get("active_calories_filepath", None),
-                data[participant_id].get("active_calories_record_count", None),
-                data[participant_id].get("average_active_calories", None),
-                data[participant_id].get("sensor_sampling_duration_days", None),
-                "Garmin",
-                "Vivosmart 5",
-            ]
-            writer.writerow(row)
+    def write_tsv(self, output_file):
+        data = self.participants_data
+
+        # Define the required column order
+        headers = [
+            "participant_id",
+            "wrist_worn_on",
+            "dominant_hand",
+            "heart_rate_filepath",
+            "heart_rate_record_count",
+            "average_heart_rate",
+            "oxygen_saturation_filepath",
+            "oxygen_saturation_record_count",
+            "average_oxygen_saturation",
+            "stress_level_filepath",
+            "stress_level_record_count",
+            "average_stress",
+            "sleep_filepath",
+            "sleep_record_count",
+            "average_sleep",
+            "respiratory_rate_filepath",
+            "respiratory_rate_record_count",
+            "average_respiratory_rate",
+            "physical_activity_filepath",
+            "physical_activity_num_days",
+            "average_physical_activity",
+            "active_calories_filepath",
+            "active_calories_record_count",
+            "average_active_calories",
+            "sensor_sampling_duration_days",
+            "manufacturer",
+            "manufacturer_model_name",
+        ]
+
+        with open(output_file, mode="w", newline="") as file:
+            writer = csv.writer(file, delimiter="\t")
+            # Write header
+            writer.writerow(headers)
+            # Sort the participants by ID and write their data
+            for participant_id in sorted(data.keys()):
+                row = [
+                    participant_id,
+                    self.redcap_data.get(participant_id, {}).get("wrist_worn_on", None),
+                    self.redcap_data.get(participant_id, {}).get("dominant_hand", None),
+                    data[participant_id].get("heart_rate_filepath", None),
+                    data[participant_id].get("heart_rate_record_count", None),
+                    data[participant_id].get("average_heart_rate", None),
+                    data[participant_id].get("oxygen_saturation_filepath", None),
+                    data[participant_id].get("oxygen_saturation_record_count", None),
+                    data[participant_id].get("average_oxygen_saturation", None),
+                    data[participant_id].get("stress_filepath", None),
+                    data[participant_id].get("stress_record_count", None),
+                    data[participant_id].get("average_stress", None),
+                    data[participant_id].get("sleep_filepath", None),
+                    data[participant_id].get("sleep_record_count", None),
+                    data[participant_id].get("average_sleep", None),
+                    data[participant_id].get("respiratory_rate_filepath", None),
+                    data[participant_id].get("respiratory_rate_record_count", None),
+                    data[participant_id].get("average_respiratory_rate", None),
+                    data[participant_id].get("physical_activity_filepath", None),
+                    data[participant_id].get("physical_activity_num_days", None),
+                    data[participant_id].get("average_physical_activity", None),
+                    data[participant_id].get("active_calories_filepath", None),
+                    data[participant_id].get("active_calories_record_count", None),
+                    data[participant_id].get("average_active_calories", None),
+                    data[participant_id].get("sensor_sampling_duration_days", None),
+                    "Garmin",
+                    "Vivosmart 5",
+                ]
+                writer.writerow(row)
 
 
 def main():
@@ -394,17 +424,17 @@ def main():
     }
 
     # Read wrist_worn_on and dominant_hand data from REDCap.tsv
-    read_redcap_file("REDCap.tsv")
+    # read_redcap_file("REDCap.tsv")
 
     for data_type, directory in directories.items():
         globals()[f"process_{data_type}"](directory)
 
     # Calculate sensor sampling duration based on heart rate data
-    calculate_sensor_sampling_duration(directories["heart_rate"])
+    # calculate_sensor_sampling_duration(directories["heart_rate"])
 
     # Write out the participants data as a TSV file
-    output_file = "manifest.tsv"
-    write_tsv(output_file, participants_data)
+    # output_file = "manifest.tsv"
+    # write_tsv(output_file, participants_data)
 
 
 if __name__ == "__main__":

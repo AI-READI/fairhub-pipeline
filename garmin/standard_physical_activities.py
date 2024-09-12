@@ -123,7 +123,7 @@ def standardize_physical_activities(root_dir, patient_id, output_folder, final_o
         out_directory_path.mkdir(parents=True, exist_ok=True)
 
         with open(
-            os.path.join(final_output, pt + "_activity.json"),
+            os.path.join(final_output, pt, pt + "_activity.json"),
             "w",
         ) as combined_file:
             combined_file.write(formatted_json)

@@ -136,13 +136,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     manifest = ecg_metadata.ECGManifest()
 
-    time_estimator = TimeEstimator(len(file_paths))
+    time_estimator = TimeEstimator(total_files)
 
-    for idx, file_item in enumerate(file_paths):
-        log_idx = idx + 1
-
-        # if log_idx == 5:
-        #     break
+    for file_item in file_paths:
 
         path = file_item["file_path"]
 
@@ -170,9 +166,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
-            logger.debug(
-                f"Skipping {path} - File has not been modified"
-            )
+            logger.debug(f"Skipping {path} - File has not been modified")
 
             logger.time(time_estimator.step())
             continue
@@ -188,9 +182,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         with open(file=download_path, mode="wb") as f:
             f.write(file_client.download_file().readall())
 
-        logger.info(
-            f"Downloaded {original_file_name} to {download_path}"
-        )
+        logger.info(f"Downloaded {original_file_name} to {download_path}")
 
         ecg_path = download_path
 
@@ -219,9 +211,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 logger.time(time_estimator.step())
                 continue
         except Exception:
-            logger.error(
-                f"Failed to convert {original_file_name}"
-            )
+            logger.error(f"Failed to convert {original_file_name}")
             error_exception = format_exc()
             e = "".join(error_exception.splitlines())
 
@@ -352,9 +342,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             manifest.add_metadata(hea_metadata, output_hea_file, output_dat_file)
 
-        logger.debug(
-            f"Metadata created for {original_file_name}"
-        )
+        logger.debug(f"Metadata created for {original_file_name}")
 
         logger.time(time_estimator.step())
 
@@ -443,6 +431,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         output_file_client.upload_data(data, overwrite=True)
 
     shutil.rmtree(meta_temp_folder_path)
+
 
 if __name__ == "__main__":
     pipeline("AI-READI")

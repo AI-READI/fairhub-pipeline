@@ -16,6 +16,7 @@ import garmin.standard_physical_activity_calorie as garmin_standardize_physical_
 import garmin.standard_respiratory_rate as garmin_standardize_respiratory_rate
 import garmin.standard_sleep_stages as garmin_standardize_sleep_stages
 import garmin.standard_stress as garmin_standardize_stress
+import garmin.metadata as garmin_metadata
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
@@ -190,6 +191,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     time_estimator = TimeEstimator(total_files)
 
+    manifest = garmin_metadata.GarminManifest(processed_data_output_folder)
+
+    manifest.read_redcap_file(red_cap_export_file_path)
+
     for patient_folder in file_paths:
         patient_id = patient_folder["patient_id"]
 
@@ -269,13 +274,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     patient_files.append(
                         {"file_path": full_file_path, "modality": "Monitor"}
                     )
+
                 elif "sleep" in full_file_path.lower():
                     total_patient_files += 1
                     patient_files.append(
                         {"file_path": full_file_path, "modality": "Sleep"}
                     )
 
-        logger.debug(f"Number of files in {temp_input_folder}: {total_patient_files}")
+        logger.debug(
+            f"Number of valid files in {temp_input_folder}: {total_patient_files}"
+        )
 
         temp_conversion_output_folder_path = os.path.join(temp_folder_path, "converted")
 
@@ -308,16 +316,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
                     )
 
-                    for root, dirs, files in os.walk(converted_output_folder_path):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-
-                            logger.info(
-                                f"Adding {file_path} to the output files for {patient_id} - ({file_idx}/{total_files})"
-                            )
                 except Exception:
                     logger.error(
-                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files})"
+                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
                     )
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
@@ -372,9 +373,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 final_heart_rate_output_folder,
             )
 
+            logger.info(f"Standardized heart rate for {patient_id}")
             shutil.rmtree(heart_rate_jsons_output_folder)
 
-            logger.info(f"Standardized heart rate for {patient_id}")
+            logger.debug(f"Generating manifest for heart rate for {patient_id}")
+            manifest.process_heart_rate(final_heart_rate_output_folder)
+            logger.info(f"Generated manifest for heart rate for {patient_id}")
+
+            logger.debug(f"Calculating sensor sampling duration for {patient_id}")
+            manifest.calculate_sensor_sampling_duration(final_heart_rate_output_folder)
+            logger.info(f"Calculated sensor sampling duration for {patient_id}")
 
             # list the contents of the final heart rate folder
             for root, dirs, files in os.walk(final_heart_rate_output_folder):
@@ -392,7 +400,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         }
                     )
         except Exception:
-            logger.error(f"Failed to standardize heart rate for {patient_id} ")
+            logger.error(f"Failed to process heart rate for {patient_id} ")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -418,9 +426,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 final_oxygen_saturation_output_folder,
             )
 
+            logger.info(f"Standardized oxygen saturation for {patient_id}")
             shutil.rmtree(oxygen_saturation_jsons_output_folder)
 
-            logger.info(f"Standardized oxygen saturation for {patient_id}")
+            logger.debug(f"Generating manifest for oxygen saturation for {patient_id}")
+            manifest.process_oxygen_saturation(final_oxygen_saturation_output_folder)
+            logger.info(f"Generated manifest for oxygen saturation for {patient_id}")
 
             # list the contents of the final oxygen saturation folder
             for root, dirs, files in os.walk(final_oxygen_saturation_output_folder):
@@ -466,9 +477,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 final_physical_activities_output_folder,
             )
 
+            logger.info(f"Standardized physical activities for {patient_id} ")
             shutil.rmtree(physical_activities_jsons_output_folder)
 
-            logger.info(f"Standardized physical activities for {patient_id} ")
+            logger.debug(
+                f"Generating manifest for physical activities for {patient_id}"
+            )
+            manifest.process_activity(final_physical_activities_output_folder)
+            logger.info(f"Generated manifest for physical activities for {patient_id}")
 
             # list the contents of the final physical activities folder
             for root, dirs, files in os.walk(final_physical_activities_output_folder):
@@ -513,10 +529,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 physical_activity_calories_jsons_output_folder,
                 final_physical_activity_calories_output_folder,
             )
-
+            logger.info(f"Standardized physical activity calories for {patient_id}")
             shutil.rmtree(physical_activity_calories_jsons_output_folder)
 
-            logger.info(f"Standardized physical activity calories for {patient_id}")
+            logger.debug(
+                f"Generating manifest for physical activity calories for {patient_id}"
+            )
+            manifest.process_calories(final_physical_activity_calories_output_folder)
+            logger.info(
+                f"Generated manifest for physical activity calories for {patient_id}"
+            )
 
             # list the contents of the final physical activity calories folder
             for root, dirs, files in os.walk(
@@ -566,9 +588,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 final_respiratory_rate_output_folder,
             )
 
+            logger.info(f"Standardized respiratory rate for {patient_id}")
             shutil.rmtree(respiratory_rate_jsons_output_folder)
 
-            logger.info(f"Standardized respiratory rate for {patient_id}")
+            logger.debug(f"Generating manifest for respiratory rate for {patient_id}")
+            manifest.process_respiratory_rate(final_respiratory_rate_output_folder)
+            logger.info(f"Generated manifest for respiratory rate for {patient_id}")
 
             # list the contents of the final respiratory rate folder
             for root, dirs, files in os.walk(final_respiratory_rate_output_folder):
@@ -614,9 +639,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 final_sleep_stages_output_folder,
             )
 
+            logger.info(f"Standardized sleep stages for {patient_id}")
             shutil.rmtree(sleep_stages_jsons_output_folder)
 
-            logger.info(f"Standardized sleep stages for {patient_id}")
+            logger.debug(f"Generating manifest for sleep stages for {patient_id}")
+            manifest.process_sleep(final_sleep_stages_output_folder)
+            logger.info(f"Generated manifest for sleep stages for {patient_id}")
 
             for root, dirs, files in os.walk(final_sleep_stages_output_folder):
                 for file in files:
@@ -657,9 +685,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 final_stress_output_folder,
             )
 
+            logger.info(f"Standardized stress for {patient_id}")
             shutil.rmtree(stress_jsons_output_folder)
 
-            logger.info(f"Standardized stress for {patient_id}")
+            logger.debug(f"Generating manifest for stress for {patient_id}")
+            manifest.process_stress(final_stress_output_folder)
+            logger.info(f"Generated manifest for stress for {patient_id}")
 
             # list the contents of the final stress folder
             for root, dirs, files in os.walk(final_stress_output_folder):
@@ -745,6 +776,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 logger.error(error_exception)
 
                 file_processor.append_errors(error_exception, patient_folder_path)
+
                 continue
 
             patient_folder["output_files"].append(output_file_path)
@@ -788,6 +820,25 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
+
+    # Write the manifest to a file
+    manifest_file_path = os.path.join(meta_temp_folder_path, "manifest.tsv")
+
+    manifest.write_tsv(manifest_file_path)
+
+    logger.debug(
+        f"Uploading manifest file to {processed_data_output_folder}/manifest.tsv"
+    )
+
+    # Upload the manifest file
+    with open(manifest_file_path, "rb") as data:
+        output_file_client = file_system_client.get_file_client(
+            file_path=f"{processed_data_output_folder}/manifest.tsv"
+        )
+
+        output_file_client.upload_data(data, overwrite=True)
+
+    logger.info(f"Uploaded manifest file to {dependency_folder}/manifest.tsv")
 
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
