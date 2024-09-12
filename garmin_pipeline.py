@@ -258,17 +258,19 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         for root, dirs, files in os.walk(temp_input_folder):
             for file in files:
                 full_file_path = os.path.join(root, file)
-                total_patient_files += 1
 
                 if "activity" in full_file_path.lower():
+                    total_patient_files += 1
                     patient_files.append(
                         {"file_path": full_file_path, "modality": "Activity"}
                     )
                 elif "monitor" in full_file_path.lower():
+                    total_patient_files += 1
                     patient_files.append(
                         {"file_path": full_file_path, "modality": "Monitor"}
                     )
                 elif "sleep" in full_file_path.lower():
+                    total_patient_files += 1
                     patient_files.append(
                         {"file_path": full_file_path, "modality": "Sleep"}
                     )
