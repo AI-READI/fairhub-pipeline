@@ -6,6 +6,7 @@ import shutil
 import azure.storage.filedatalake as azurelake
 import pathlib
 import json
+import glob
 
 
 class FileMapProcessor:
@@ -30,7 +31,7 @@ class FileMapProcessor:
             file_system_name="stage-1-container",
         )
 
-        meta_blob_client = self.file_system_client.get_file_client(
+        meta_file_client = self.file_system_client.get_file_client(
             file_path=f"{dependency_folder}/file_map.json"
         )
 
@@ -41,13 +42,13 @@ class FileMapProcessor:
             ignore_file_download_path = os.path.join(
                 self.meta_temp_folder_path, ignored_file_name
             )
-            ignore_meta_blob_client = self.file_system_client.get_file_client(
-                 file_path=ignore_file
+            ignore_meta_file_client = self.file_system_client.get_file_client(
+                file_path=ignore_file
             )
             # Download the meta file for the pipeline
             with contextlib.suppress(Exception):
                 with open(ignore_file_download_path, "wb") as data:
-                    ignore_meta_blob_client.download_file().readinto(data)
+                    ignore_meta_file_client.download_file().readinto(data)
 
                 # Read the ignore file
                 with open(ignore_file_download_path, "r") as f:
@@ -60,7 +61,7 @@ class FileMapProcessor:
         # Downloading file map
         with contextlib.suppress(Exception):
             with open(file_map_download_path, "wb") as data:
-                meta_blob_client.download_file().readinto(data)
+                meta_file_client.download_file().readinto(data)
 
             # Load the meta file
             with open(file_map_download_path, "r") as f:
@@ -114,10 +115,10 @@ class FileMapProcessor:
             if entry["input_file"] == input_path:
                 for output_file in entry["output_files"]:
                     with contextlib.suppress(Exception):
-                        output_blob_client = self.file_system_client.get_file_client(
+                        output_file_client = self.file_system_client.get_file_client(
                             file_path=output_file
                         )
-                        output_blob_client.delete_file()
+                        output_file_client.delete_file()
                 break
 
     def delete_out_of_date_output_files(self):
@@ -126,11 +127,11 @@ class FileMapProcessor:
             if not entry["seen"]:
                 for output_file in entry["output_files"]:
                     with contextlib.suppress(Exception):
-                        output_blob_client = self.file_system_client.get_file_client(
+                        output_file_client = self.file_system_client.get_file_client(
                             file_path=output_file
                         )
 
-                        output_blob_client.delete_file()
+                        output_file_client.delete_file()
 
     def append_errors(self, error_exception, path):
         # This function appends errors to the json
@@ -159,15 +160,15 @@ class FileMapProcessor:
         with open(file_map_file_path, "w") as f:
             json.dump(self.file_map, f, indent=4, sort_keys=True, default=str)
         with open(file_map_file_path, "rb") as data:
-            output_blob_client = self.file_system_client.get_file_client(
+            output_file_client = self.file_system_client.get_file_client(
                 file_path=f"{self.dependency_folder}/file_map.json",
             )
 
             # # delete the existing file map
             with contextlib.suppress(Exception):
-                output_blob_client.delete_file()
+                output_file_client.delete_file()
 
-            output_blob_client.upload_data(data, overwrite=True)
+            output_file_client.upload_data(data, overwrite=True)
         shutil.rmtree(meta_temp_folder_path)
 
     def is_file_ignored(self, file_name, path) -> bool:
@@ -175,6 +176,9 @@ class FileMapProcessor:
 
     def is_file_ignored_by_path(self, path) -> bool:
         for pattern in self.ignore_files:
+            if not pattern:
+                continue
+
             if pathlib.Path(path).match(pattern):
                 return True
 
@@ -185,6 +189,9 @@ class FileMapProcessor:
 
         # Using glob to get all files that match the ignore pattern
         for pattern in self.ignore_files:
+            if not pattern:
+                continue
+
             glob_pattern = os.path.join(input_folder, pattern)
 
             files_to_ignore.extend(glob.glob(glob_pattern))

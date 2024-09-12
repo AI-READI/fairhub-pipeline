@@ -164,7 +164,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "convert_error": True,
                 "output_uploaded": False,
                 "output_files": [],
-                "patient_folder": cleaned_file_name,
+                "patient_folder_name": cleaned_file_name,
                 "patient_id": patient_id,
             }
         )
@@ -190,40 +190,44 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     time_estimator = TimeEstimator(total_files)
 
-    for file_item in enumerate(file_paths):
-        patient_id = file_item["patient_id"]
+    for patient_folder in file_paths:
+        patient_id = patient_folder["patient_id"]
 
         logger.info(f"Processing {patient_id}")
 
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp(prefix="garmin_pipeline_")
 
-        path = file_item["file_path"]
-        patient_folder_name = file_item["patient_folder"]
+        patient_folder_path = patient_folder["file_path"]
+        patient_folder_name = patient_folder["patient_folder_name"]
 
-        workflow_input_files = [path]
+        workflow_input_files = [patient_folder_path]
 
         # get the file name from the path
-        file_name = path.split("/")[-1]
+        file_name = patient_folder_path.split("/")[-1]
 
         # download the file to the temp folder
-        input_file_client = file_system_client.get_file_client(file_path=path)
+        input_file_client = file_system_client.get_file_client(
+            file_path=patient_folder_path
+        )
 
         input_last_modified = input_file_client.get_file_properties().last_modified
 
-        should_process = file_processor.file_should_process(path, input_last_modified)
+        should_process = file_processor.file_should_process(
+            patient_folder_path, input_last_modified
+        )
 
         if not should_process:
             logger.debug(
-                f"The file {path} has not been modified since the last time it was processed",
+                f"The file {patient_folder_path} has not been modified since the last time it was processed",
             )
-            logger.debug(f"Skipping {path} - File has not been modified")
+            logger.debug(f"Skipping {patient_folder_path} - File has not been modified")
 
             logger.time(time_estimator.step())
             continue
 
-        file_processor.add_entry(path, input_last_modified)
-        file_processor.clear_errors(path)
+        file_processor.add_entry(patient_folder_path, input_last_modified)
+        file_processor.clear_errors(patient_folder_path)
 
         temp_input_folder = os.path.join(temp_folder_path, patient_folder_name)
         os.makedirs(temp_input_folder, exist_ok=True)
@@ -244,60 +248,62 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.info(f"Unzipped {download_path} to {temp_input_folder}")
 
-        # Count the number of files in the temp_input_folder recursively
-        # One liner form https://stackoverflow.com/questions/16910330/return-total-number-of-files-in-directory-and-subdirectories
-        num_files = sum(len(files) for r, d, files in os.walk(temp_input_folder))
-        logger.debug(f"Number of files in {temp_input_folder}: {num_files}")
+        # Delete the downloaded file
+        os.remove(download_path)
+
+        # Create a modality list
+        patient_files = []
+        total_patient_files = 0
+
+        for root, dirs, files in os.walk(temp_input_folder):
+            for file in files:
+                full_file_path = os.path.join(root, file)
+                total_patient_files += 1
+
+                if "activity" in full_file_path.lower():
+                    patient_files.append(
+                        {"file_path": full_file_path, "modality": "Activity"}
+                    )
+                elif "monitor" in full_file_path.lower():
+                    patient_files.append(
+                        {"file_path": full_file_path, "modality": "Monitor"}
+                    )
+                elif "sleep" in full_file_path.lower():
+                    patient_files.append(
+                        {"file_path": full_file_path, "modality": "Sleep"}
+                    )
+
+        logger.debug(f"Number of files in {temp_input_folder}: {total_patient_files}")
 
         temp_conversion_output_folder_path = os.path.join(temp_folder_path, "converted")
 
-        logger.debug(f"Begin download and conversion of all files for {patient_id}")
+        for idx, patient_file in enumerate(patient_files):
+            file_idx = idx + 1
 
-        for idx2, file_item in enumerate(patient_files):
-            file_idx = idx2 + 1
+            patient_file_path = patient_file["file_path"]
+            file_modality = patient_file["modality"]
 
-            path = file_item["file_path"]
+            workflow_input_files.append(patient_file_path)
 
-            workflow_input_files.append(path)
-
-            original_file_name = path.split("/")[-1]
+            original_file_name = patient_file_path.split("/")[-1]
             original_file_name_only = original_file_name.split(".")[0]
-            file_modality = file_item["modality"]
-
-            logger.debug(f"Downloading {path} - ({file_idx}/{total_files})")
-
-            download_path = os.path.join(
-                temp_patient_folder_path, file_modality, original_file_name
-            )
-
-            # Create the directory if it does not exist
-            os.makedirs(os.path.dirname(download_path), exist_ok=True)
-
-            blob_client = file_system_client.get_file_client(file_path=path)
-
-            with open(download_path, "wb") as data:
-                blob_client.download_file().readinto(data)
-
-            logger.info(
-                f"Downloaded {original_file_name} to {download_path} - ({file_idx}/{total_files})"
-            )
 
             converted_output_folder_path = os.path.join(
                 temp_conversion_output_folder_path, original_file_name_only
             )
 
             logger.debug(
-                f"Converting {file_modality}/{original_file_name} - ({file_idx}/{total_files})"
+                f"Converting {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
             )
 
             if file_modality == "Sleep":
                 try:
                     garmin_read_sleep.convert(
-                        download_path, converted_output_folder_path
+                        patient_file_path, converted_output_folder_path
                     )
 
                     logger.info(
-                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_files})"
+                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
                     )
 
                     for root, dirs, files in os.walk(converted_output_folder_path):
@@ -316,16 +322,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     logger.error(error_exception)
 
-                    file_processor.append_errors(error_exception, patient_id)
+                    file_processor.append_errors(error_exception, patient_folder_path)
                     continue
             elif file_modality in ["Activity", "Monitor"]:
                 try:
                     garmin_read_activity.convert(
-                        download_path, converted_output_folder_path
+                        patient_file_path, converted_output_folder_path
                     )
 
                     logger.info(
-                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_files})"
+                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
                     )
 
                 except Exception:
@@ -337,16 +343,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     logger.error(error_exception)
 
-                    file_processor.append_errors(error_exception, patient_id)
+                    file_processor.append_errors(error_exception, patient_folder_path)
                     continue
             else:
                 logger.info(
-                    f"Skipping {file_modality}/{original_file_name} - ({file_idx}/{total_files})"
+                    f"Skipping {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
                 )
                 continue
-
-            # Delete the downloaded file
-            os.remove(download_path)
 
         output_files = []
 
@@ -393,7 +396,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.error(error_exception)
 
-            file_processor.append_errors(error_exception, patient_id)
+            file_processor.append_errors(error_exception, patient_folder_path)
             continue
 
         try:
@@ -439,7 +442,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.error(error_exception)
 
-            file_processor.append_errors(error_exception, patient_id)
+            file_processor.append_errors(error_exception, patient_folder_path)
 
             logger.time(time_estimator.step())
             continue
@@ -487,7 +490,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.error(error_exception)
 
-            file_processor.append_errors(error_exception, patient_id)
+            file_processor.append_errors(error_exception, patient_folder_path)
 
             logger.time(time_estimator.step())
             continue
@@ -539,7 +542,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.error(error_exception)
 
-            file_processor.append_errors(error_exception, patient_id)
+            file_processor.append_errors(error_exception, patient_folder_path)
 
             logger.time(time_estimator.step())
             continue
@@ -587,7 +590,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.error(error_exception)
 
-            file_processor.append_errors(error_exception, patient_id)
+            file_processor.append_errors(error_exception, patient_folder_path)
 
             logger.time(time_estimator.step())
             continue
@@ -634,7 +637,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.error(error_exception)
 
-            file_processor.append_errors(error_exception, patient_id)
+            file_processor.append_errors(error_exception, patient_folder_path)
 
             logger.time(time_estimator.step())
             continue
@@ -678,13 +681,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.error(error_exception)
 
-            file_processor.append_errors(error_exception, patient_id)
+            file_processor.append_errors(error_exception, patient_folder_path)
 
             logger.time(time_estimator.step())
             continue
 
-        file_item["convert_error"] = False
-        file_item["processed"] = True
+        patient_folder["convert_error"] = False
+        patient_folder["processed"] = True
 
         workflow_output_files = []
 
@@ -733,10 +736,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 logger.error(error_exception)
 
-                file_processor.append_errors(error_exception, patient_id)
+                file_processor.append_errors(error_exception, patient_folder_path)
                 continue
 
-            file_item["output_files"].append(output_file_path)
+            patient_folder["output_files"].append(output_file_path)
             workflow_output_files.append(output_file_path)
 
         file_processor.confirm_output_files(
@@ -744,8 +747,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         if outputs_uploaded:
-            file_item["output_uploaded"] = True
-            file_item["status"] = "success"
+            patient_folder["output_uploaded"] = True
+            patient_folder["status"] = "success"
             logger.info(
                 f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
             )
@@ -843,3 +846,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     # Clean up the temporary folder
     shutil.rmtree(meta_temp_folder_path)
+
+
+if __name__ == "__main__":
+    pipeline("AI-READI")
