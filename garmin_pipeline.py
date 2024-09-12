@@ -778,6 +778,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         shutil.rmtree(temp_folder_path)
 
+    file_processor.delete_out_of_date_output_files()
+    file_processor.remove_seen_flag_from_map()
+
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
     try:
