@@ -693,6 +693,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         outputs_uploaded = True
 
+        file_processor.delete_preexisting_output_files(patient_folder_path)
+
         total_output_files = len(output_files)
 
         logger.info(f"Uploading {total_output_files} output files for {patient_id}")
