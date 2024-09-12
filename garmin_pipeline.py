@@ -122,14 +122,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
-    exit_flag = False
-
     for path in paths:
-        if exit_flag:
-            break
-        else:
-            exit_flag = True
-
         t = str(path.name)
 
         file_name = t.split("/")[-1]

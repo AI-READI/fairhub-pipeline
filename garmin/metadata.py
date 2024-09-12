@@ -174,18 +174,30 @@ class GarminManifest:
                             if "body" in data and "sleep" in data["body"]:
                                 sleep_data = data["body"]["sleep"]
 
-                                print(sleep_data)
-
                                 sleep_sorted = sorted(
                                     sleep_data,
-                                    key=lambda x: x["effective_time_frame"][
+                                    key=lambda x: x["sleep_stage_time_frame"][
                                         "time_interval"
                                     ]["start_date_time"],
                                 )
-                                total_sleep_duration = sum(
-                                    item["sleep_duration"]["value"]
-                                    for item in sleep_sorted
-                                )
+                                total_sleep_duration = 0
+                                for item in sleep_sorted:
+                                    start_time = datetime.strptime(
+                                        item["sleep_stage_time_frame"]["time_interval"][
+                                            "start_date_time"
+                                        ],
+                                        "%Y-%m-%dT%H:%M:%SZ",
+                                    )
+                                    end_time = datetime.strptime(
+                                        item["sleep_stage_time_frame"]["time_interval"][
+                                            "end_date_time"
+                                        ],
+                                        "%Y-%m-%dT%H:%M:%SZ",
+                                    )
+                                    duration = (
+                                        end_time - start_time
+                                    ).total_seconds() / 3600
+                                    total_sleep_duration += duration
                                 average_sleep_duration = (
                                     total_sleep_duration / len(sleep_sorted)
                                     if sleep_sorted
