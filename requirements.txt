@@ -9,6 +9,7 @@ pandas
 xmltodict
 colorama
 termcolor
+pydicom==2.4.4
 
 # ecg
 sierraecg
@@ -42,9 +43,6 @@ pydocstyle
 # Development
 faker
 poethepoet
-
-# Temporary
-pydicom
 
 # Database
 psycopg2-binary
