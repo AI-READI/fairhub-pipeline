@@ -72,6 +72,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/FitnessTracker"
     dependency_folder = f"{study_id}/dependency/FitnessTracker"
     ignore_file = f"{study_id}/ignore/fitnessTracker.ignore"
+    manifest_folder = f"{study_id}/pooled-data/FitnessTracker-manifest"
     red_cap_export_file = f"{study_id}/pooled-data/REDCap/AIREADI-Garmin.tsv"
     participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
@@ -190,7 +191,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     manifest.read_redcap_file(red_cap_export_file_path)
 
-    file_paths = file_paths[:5]
+    # file_paths = file_paths[:5]
     for patient_folder in file_paths:
         patient_id = patient_folder["patient_id"]
 
@@ -858,12 +859,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Upload the manifest file
     with open(manifest_file_path, "rb") as data:
         output_file_client = file_system_client.get_file_client(
-            file_path=f"{processed_data_output_folder}/manifest.tsv"
+            file_path=f"{manifest_folder}/manifest.tsv"
         )
 
         output_file_client.upload_data(data, overwrite=True)
 
-    logger.info(f"Uploaded manifest file to {dependency_folder}/manifest.tsv")
+    logger.info(
+        f"Uploaded manifest file to {processed_data_output_folder}/manifest.tsv"
+    )
 
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
