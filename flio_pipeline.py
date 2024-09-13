@@ -398,6 +398,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "data_type",
             "start_date",
             "end_date",
+            "organize_result",
+            "organize_error",
             "convert_error",
             "output_uploaded",
             "output_files",
