@@ -128,13 +128,7 @@ def pipeline(
 
     time_estimator = TimeEstimator(total_files)
 
-    for idx, file_item in enumerate(file_paths):
-        log_idx = idx + 1
-
-        print("log_idx", log_idx)
-
-        # if log_idx == 5:
-        #     break
+    for file_item in file_paths:
 
         path = file_item["file_path"]
 
@@ -204,6 +198,8 @@ def pipeline(
 
         filtered_list = imaging_utils.spectralis_get_filtered_file_names(batch_folder)
 
+        logger.debug(f"Organizing {original_file_name}")
+
         try:
             for file_name in filtered_list:
 
@@ -221,6 +217,8 @@ def pipeline(
 
             logger.time(time_estimator.step())
             continue
+
+        logger.info(f"Organized {original_file_name}")
 
         # convert dicom files to nema compliant dicom files
         protocols = [
@@ -247,6 +245,8 @@ def pipeline(
             for file in files:
                 spectralis_instance.convert(file, output)
 
+        logger.info(f"Converted {original_file_name}")
+
         step4_folder = os.path.join(temp_folder_path, "step4")
         os.makedirs(step4_folder, exist_ok=True)
 
@@ -271,6 +271,8 @@ def pipeline(
         upload_exception = ""
 
         file_processor.delete_preexisting_output_files(path)
+
+        logger.debug(f"Uploading outputs for {original_file_name}")
 
         for root, dirs, files in os.walk(step4_folder):
             for file in files:
@@ -315,6 +317,8 @@ def pipeline(
 
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
+
+        logger.info(f"Uploaded outputs for {original_file_name}")
 
         logger.debug(f"Uploading metadata for {file_name}")
 
