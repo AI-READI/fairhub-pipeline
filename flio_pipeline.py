@@ -31,6 +31,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     input_folder = f"{study_id}/pooled-data/Flio"
     processed_data_output_folder = f"{study_id}/pooled-data/Flio-processed"
+    processed_metadata_output_folder = f"{study_id}/pooled-data/Flio-metadata"
     dependency_folder = f"{study_id}/dependency/Flio"
     pipeline_workflow_log_folder = f"{study_id}/logs/Flio"
     ignore_file = f"{study_id}/ignore/flio.ignore"
@@ -45,6 +46,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_metadata_output_folder)
 
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
@@ -127,13 +131,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
-    time_estimator = TimeEstimator(len(file_paths))
+    time_estimator = TimeEstimator(total_files)
 
-    for idx, file_item in enumerate(file_paths):
-        log_idx = idx + 1
-
-        # if log_idx == 5:
-        #     break
+    for file_item in file_paths:
 
         path = file_item["file_path"]
 
@@ -149,9 +149,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         step1_folder = os.path.join(temp_folder_path, "step1")
         os.makedirs(step1_folder, exist_ok=True)
 
-        logger.debug(
-            f"Downloading {patient_folder_name} to {step1_folder}"
-        )
+        logger.debug(f"Downloading {patient_folder_name} to {step1_folder}")
 
         # Download the contents of the patient folder to the step1 folder
         folder_contents = file_system_client.get_paths(path=path, recursive=True)
@@ -184,19 +182,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 continue
 
-            logger.debug(
-                f"Downloading {item_path} to {download_path}"
-            )
+            logger.debug(f"Downloading {item_path} to {download_path}")
 
             with open(file=download_path, mode="wb") as f:
                 f.write(file_client.download_file().readall())
-                logger.debug(
-                    f"Downloaded {item_path} to {download_path}"
-                )
+                logger.debug(f"Downloaded {item_path} to {download_path}")
 
-        logger.info(
-            f"Downloaded {patient_folder_name} to {step1_folder}"
-        )
+        logger.info(f"Downloaded {patient_folder_name} to {step1_folder}")
 
         flio_instance = Flio()
 
@@ -205,14 +197,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         step2_folder = os.path.join(temp_folder_path, "step2")
         os.makedirs(step2_folder, exist_ok=True)
 
+        logger.debug(f"Organizing {patient_folder_name}")
+
         try:
             organize_result = flio_instance.organize(step1_folder, step2_folder)
 
             file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
-            logger.error(
-                f"Failed to organize {patient_folder_name}"
-            )
+            logger.error(f"Failed to organize {patient_folder_name}")
 
             error_exception = "".join(format_exc().splitlines())
 
@@ -222,6 +214,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.time(time_estimator.step())
             continue
+
+        logger.info(f"Organized {patient_folder_name}")
 
         step3_folder = os.path.join(temp_folder_path, "step3")
         os.makedirs(step3_folder, exist_ok=True)
@@ -244,13 +238,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         step5_folder = os.path.join(temp_folder_path, "step5")
         os.makedirs(step5_folder, exist_ok=True)
 
+        metadata_folder = os.path.join(temp_folder_path, "metadata")
+        os.makedirs(metadata_folder, exist_ok=True)
+
         filtered_list = imaging_utils.get_filtered_file_names(step4_folder)
 
         for file_name in filtered_list:
             if "flio" in file_name:
                 full_file_path = imaging_utils.format_file(file_name, step5_folder)
 
-                flio_instance.metadata(full_file_path, step5_folder)
+                flio_instance.metadata(full_file_path, metadata_folder)
 
         # Upload the processed files to the output folder
 
@@ -269,9 +266,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 # Check if is a json metadata file
                 if full_file_path.endswith(".json"):
-                    logger.debug(
-                        f"Skipping {full_file_path} for now"
-                    )
+                    logger.debug(f"Skipping {full_file_path} for now")
                     continue
 
                 f2 = full_file_path.split("/")[-5:]
@@ -282,9 +277,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     f"{processed_data_output_folder}/{combined_file_name}"
                 )
 
-                logger.debug(
-                    f"Uploading {full_file_path} to {output_file_path}"
-                )
+                logger.debug(f"Uploading {full_file_path} to {output_file_path}")
 
                 try:
                     output_file_client = file_system_client.get_file_client(
@@ -299,24 +292,55 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     with open(full_file_path, "rb") as f:
                         output_file_client.upload_data(f, overwrite=True)
-                        logger.info(
-                            f"Uploaded {combined_file_name}"
-                        )
+                        logger.info(f"Uploaded {combined_file_name}")
                 except Exception:
                     outputs_uploaded = False
-                    logger.error(
-                        f"Failed to upload {combined_file_name}"
-                    )
+                    logger.error(f"Failed to upload {combined_file_name}")
 
                     upload_exception = "".join(format_exc().splitlines())
 
                     logger.error(upload_exception)
 
-                    file_processor.append_errors(error_exception, path)
+                    file_processor.append_errors(upload_exception, path)
                     continue
 
                 file_item["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
+
+        logger.debug(f"Uploading metadata for {file_name}")
+
+        for root, dirs, files in os.walk(metadata_folder):
+            for file in files:
+                full_file_path = os.path.join(root, file)
+
+                f2 = full_file_path.split("/")[-2:]
+
+                combined_file_name = "/".join(f2)
+
+                output_file_path = (
+                    f"{processed_metadata_output_folder}/{combined_file_name}"
+                )
+
+                output_file_client = file_system_client.get_file_client(
+                    file_path=output_file_path
+                )
+
+                logger.debug(
+                    f"Uploading {full_file_path} to {processed_metadata_output_folder}"
+                )
+
+                # Check if the file already exists in the output folder
+                if output_file_client.exists():
+                    raise Exception(
+                        f"File {output_file_path} already exists. Throwing exception"
+                    )
+
+                with open(full_file_path, "rb") as f:
+                    output_file_client.upload_data(f, overwrite=True)
+
+                    logger.info(
+                        f"Uploaded {file_name} to {processed_metadata_output_folder}"
+                    )
 
         # Add the new output files to the file map
         file_processor.confirm_output_files(path, workflow_output_files, "")
@@ -341,6 +365,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug("Cleaning up temp folders")
 
+        shutil.rmtree(metadata_folder)
         shutil.rmtree(step5_folder)
         shutil.rmtree(step4_folder)
         shutil.rmtree(step3_folder)
