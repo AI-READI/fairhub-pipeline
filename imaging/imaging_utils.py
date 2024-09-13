@@ -7,6 +7,24 @@ import importlib.util
 import string
 
 
+def find_string_in_files(file_list, target_string):
+    """
+    Searches for the target string in a list of file contents.
+
+    Args:
+        file_list (list of str): A list of strings, where each string represents the content of a file.
+        target_string (str): The string to search for within the file contents.
+
+    Returns:
+        int: The index of the first file in which the target string is found.
+        str: A message indicating that the string was not found if the target string is not found in any file.
+    """
+    for i in file_list:
+        if target_string in i:
+            return i
+    return "String not found in any file."
+
+
 def extract_numeric_part(uid):
     """
     Extract numerical parts of the UID.
@@ -58,8 +76,8 @@ def unzip_fda_file(input_zip_path, output_folder_path):
 
     if "fda" not in input_zip_path.lower():
         dic = {
-            "Foldername": f"{input_zip_path}",
-            "unzipping": "no fda file will be skipped",
+            "Input": f"{input_zip_path}",
+            "Unzipping": "no fda file will be skipped",
         }
         print(dic)
         return dic
@@ -73,7 +91,7 @@ def unzip_fda_file(input_zip_path, output_folder_path):
         with zipfile.ZipFile(input_zip_path, "r") as zip_ref:
             zip_ref.extractall(maestro2)
 
-        dic = {"Foldername": f"{input_zip_path}", "unzipping": "correct"}
+        dic = {"Input": f"{input_zip_path}", "Unzipping": "correct"}
         print(dic)
         return dic
 
@@ -85,7 +103,7 @@ def unzip_fda_file(input_zip_path, output_folder_path):
         # Unzip the contents of the zip file into the output folder
         with zipfile.ZipFile(input_zip_path, "r") as zip_ref:
             zip_ref.extractall(triton)
-        dic = {"Foldername": f"{input_zip_path}", "unzipping": "correct"}
+        dic = {"Input": f"{input_zip_path}", "Unzipping": "correct"}
         print(dic)
         return dic
 
@@ -103,13 +121,13 @@ def unzip_fda_file(input_zip_path, output_folder_path):
                 if not file.lower().endswith(".dcm"):
                     os.remove(os.path.join(root, file))
 
-        dic = {"Foldername": f"{input_zip_path}", "unzipping": "correct"}
+        dic = {"Input": f"{input_zip_path}", "Unzipping": "correct"}
         print(dic)
         return dic
 
     else:
         print("unknown")
-        dic = {"Foldername": f"{input_zip_path}", "unzipping": "unknown"}
+        dic = {"Input": f"{input_zip_path}", "Unzipping": "unknown"}
         print(dic)
         return dic
 
@@ -532,6 +550,21 @@ name_mapping = {
     "spectralis_ppol_mac_hr_retinal_photography": "spectralis_ppol_mac_hr_ir",
     "spectralis_ppol_mac_hr_retinal_photography_small": "spectralis_ppol_mac_hr_ir",
     "flio": "flio",
+    "mac_angiography": "cirrus_macula_6x6_octa",
+    "onh_angiography": "cirrus_disc_6x6_octa",
+    "mac_macular_cube_": "cirrus_mac_oct",
+    "onh_optic_disc_cube_": "cirrus_disc_oct",
+}
+
+
+cirrus_submodality_mapping = {
+    "LSO": "ir",
+    "Struc.": "oct",
+    "Flow.": "flow_cube",
+    "ProjectionRemoved": "enface_projection_removed",
+    "AngioEnface.": "enface",
+    "StructuralEnface": "enface_structural",
+    "Seg": "segmentation",
 }
 
 
@@ -561,7 +594,7 @@ topcon_except_maestro_octa_submodality_mapping = {
 
 
 modality_folder_mapping = {
-    "ir": "retinal_photography",
+    "ir_": "retinal_photography",
     "cfp": "retinal_photography",
     "faf": "retinal_photography",
     "flow_cube": "retinal_octa",
@@ -572,10 +605,11 @@ modality_folder_mapping = {
 }
 
 submodality_folder_mapping = {
-    "ir": "ir",
+    "ir_": "ir",
     "cfp": "cfp",
     "faf": "faf",
-    "oct": "oct_structural_scan",
+    "_oct_l": "oct_structural_scan",
+    "_oct_r": "oct_structural_scan",
     "flow_cube": "flow_cube",
     "segmentation": "segmentation",
     "enface": "enface",
@@ -589,6 +623,7 @@ device_folder_mapping = {
     "triton": "topcon_triton",
     "spectralis": "heidelberg_spectralis",
     "flio": "heidelberg_flio",
+    "cirrus": "zeiss_cirrus",
 }
 
 
@@ -727,16 +762,21 @@ def format_file(file, output):
 
         else:
             uid = dataset.SOPInstanceUID
-            protocol = get_description(file, protocol_mapping)
+
             dataset.PatientID = id
             dataset.PatientName = ""
             dataset.PatientSex = "M"
             dataset.PatientBirthDate = ""
-            dataset.ProtocolName = protocol
+
+            if "cirrus" in file:
+                dataset.ProtocolName = dataset.ProtocolName
+
+            else:
+                protocol = get_description(file, protocol_mapping)
+                dataset.ProtocolName = protocol
 
             laterality = dataset.ImageLaterality.lower()
             patientid = id
-            protocol = protocol
 
             modality = get_description(file, name_mapping)
 
@@ -753,6 +793,12 @@ def format_file(file, output):
                 )
                 submodality = f"{submodality}"
                 filename = f"{id}_{modality}_{submodality}_{laterality}_{uid}.dcm"
+
+            elif "cirrus" in file:
+                n = get_description(file, cirrus_submodality_mapping)
+                n = f"{n}"
+
+                filename = f"{id}_{modality}_{n}_{laterality}_{uid}.dcm"
 
             elif "flio" in file:
                 submodality = next(
