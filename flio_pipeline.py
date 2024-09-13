@@ -61,15 +61,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     logger.debug(f"Getting batch folder paths in {input_folder}")
 
-    exit_flag = False
-
-    logger.debug(f"Getting file paths in {input_folder}")
-
     for batch_folder_path in batch_folder_paths:
-        if exit_flag:
-            break
-        else:
-            exit_flag = True
 
         t = str(batch_folder_path.name)
 
