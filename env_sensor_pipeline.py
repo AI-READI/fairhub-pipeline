@@ -92,14 +92,7 @@ def pipeline(
         # remove the first row
         participant_filter_list.pop(0)
 
-    exit_flag = False
-
     for path in paths:
-        if exit_flag:
-            break
-        else:
-            exit_flag = True
-
         t = str(path.name)
 
         file_name = t.split("/")[-1]
@@ -113,7 +106,7 @@ def pipeline(
             logger.debug(f"Skipping {file_name}")
             continue
 
-        cleaned_file_name = t.replace(".zip", "")
+        cleaned_file_name = file_name.replace(".zip", "")
 
         if file_processor.is_file_ignored_by_path(cleaned_file_name):
             logger.debug(f"Skipping {t}")

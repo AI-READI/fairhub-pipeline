@@ -191,6 +191,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         xecg = ecg.ECG()
 
+        logger.debug(f"Converting {original_file_name}")
+
         try:
             conv_retval_dict = xecg.convert(
                 ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
@@ -210,6 +212,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 logger.time(time_estimator.step())
                 continue
+
+            logger.info(f"Converted {original_file_name}")
         except Exception:
             logger.error(f"Failed to convert {original_file_name}")
             error_exception = format_exc()
