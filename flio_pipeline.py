@@ -364,6 +364,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         shutil.rmtree(step2_folder)
         shutil.rmtree(step1_folder)
 
+    shutil.rmtree(temp_folder_path)
+
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
 
