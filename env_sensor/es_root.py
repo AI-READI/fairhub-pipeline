@@ -1,15 +1,16 @@
 import logging
 
-from env_sensor.es_standards import DataDomain
+from .standards import DataDomain
 
 from . import es_converter as es_conv
 from . import es_metadata as es_meta
 from . import es_utils_plot as es_plot
 
 # Notes on amount of data:
-#  example: 023-06-17 05:19:00 to 2023-06-18 19:32:24 = 38 hours --> 3.8MB
+#  example: 2023-06-17 05:19:00 to 2023-06-18 19:32:24 = 38 hours --> 3.8MB
 #       1.5 hours of data is 145 kB
 #  Estimated size for 10 days is (10*24/38)*3.8MB = 24MB
+#  Estimated # of lines of data for 10 days is 172,800
 
 
 # Create logger with 'es'
@@ -66,7 +67,15 @@ class EnvironmentalSensor(DataDomain):
         # Self-documenting header import from file
         self.header_content = ""
 
-    def convert(self, input_path, output_folder, visit_file, build_file=None):
+    def convert(
+        self,
+        input_path,
+        output_folder,
+        visit_file,
+        filter_level=2,
+        build_file=None,
+        extended_conv_dict=False,
+    ):
         """
         Read one folder with a sequence of environmental sensor *.csv files and combine them, then
         add a self-documenting header section.
@@ -77,15 +86,27 @@ class EnvironmentalSensor(DataDomain):
             input_path (string): Full path to a folder of EnvironmentalSensor *.csv files
             output_folder (string): Full path to output folder
             visit_file (string): Full path to a csv file with visit data
+            filter_level (int): (Optional) Controls data filters.
+                0 = remove only corrupted data rows
+                1 = + remove short files with less than 2 minutes of data
+                2 = + remove files outside of the observation window visit_date to return_date
             build_file (string): (Optional) Full path to a csv file with esID to SEN55 mapping
+            extended_conv_dict (boolean): (Optional) Return an extensive conv_dict suitable for debug
 
-        Returns: dict
-            status (string): TBD  # ToDo: update
-            selfdoc_file (string) : path to the file with the selfdocumenting header
+        Returns: dict including the following keys
+            participantID (4 digit string): participant ID e.g. 9998
+            output_file (string) : path to the file with the selfdocumenting header
+            conversion_success (boolean): whether or not the final conversion was completed
+            conversion_issues (list of strings): issues that interfered with conversion
         """
         logger.info(f"ES conversion starting for {input_path}")
         conv_dict = es_conv.convert_env_sensor(
-            input_path, output_folder, visit_file=visit_file, build_file=build_file
+            input_path,
+            output_folder,
+            visit_file=visit_file,
+            filter_level=filter_level,
+            build_file=build_file,
+            extended_conv_dict=extended_conv_dict,
         )
 
         logger.info(f'ES conversion is complete; output is {conv_dict["output_file"]}')
@@ -98,10 +119,10 @@ class EnvironmentalSensor(DataDomain):
             input_csv (string): full path to EnvironmentalSensor self-documenting *.csv
 
         Returns:
-            meta_dict (dict): metadata, e.g.
-            # TODO: put example here
+            meta_dict (dict): metadata including key, values for
+                modality, manufacturer, device, particpant_id, sesnor_id,
+                sensor_location, number_of_observations, sensor_sampling_extent_in_days
         """
-        # TODO: decide if pass the # skiprows or if determine when reading #25
         # decision impacts whether we can check that the file is formatted correctly
         logger.info(f"ES metadata extraction started for {input_csv}")
         meta_dict = es_meta.metadata_env_sensor(input_csv)
@@ -115,12 +136,11 @@ class EnvironmentalSensor(DataDomain):
                 participantID
                 output_file
             output_folder (string): full path to a folder for the saved plot
-        Returns:
-            fig_path (string): full path to the saved plot  # ToDo: update comment
+        Returns: dict with one key, value
+            output_file (string): full path to the saved *.png plot
         """
-        # ToDo: get this to work with participantID so that things are same as ecg
         # logger.info(f'ES dataplot working on {conv_dict["participantID"]}')
-        logger.info(f'ES dataplot working on {conv_dict["r"]["pppp"]}')
+        logger.info(f'ES dataplot working on {conv_dict["participantID"]}')
         dataplot_dict = es_plot.dataplot(conv_dict, output_folder)
 
         return dataplot_dict
