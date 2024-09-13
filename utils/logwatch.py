@@ -22,6 +22,7 @@ class Logwatch:
         self.optomed_drain = config.FAIRHUB_OPTOMED_LOG_ENDPOINT
         self.flio_drain = config.FAIRHUB_FLIO_LOG_ENDPOINT
         self.spectralis_drain = config.FAIRHUB_SPECTRALIS_LOG_ENDPOINT
+        self.cirrus_drain = config.FAIRHUB_CIRRUS_LOG_ENDPOINT
 
         if (channel == "triton") and (self.triton_drain is not None):
             self.drain = self.triton_drain
@@ -43,6 +44,8 @@ class Logwatch:
             self.drain = self.flio_drain
         if (channel == "spectralis") and (self.spectralis_drain is not None):
             self.drain = self.spectralis_drain
+        if (channel == "cirrus") and (self.cirrus_drain is not None):
+            self.drain = self.cirrus_drain
 
     def info(self, message: str):
         """Send an info message to the logwatch server"""
