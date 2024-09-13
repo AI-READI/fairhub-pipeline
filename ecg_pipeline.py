@@ -139,7 +139,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     time_estimator = TimeEstimator(total_files)
 
     for file_item in file_paths:
-
         path = file_item["file_path"]
 
         workflow_input_files = [path]
@@ -303,34 +302,33 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         # Do the data plot
-        # logger.debug(f"Data plotting {original_file_name}")
+        logger.debug(f"Data plotting {original_file_name}")
 
-        # dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
+        dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
 
-        # logger.debug(f"Data plotted {original_file_name}")
+        logger.debug(f"Data plotted {original_file_name}")
 
-        # dataplot_pngs = dataplot_retval_dict["output_files"]
+        dataplot_pngs = dataplot_retval_dict["output_files"]
 
-        # logger.debug(
-        #     f"Uploading {original_file_name} to {data_plot_output_folder}"
-        # )
+        logger.debug(f"Uploading {original_file_name} to {data_plot_output_folder}")
 
-        # for file in dataplot_pngs:
-        #     with open(f"{file}", "rb") as data:
-        #         original_file_name = file.split("/")[-1]
-        #         output_blob_client = blob_service_client.get_blob_client(
-        #             container="stage-1-container",
-        #             blob=f"{data_plot_output_folder}/{original_file_name}",
-        #         )
-        #         output_blob_client.upload_blob(data)
+        for file in dataplot_pngs:
+            with open(f"{file}", "rb") as data:
+                original_file_name = file.split("/")[-1]
 
-        # logger.debug(
-        #     f"Uploaded {original_file_name} to {data_plot_output_folder}"
-        # )
+                output_file_path = f"{data_plot_output_folder}/{original_file_name}"
+
+                output_file_client = file_system_client.get_file_client(
+                    file_path=output_file_path
+                )
+
+                output_file_client.upload_data(data, overwrite=True)
+
+        logger.debug(f"Uploaded {original_file_name} to {data_plot_output_folder}")
 
         # Create the file metadata
 
-        # logger.debug(f"Creating metadata for {original_file_name}")
+        logger.debug(f"Creating metadata for {original_file_name}")
 
         # Generate the metadata
 
