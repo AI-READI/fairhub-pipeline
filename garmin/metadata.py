@@ -130,10 +130,12 @@ class GarminManifest:
                                 valid_records = 0
                                 for record in calorie_data:
                                     if (
-                                        "duration" in record
-                                        and "value" in record["duration"]
+                                        "calories_value" in record
+                                        and "value" in record["calories_value"]
                                     ):
-                                        calorie_value = record["duration"]["value"]
+                                        calorie_value = record["calories_value"][
+                                            "value"
+                                        ]
                                         if isinstance(
                                             calorie_value, (int, float)
                                         ):  # Ensure it's a valid number
@@ -394,30 +396,34 @@ class GarminManifest:
             for participant_id in sorted(data.keys()):
                 row = [
                     participant_id,
-                    self.redcap_data.get(participant_id, {}).get("wrist_worn_on", None),
-                    self.redcap_data.get(participant_id, {}).get("dominant_hand", None),
-                    data[participant_id].get("heart_rate_filepath", None),
-                    data[participant_id].get("heart_rate_record_count", None),
-                    data[participant_id].get("average_heart_rate", None),
-                    data[participant_id].get("oxygen_saturation_filepath", None),
-                    data[participant_id].get("oxygen_saturation_record_count", None),
-                    data[participant_id].get("average_oxygen_saturation", None),
-                    data[participant_id].get("stress_filepath", None),
-                    data[participant_id].get("stress_record_count", None),
-                    data[participant_id].get("average_stress", None),
-                    data[participant_id].get("sleep_filepath", None),
-                    data[participant_id].get("sleep_record_count", None),
-                    data[participant_id].get("average_sleep", None),
-                    data[participant_id].get("respiratory_rate_filepath", None),
-                    data[participant_id].get("respiratory_rate_record_count", None),
-                    data[participant_id].get("average_respiratory_rate", None),
-                    data[participant_id].get("physical_activity_filepath", None),
-                    data[participant_id].get("physical_activity_num_days", None),
-                    data[participant_id].get("average_physical_activity", None),
-                    data[participant_id].get("active_calories_filepath", None),
-                    data[participant_id].get("active_calories_record_count", None),
-                    data[participant_id].get("average_active_calories", None),
-                    data[participant_id].get("sensor_sampling_duration_days", None),
+                    self.redcap_data.get(participant_id, {}).get(
+                        "wrist_worn_on", "None"
+                    ),
+                    self.redcap_data.get(participant_id, {}).get(
+                        "dominant_hand", "None"
+                    ),
+                    data[participant_id].get("heart_rate_filepath", "None"),
+                    data[participant_id].get("heart_rate_record_count", "None"),
+                    data[participant_id].get("average_heart_rate", "None"),
+                    data[participant_id].get("oxygen_saturation_filepath", "None"),
+                    data[participant_id].get("oxygen_saturation_record_count", "None"),
+                    data[participant_id].get("average_oxygen_saturation", "None"),
+                    data[participant_id].get("stress_filepath", "None"),
+                    data[participant_id].get("stress_record_count", "None"),
+                    data[participant_id].get("average_stress", "None"),
+                    data[participant_id].get("sleep_filepath", "None"),
+                    data[participant_id].get("sleep_record_count", "None"),
+                    data[participant_id].get("average_sleep", "None"),
+                    data[participant_id].get("respiratory_rate_filepath", "None"),
+                    data[participant_id].get("respiratory_rate_record_count", "None"),
+                    data[participant_id].get("average_respiratory_rate", "None"),
+                    data[participant_id].get("physical_activity_filepath", "None"),
+                    data[participant_id].get("physical_activity_record_count", "None"),
+                    data[participant_id].get("average_physical_activity", "None"),
+                    data[participant_id].get("active_calories_filepath", "None"),
+                    data[participant_id].get("active_calories_record_count", "None"),
+                    data[participant_id].get("average_active_calories", "None"),
+                    data[participant_id].get("sensor_sampling_duration_days", "None"),
                     "Garmin",
                     "Vivosmart 5",
                 ]

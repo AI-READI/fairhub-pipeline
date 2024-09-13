@@ -129,11 +129,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # Check if the file name is in the format FIT-patientID.zip
         if not file_name.endswith(".zip"):
-            logger.debug(f"Skipping {file_name}")
+            logger.debug(f"Skipping {file_name} because it is not a .zip file")
             continue
 
         if len(file_name.split("-")) != 2:
-            logger.debug(f"Skipping {file_name}")
+            logger.debug(
+                f"Skipping {file_name} because it does not have the expected format"
+            )
             continue
 
         cleaned_file_name = file_name.replace(".zip", "")
@@ -188,13 +190,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     manifest.read_redcap_file(red_cap_export_file_path)
 
+    file_paths = file_paths[:5]
     for patient_folder in file_paths:
         patient_id = patient_folder["patient_id"]
 
         logger.info(f"Processing {patient_id}")
-
-        # Create a temporary folder on the local machine
-        temp_folder_path = tempfile.mkdtemp(prefix="garmin_pipeline_")
 
         patient_folder_path = patient_folder["file_path"]
         patient_folder_name = patient_folder["patient_folder_name"]
@@ -227,542 +227,240 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_processor.add_entry(patient_folder_path, input_last_modified)
         file_processor.clear_errors(patient_folder_path)
 
-        temp_input_folder = os.path.join(temp_folder_path, patient_folder_name)
-        os.makedirs(temp_input_folder, exist_ok=True)
+        # Create a temporary folder on the local machine
+        with tempfile.TemporaryDirectory(prefix="garmin_pipeline_") as temp_folder_path:
+            temp_input_folder = os.path.join(temp_folder_path, patient_folder_name)
+            os.makedirs(temp_input_folder, exist_ok=True)
 
-        download_path = os.path.join(temp_input_folder, "raw_data.zip")
+            download_path = os.path.join(temp_input_folder, "raw_data.zip")
 
-        logger.debug(f"Downloading {file_name} to {download_path}")
+            logger.debug(f"Downloading {file_name} to {download_path}")
 
-        with open(file=download_path, mode="wb") as f:
-            f.write(input_file_client.download_file().readall())
+            with open(file=download_path, mode="wb") as f:
+                f.write(input_file_client.download_file().readall())
 
-        logger.info(f"Downloaded {file_name} to {download_path}")
+            logger.info(f"Downloaded {file_name} to {download_path}")
 
-        logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
+            logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
 
-        with zipfile.ZipFile(download_path, "r") as zip_ref:
-            zip_ref.extractall(temp_input_folder)
+            with zipfile.ZipFile(download_path, "r") as zip_ref:
+                zip_ref.extractall(temp_input_folder)
 
-        logger.info(f"Unzipped {download_path} to {temp_input_folder}")
+            logger.info(f"Unzipped {download_path} to {temp_input_folder}")
 
-        # Delete the downloaded file
-        os.remove(download_path)
+            # Delete the downloaded file
+            os.remove(download_path)
 
-        # Create a modality list
-        patient_files = []
-        total_patient_files = 0
+            # Create a modality list
+            patient_files = []
+            total_patient_files = 0
 
-        for root, dirs, files in os.walk(temp_input_folder):
-            for file in files:
-                full_file_path = os.path.join(root, file)
+            for root, dirs, files in os.walk(temp_input_folder):
+                for file in files:
+                    full_file_path = os.path.join(root, file)
 
-                if "activity" in full_file_path.lower():
-                    total_patient_files += 1
-                    patient_files.append(
-                        {"file_path": full_file_path, "modality": "Activity"}
-                    )
-                elif "monitor" in full_file_path.lower():
-                    total_patient_files += 1
-                    patient_files.append(
-                        {"file_path": full_file_path, "modality": "Monitor"}
-                    )
+                    if "activity" in full_file_path.lower():
+                        total_patient_files += 1
+                        patient_files.append(
+                            {"file_path": full_file_path, "modality": "Activity"}
+                        )
+                    elif "monitor" in full_file_path.lower():
+                        total_patient_files += 1
+                        patient_files.append(
+                            {"file_path": full_file_path, "modality": "Monitor"}
+                        )
 
-                elif "sleep" in full_file_path.lower():
-                    total_patient_files += 1
-                    patient_files.append(
-                        {"file_path": full_file_path, "modality": "Sleep"}
-                    )
-
-        logger.debug(
-            f"Number of valid files in {temp_input_folder}: {total_patient_files}"
-        )
-
-        temp_conversion_output_folder_path = os.path.join(temp_folder_path, "converted")
-
-        for idx, patient_file in enumerate(patient_files):
-            file_idx = idx + 1
-
-            patient_file_path = patient_file["file_path"]
-            file_modality = patient_file["modality"]
-
-            workflow_input_files.append(patient_file_path)
-
-            original_file_name = patient_file_path.split("/")[-1]
-            original_file_name_only = original_file_name.split(".")[0]
-
-            converted_output_folder_path = os.path.join(
-                temp_conversion_output_folder_path, original_file_name_only
-            )
+                    elif "sleep" in full_file_path.lower():
+                        total_patient_files += 1
+                        patient_files.append(
+                            {"file_path": full_file_path, "modality": "Sleep"}
+                        )
 
             logger.debug(
-                f"Converting {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
+                f"Number of valid files in {temp_input_folder}: {total_patient_files}"
             )
 
-            if file_modality == "Sleep":
-                try:
-                    garmin_read_sleep.convert(
-                        patient_file_path, converted_output_folder_path
-                    )
+            temp_conversion_output_folder_path = os.path.join(
+                temp_folder_path, "converted"
+            )
 
-                    logger.info(
-                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
-                    )
+            for idx, patient_file in enumerate(patient_files):
+                file_idx = idx + 1
 
-                except Exception:
-                    logger.error(
-                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
-                    )
-                    error_exception = format_exc()
-                    error_exception = "".join(error_exception.splitlines())
+                patient_file_path = patient_file["file_path"]
+                file_modality = patient_file["modality"]
 
-                    logger.error(error_exception)
+                workflow_input_files.append(patient_file_path)
 
-                    file_processor.append_errors(error_exception, patient_folder_path)
-                    continue
-            elif file_modality in ["Activity", "Monitor"]:
-                try:
-                    garmin_read_activity.convert(
-                        patient_file_path, converted_output_folder_path
-                    )
+                original_file_name = patient_file_path.split("/")[-1]
+                original_file_name_only = original_file_name.split(".")[0]
 
-                    logger.info(
-                        f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
-                    )
-
-                except Exception:
-                    logger.error(
-                        f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files})"
-                    )
-                    error_exception = format_exc()
-                    error_exception = "".join(error_exception.splitlines())
-
-                    logger.error(error_exception)
-
-                    file_processor.append_errors(error_exception, patient_folder_path)
-                    continue
-            else:
-                logger.info(
-                    f"Skipping {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
+                converted_output_folder_path = os.path.join(
+                    temp_conversion_output_folder_path, original_file_name_only
                 )
-                continue
 
-        output_files = []
+                logger.debug(
+                    f"Converting {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
+                )
 
-        try:
-            logger.info(f"Standardizing heart rate for {patient_id}")
+                if file_modality == "Sleep":
+                    try:
+                        garmin_read_sleep.convert(
+                            patient_file_path, converted_output_folder_path
+                        )
 
-            heart_rate_jsons_output_folder = os.path.join(
-                temp_folder_path, "heart_rate_jsons"
-            )
-            final_heart_rate_output_folder = os.path.join(
-                temp_folder_path, "final_heart_rate"
-            )
+                        logger.info(
+                            f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
+                        )
 
-            garmin_standardize_heart_rate.standardize_heart_rate(
-                temp_conversion_output_folder_path,
-                patient_id,
-                heart_rate_jsons_output_folder,
-                final_heart_rate_output_folder,
-            )
+                    except Exception:
+                        logger.error(
+                            f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
+                        )
+                        error_exception = format_exc()
+                        error_exception = "".join(error_exception.splitlines())
 
-            logger.info(f"Standardized heart rate for {patient_id}")
-            shutil.rmtree(heart_rate_jsons_output_folder)
+                        logger.error(error_exception)
 
-            logger.debug(f"Generating manifest for heart rate for {patient_id}")
-            manifest.process_heart_rate(final_heart_rate_output_folder)
-            logger.info(f"Generated manifest for heart rate for {patient_id}")
+                        file_processor.append_errors(
+                            error_exception, patient_folder_path
+                        )
+                        continue
+                elif file_modality in ["Activity", "Monitor"]:
+                    try:
+                        garmin_read_activity.convert(
+                            patient_file_path, converted_output_folder_path
+                        )
 
-            logger.debug(f"Calculating sensor sampling duration for {patient_id}")
-            manifest.calculate_sensor_sampling_duration(final_heart_rate_output_folder)
-            logger.info(f"Calculated sensor sampling duration for {patient_id}")
+                        logger.info(
+                            f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
+                        )
 
-            # list the contents of the final heart rate folder
-            for root, dirs, files in os.walk(final_heart_rate_output_folder):
-                for file in files:
-                    file_path = os.path.join(root, file)
+                    except Exception:
+                        logger.error(
+                            f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files})"
+                        )
+                        error_exception = format_exc()
+                        error_exception = "".join(error_exception.splitlines())
 
+                        logger.error(error_exception)
+
+                        file_processor.append_errors(
+                            error_exception, patient_folder_path
+                        )
+                        continue
+                else:
                     logger.info(
-                        f"Adding {file_path} to the output files for {patient_id}"
+                        f"Skipping {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
                     )
+                    continue
 
-                    output_files.append(
-                        {
-                            "file_to_upload": file_path,
-                            "uploaded_file_path": f"{processed_data_output_folder}/heart_rate/garmin_vivosmart5/{patient_id}/{file}",
-                        }
-                    )
-        except Exception:
-            logger.error(f"Failed to process heart rate for {patient_id} ")
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, patient_folder_path)
-            continue
-
-        try:
-            logger.info(f"Standardizing oxygen saturation for {patient_id}")
-
-            oxygen_saturation_jsons_output_folder = os.path.join(
-                temp_folder_path, "oxygen_saturation_jsons"
-            )
-            final_oxygen_saturation_output_folder = os.path.join(
-                temp_folder_path, "final_oxygen_saturation"
-            )
-
-            garmin_standardize_oxygen_saturation.standardize_oxygen_saturation(
-                temp_conversion_output_folder_path,
-                patient_id,
-                oxygen_saturation_jsons_output_folder,
-                final_oxygen_saturation_output_folder,
-            )
-
-            logger.info(f"Standardized oxygen saturation for {patient_id}")
-            shutil.rmtree(oxygen_saturation_jsons_output_folder)
-
-            logger.debug(f"Generating manifest for oxygen saturation for {patient_id}")
-            manifest.process_oxygen_saturation(final_oxygen_saturation_output_folder)
-            logger.info(f"Generated manifest for oxygen saturation for {patient_id}")
-
-            # list the contents of the final oxygen saturation folder
-            for root, dirs, files in os.walk(final_oxygen_saturation_output_folder):
-                for file in files:
-                    file_path = os.path.join(root, file)
-
-                    logger.info(
-                        f"Adding {file_path} to the output files for {patient_id}"
-                    )
-
-                    output_files.append(
-                        {
-                            "file_to_upload": file_path,
-                            "uploaded_file_path": f"{processed_data_output_folder}/oxygen_saturation/garmin_vivosmart5/{patient_id}/{file}",
-                        }
-                    )
-        except Exception:
-            logger.error(f"Failed to standardize oxygen saturation for {patient_id}")
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, patient_folder_path)
-
-            logger.time(time_estimator.step())
-            continue
-
-        try:
-            logger.info(f"Standardizing physical activities for {patient_id}")
-
-            physical_activities_jsons_output_folder = os.path.join(
-                temp_folder_path, "physical_activities_jsons"
-            )
-            final_physical_activities_output_folder = os.path.join(
-                temp_folder_path, "final_physical_activities"
-            )
-
-            garmin_standardize_physical_activities.standardize_physical_activities(
-                temp_conversion_output_folder_path,
-                patient_id,
-                physical_activities_jsons_output_folder,
-                final_physical_activities_output_folder,
-            )
-
-            logger.info(f"Standardized physical activities for {patient_id} ")
-            shutil.rmtree(physical_activities_jsons_output_folder)
-
-            logger.debug(
-                f"Generating manifest for physical activities for {patient_id}"
-            )
-            manifest.process_activity(final_physical_activities_output_folder)
-            logger.info(f"Generated manifest for physical activities for {patient_id}")
-
-            # list the contents of the final physical activities folder
-            for root, dirs, files in os.walk(final_physical_activities_output_folder):
-                for file in files:
-                    file_path = os.path.join(root, file)
-
-                    logger.info(
-                        f"Adding {file_path} to the output files for {patient_id}"
-                    )
-
-                    output_files.append(
-                        {
-                            "file_to_upload": file_path,
-                            "uploaded_file_path": f"{processed_data_output_folder}/physical_activity/garmin_vivosmart5/{patient_id}/{file}",
-                        }
-                    )
-        except Exception:
-            logger.error(f"Failed to standardize physical activities for {patient_id}")
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, patient_folder_path)
-
-            logger.time(time_estimator.step())
-            continue
-
-        try:
-            logger.info(f"Standardizing physical activity calories for {patient_id}")
-
-            physical_activity_calories_jsons_output_folder = os.path.join(
-                temp_folder_path, "physical_activity_calories_jsons"
-            )
-            final_physical_activity_calories_output_folder = os.path.join(
-                temp_folder_path, "final_physical_activity_calories"
-            )
-
-            garmin_standardize_physical_activity_calories.standardize_physical_activity_calories(
-                temp_conversion_output_folder_path,
-                patient_id,
-                physical_activity_calories_jsons_output_folder,
-                final_physical_activity_calories_output_folder,
-            )
-            logger.info(f"Standardized physical activity calories for {patient_id}")
-            shutil.rmtree(physical_activity_calories_jsons_output_folder)
-
-            logger.debug(
-                f"Generating manifest for physical activity calories for {patient_id}"
-            )
-            manifest.process_calories(final_physical_activity_calories_output_folder)
-            logger.info(
-                f"Generated manifest for physical activity calories for {patient_id}"
-            )
-
-            # list the contents of the final physical activity calories folder
-            for root, dirs, files in os.walk(
-                final_physical_activity_calories_output_folder
-            ):
-                for file in files:
-                    file_path = os.path.join(root, file)
-
-                    logger.info(
-                        f"Adding {file_path} to the output files for {patient_id}"
-                    )
-
-                    output_files.append(
-                        {
-                            "file_to_upload": file_path,
-                            "uploaded_file_path": f"{processed_data_output_folder}/physical_activity_calorie/garmin_vivosmart5/{patient_id}/{file}",
-                        }
-                    )
-        except Exception:
-            logger.error(
-                f"Failed to standardize physical activity calories for {patient_id}"
-            )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, patient_folder_path)
-
-            logger.time(time_estimator.step())
-            continue
-
-        try:
-            logger.info(f"Standardizing respiratory rate for {patient_id}")
-
-            respiratory_rate_jsons_output_folder = os.path.join(
-                temp_folder_path, "respiratory_rate_jsons"
-            )
-            final_respiratory_rate_output_folder = os.path.join(
-                temp_folder_path, "final_respiratory_rate"
-            )
-
-            garmin_standardize_respiratory_rate.standardize_respiratory_rate(
-                temp_conversion_output_folder_path,
-                patient_id,
-                respiratory_rate_jsons_output_folder,
-                final_respiratory_rate_output_folder,
-            )
-
-            logger.info(f"Standardized respiratory rate for {patient_id}")
-            shutil.rmtree(respiratory_rate_jsons_output_folder)
-
-            logger.debug(f"Generating manifest for respiratory rate for {patient_id}")
-            manifest.process_respiratory_rate(final_respiratory_rate_output_folder)
-            logger.info(f"Generated manifest for respiratory rate for {patient_id}")
-
-            # list the contents of the final respiratory rate folder
-            for root, dirs, files in os.walk(final_respiratory_rate_output_folder):
-                for file in files:
-                    file_path = os.path.join(root, file)
-
-                    logger.info(
-                        f"Adding {file_path} to the output files for {patient_id}"
-                    )
-
-                    output_files.append(
-                        {
-                            "file_to_upload": file_path,
-                            "uploaded_file_path": f"{processed_data_output_folder}/respiratory_rate/garmin_vivosmart5/{patient_id}/{file}",
-                        }
-                    )
-        except Exception:
-            logger.error(f"Failed to standardize respiratory rate for {patient_id}")
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, patient_folder_path)
-
-            logger.time(time_estimator.step())
-            continue
-
-        try:
-            logger.info(f"Standardizing sleep stages for {patient_id}")
-
-            sleep_stages_jsons_output_folder = os.path.join(
-                temp_folder_path, "sleep_jsons"
-            )
-            final_sleep_stages_output_folder = os.path.join(
-                temp_folder_path, "final_sleep_stages"
-            )
-
-            garmin_standardize_sleep_stages.standardize_sleep_stages(
-                temp_conversion_output_folder_path,
-                patient_id,
-                sleep_stages_jsons_output_folder,
-                final_sleep_stages_output_folder,
-            )
-
-            logger.info(f"Standardized sleep stages for {patient_id}")
-            shutil.rmtree(sleep_stages_jsons_output_folder)
-
-            logger.debug(f"Generating manifest for sleep stages for {patient_id}")
-            manifest.process_sleep(final_sleep_stages_output_folder)
-            logger.info(f"Generated manifest for sleep stages for {patient_id}")
-
-            for root, dirs, files in os.walk(final_sleep_stages_output_folder):
-                for file in files:
-                    file_path = os.path.join(root, file)
-
-                    logger.info(
-                        f"Adding {file_path} to the output files for {patient_id}"
-                    )
-
-                    output_files.append(
-                        {
-                            "file_to_upload": file_path,
-                            "uploaded_file_path": f"{processed_data_output_folder}/sleep/garmin_vivosmart5/{patient_id}/{file}",
-                        }
-                    )
-        except Exception:
-            logger.error(f"Failed to standardize sleep stages for {patient_id}")
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, patient_folder_path)
-
-            logger.time(time_estimator.step())
-            continue
-
-        try:
-            logger.info(f"Standardizing stress for {patient_id}")
-
-            stress_jsons_output_folder = os.path.join(temp_folder_path, "stress_jsons")
-            final_stress_output_folder = os.path.join(temp_folder_path, "final_stress")
-
-            garmin_standardize_stress.standardize_stress(
-                temp_conversion_output_folder_path,
-                patient_id,
-                stress_jsons_output_folder,
-                final_stress_output_folder,
-            )
-
-            logger.info(f"Standardized stress for {patient_id}")
-            shutil.rmtree(stress_jsons_output_folder)
-
-            logger.debug(f"Generating manifest for stress for {patient_id}")
-            manifest.process_stress(final_stress_output_folder)
-            logger.info(f"Generated manifest for stress for {patient_id}")
-
-            # list the contents of the final stress folder
-            for root, dirs, files in os.walk(final_stress_output_folder):
-                for file in files:
-                    file_path = os.path.join(root, file)
-
-                    logger.info(
-                        f"Adding {file_path} to the output files for {patient_id}"
-                    )
-
-                    output_files.append(
-                        {
-                            "file_to_upload": file_path,
-                            "uploaded_file_path": f"{processed_data_output_folder}/stress/garmin_vivosmart5/{patient_id}/{file}",
-                        }
-                    )
-        except Exception:
-            logger.error(f"Failed to standardize stress for {patient_id}")
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, patient_folder_path)
-
-            logger.time(time_estimator.step())
-            continue
-
-        patient_folder["convert_error"] = False
-        patient_folder["processed"] = True
-
-        workflow_output_files = []
-
-        outputs_uploaded = True
-
-        file_processor.delete_preexisting_output_files(patient_folder_path)
-
-        total_output_files = len(output_files)
-
-        logger.info(f"Uploading {total_output_files} output files for {patient_id}")
-
-        for idx3, file in enumerate(output_files):
-            log_idx = idx3 + 1
-
-            f_path = file["file_to_upload"]
-            f_name = f_path.split("/")[-1]
-
-            output_file_path = file["uploaded_file_path"]
-
-            logger.debug(
-                f"Uploading {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
-            )
+            output_files = []
 
             try:
-                # Check if the file exists on the file system
-                if not os.path.exists(f_path):
-                    logger.error(f"File {f_path} does not exist")
-                    continue
+                logger.info(f"Standardizing heart rate for {patient_id}")
 
-                # Check if the file already exists in the output folder
-                output_file_client = file_system_client.get_file_client(
-                    file_path=output_file_path
+                heart_rate_jsons_output_folder = os.path.join(
+                    temp_folder_path, "heart_rate_jsons"
+                )
+                final_heart_rate_output_folder = os.path.join(
+                    temp_folder_path, "final_heart_rate"
                 )
 
-                if output_file_client.exists():
-                    logger.error(f"File {output_file_path} already exists")
-                    throw_exception = f"File {output_file_path} already exists"
-                    raise Exception(throw_exception)
+                garmin_standardize_heart_rate.standardize_heart_rate(
+                    temp_conversion_output_folder_path,
+                    patient_id,
+                    heart_rate_jsons_output_folder,
+                    final_heart_rate_output_folder,
+                )
 
-                with open(f_path, "rb") as data:
-                    output_file_client.upload_data(data, overwrite=True)
+                logger.info(f"Standardized heart rate for {patient_id}")
+                shutil.rmtree(heart_rate_jsons_output_folder)
 
-                    logger.info(
-                        f"Uploaded {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
-                    )
+                logger.debug(f"Generating manifest for heart rate for {patient_id}")
+                manifest.process_heart_rate(final_heart_rate_output_folder)
+                logger.info(f"Generated manifest for heart rate for {patient_id}")
 
+                logger.debug(f"Calculating sensor sampling duration for {patient_id}")
+                manifest.calculate_sensor_sampling_duration(
+                    final_heart_rate_output_folder
+                )
+                logger.info(f"Calculated sensor sampling duration for {patient_id}")
+
+                # list the contents of the final heart rate folder
+                for root, dirs, files in os.walk(final_heart_rate_output_folder):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+
+                        logger.info(
+                            f"Adding {file_path} to the output files for {patient_id}"
+                        )
+
+                        output_files.append(
+                            {
+                                "file_to_upload": file_path,
+                                "uploaded_file_path": f"{processed_data_output_folder}/heart_rate/garmin_vivosmart5/{patient_id}/{file}",
+                            }
+                        )
             except Exception:
-                outputs_uploaded = False
-                logger.error(f"Failed to upload {file}")
+                logger.error(f"Failed to process heart rate for {patient_id} ")
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, patient_folder_path)
+                continue
+
+            try:
+                logger.info(f"Standardizing oxygen saturation for {patient_id}")
+
+                oxygen_saturation_jsons_output_folder = os.path.join(
+                    temp_folder_path, "oxygen_saturation_jsons"
+                )
+                final_oxygen_saturation_output_folder = os.path.join(
+                    temp_folder_path, "final_oxygen_saturation"
+                )
+
+                garmin_standardize_oxygen_saturation.standardize_oxygen_saturation(
+                    temp_conversion_output_folder_path,
+                    patient_id,
+                    oxygen_saturation_jsons_output_folder,
+                    final_oxygen_saturation_output_folder,
+                )
+
+                logger.info(f"Standardized oxygen saturation for {patient_id}")
+                shutil.rmtree(oxygen_saturation_jsons_output_folder)
+
+                logger.debug(
+                    f"Generating manifest for oxygen saturation for {patient_id}"
+                )
+                manifest.process_oxygen_saturation(
+                    final_oxygen_saturation_output_folder
+                )
+                logger.info(
+                    f"Generated manifest for oxygen saturation for {patient_id}"
+                )
+
+                # list the contents of the final oxygen saturation folder
+                for root, dirs, files in os.walk(final_oxygen_saturation_output_folder):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+
+                        logger.info(
+                            f"Adding {file_path} to the output files for {patient_id}"
+                        )
+
+                        output_files.append(
+                            {
+                                "file_to_upload": file_path,
+                                "uploaded_file_path": f"{processed_data_output_folder}/oxygen_saturation/garmin_vivosmart5/{patient_id}/{file}",
+                            }
+                        )
+            except Exception:
+                logger.error(
+                    f"Failed to standardize oxygen saturation for {patient_id}"
+                )
                 error_exception = format_exc()
                 error_exception = "".join(error_exception.splitlines())
 
@@ -770,46 +468,380 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 file_processor.append_errors(error_exception, patient_folder_path)
 
+                logger.time(time_estimator.step())
                 continue
 
-            patient_folder["output_files"].append(output_file_path)
-            workflow_output_files.append(output_file_path)
+            try:
+                logger.info(f"Standardizing physical activities for {patient_id}")
 
-        file_processor.confirm_output_files(
-            patient_folder_path,
-            [file["uploaded_file_path"] for file in output_files],
-            input_last_modified,
-        )
+                physical_activities_jsons_output_folder = os.path.join(
+                    temp_folder_path, "physical_activities_jsons"
+                )
+                final_physical_activities_output_folder = os.path.join(
+                    temp_folder_path, "final_physical_activities"
+                )
 
-        if outputs_uploaded:
-            patient_folder["output_uploaded"] = True
-            patient_folder["status"] = "success"
-            logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
+                garmin_standardize_physical_activities.standardize_physical_activities(
+                    temp_conversion_output_folder_path,
+                    patient_id,
+                    physical_activities_jsons_output_folder,
+                    final_physical_activities_output_folder,
+                )
+
+                logger.info(f"Standardized physical activities for {patient_id} ")
+                shutil.rmtree(physical_activities_jsons_output_folder)
+
+                logger.debug(
+                    f"Generating manifest for physical activities for {patient_id}"
+                )
+                manifest.process_activity(final_physical_activities_output_folder)
+                logger.info(
+                    f"Generated manifest for physical activities for {patient_id}"
+                )
+
+                # list the contents of the final physical activities folder
+                for root, dirs, files in os.walk(
+                    final_physical_activities_output_folder
+                ):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+
+                        logger.info(
+                            f"Adding {file_path} to the output files for {patient_id}"
+                        )
+
+                        output_files.append(
+                            {
+                                "file_to_upload": file_path,
+                                "uploaded_file_path": f"{processed_data_output_folder}/physical_activity/garmin_vivosmart5/{patient_id}/{file}",
+                            }
+                        )
+            except Exception:
+                logger.error(
+                    f"Failed to standardize physical activities for {patient_id}"
+                )
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, patient_folder_path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            try:
+                logger.info(
+                    f"Standardizing physical activity calories for {patient_id}"
+                )
+
+                physical_activity_calories_jsons_output_folder = os.path.join(
+                    temp_folder_path, "physical_activity_calories_jsons"
+                )
+                final_physical_activity_calories_output_folder = os.path.join(
+                    temp_folder_path, "final_physical_activity_calories"
+                )
+
+                garmin_standardize_physical_activity_calories.standardize_physical_activity_calories(
+                    temp_conversion_output_folder_path,
+                    patient_id,
+                    physical_activity_calories_jsons_output_folder,
+                    final_physical_activity_calories_output_folder,
+                )
+                logger.info(f"Standardized physical activity calories for {patient_id}")
+                shutil.rmtree(physical_activity_calories_jsons_output_folder)
+
+                logger.debug(
+                    f"Generating manifest for physical activity calories for {patient_id}"
+                )
+                manifest.process_calories(
+                    final_physical_activity_calories_output_folder
+                )
+                logger.info(
+                    f"Generated manifest for physical activity calories for {patient_id}"
+                )
+
+                # list the contents of the final physical activity calories folder
+                for root, dirs, files in os.walk(
+                    final_physical_activity_calories_output_folder
+                ):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+
+                        logger.info(
+                            f"Adding {file_path} to the output files for {patient_id}"
+                        )
+
+                        output_files.append(
+                            {
+                                "file_to_upload": file_path,
+                                "uploaded_file_path": f"{processed_data_output_folder}/physical_activity_calorie/garmin_vivosmart5/{patient_id}/{file}",
+                            }
+                        )
+            except Exception:
+                logger.error(
+                    f"Failed to standardize physical activity calories for {patient_id}"
+                )
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, patient_folder_path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            try:
+                logger.info(f"Standardizing respiratory rate for {patient_id}")
+
+                respiratory_rate_jsons_output_folder = os.path.join(
+                    temp_folder_path, "respiratory_rate_jsons"
+                )
+                final_respiratory_rate_output_folder = os.path.join(
+                    temp_folder_path, "final_respiratory_rate"
+                )
+
+                garmin_standardize_respiratory_rate.standardize_respiratory_rate(
+                    temp_conversion_output_folder_path,
+                    patient_id,
+                    respiratory_rate_jsons_output_folder,
+                    final_respiratory_rate_output_folder,
+                )
+
+                logger.info(f"Standardized respiratory rate for {patient_id}")
+                shutil.rmtree(respiratory_rate_jsons_output_folder)
+
+                logger.debug(
+                    f"Generating manifest for respiratory rate for {patient_id}"
+                )
+                manifest.process_respiratory_rate(final_respiratory_rate_output_folder)
+                logger.info(f"Generated manifest for respiratory rate for {patient_id}")
+
+                # list the contents of the final respiratory rate folder
+                for root, dirs, files in os.walk(final_respiratory_rate_output_folder):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+
+                        logger.info(
+                            f"Adding {file_path} to the output files for {patient_id}"
+                        )
+
+                        output_files.append(
+                            {
+                                "file_to_upload": file_path,
+                                "uploaded_file_path": f"{processed_data_output_folder}/respiratory_rate/garmin_vivosmart5/{patient_id}/{file}",
+                            }
+                        )
+            except Exception:
+                logger.error(f"Failed to standardize respiratory rate for {patient_id}")
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, patient_folder_path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            try:
+                logger.info(f"Standardizing sleep stages for {patient_id}")
+
+                sleep_stages_jsons_output_folder = os.path.join(
+                    temp_folder_path, "sleep_jsons"
+                )
+                final_sleep_stages_output_folder = os.path.join(
+                    temp_folder_path, "final_sleep_stages"
+                )
+
+                garmin_standardize_sleep_stages.standardize_sleep_stages(
+                    temp_conversion_output_folder_path,
+                    patient_id,
+                    sleep_stages_jsons_output_folder,
+                    final_sleep_stages_output_folder,
+                )
+
+                logger.info(f"Standardized sleep stages for {patient_id}")
+                shutil.rmtree(sleep_stages_jsons_output_folder)
+
+                logger.debug(f"Generating manifest for sleep stages for {patient_id}")
+                manifest.process_sleep(final_sleep_stages_output_folder)
+                logger.info(f"Generated manifest for sleep stages for {patient_id}")
+
+                for root, dirs, files in os.walk(final_sleep_stages_output_folder):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+
+                        logger.info(
+                            f"Adding {file_path} to the output files for {patient_id}"
+                        )
+
+                        output_files.append(
+                            {
+                                "file_to_upload": file_path,
+                                "uploaded_file_path": f"{processed_data_output_folder}/sleep/garmin_vivosmart5/{patient_id}/{file}",
+                            }
+                        )
+            except Exception:
+                logger.error(f"Failed to standardize sleep stages for {patient_id}")
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, patient_folder_path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            try:
+                logger.info(f"Standardizing stress for {patient_id}")
+
+                stress_jsons_output_folder = os.path.join(
+                    temp_folder_path, "stress_jsons"
+                )
+                final_stress_output_folder = os.path.join(
+                    temp_folder_path, "final_stress"
+                )
+
+                garmin_standardize_stress.standardize_stress(
+                    temp_conversion_output_folder_path,
+                    patient_id,
+                    stress_jsons_output_folder,
+                    final_stress_output_folder,
+                )
+
+                logger.info(f"Standardized stress for {patient_id}")
+                shutil.rmtree(stress_jsons_output_folder)
+
+                logger.debug(f"Generating manifest for stress for {patient_id}")
+                manifest.process_stress(final_stress_output_folder)
+                logger.info(f"Generated manifest for stress for {patient_id}")
+
+                # list the contents of the final stress folder
+                for root, dirs, files in os.walk(final_stress_output_folder):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+
+                        logger.info(
+                            f"Adding {file_path} to the output files for {patient_id}"
+                        )
+
+                        output_files.append(
+                            {
+                                "file_to_upload": file_path,
+                                "uploaded_file_path": f"{processed_data_output_folder}/stress/garmin_vivosmart5/{patient_id}/{file}",
+                            }
+                        )
+            except Exception:
+                logger.error(f"Failed to standardize stress for {patient_id}")
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, patient_folder_path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            patient_folder["convert_error"] = False
+            patient_folder["processed"] = True
+
+            workflow_output_files = []
+
+            outputs_uploaded = True
+
+            file_processor.delete_preexisting_output_files(patient_folder_path)
+
+            total_output_files = len(output_files)
+
+            logger.info(f"Uploading {total_output_files} output files for {patient_id}")
+
+            for idx3, file in enumerate(output_files):
+                log_idx = idx3 + 1
+
+                f_path = file["file_to_upload"]
+                f_name = f_path.split("/")[-1]
+
+                output_file_path = file["uploaded_file_path"]
+
+                logger.debug(
+                    f"Uploading {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
+                )
+
+                try:
+                    # Check if the file exists on the file system
+                    if not os.path.exists(f_path):
+                        logger.error(f"File {f_path} does not exist")
+                        continue
+
+                    # Check if the file already exists in the output folder
+                    output_file_client = file_system_client.get_file_client(
+                        file_path=output_file_path
+                    )
+
+                    if output_file_client.exists():
+                        logger.error(f"File {output_file_path} already exists")
+                        throw_exception = f"File {output_file_path} already exists"
+                        raise Exception(throw_exception)
+
+                    with open(f_path, "rb") as data:
+                        output_file_client.upload_data(data, overwrite=True)
+
+                        logger.info(
+                            f"Uploaded {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
+                        )
+
+                except Exception:
+                    outputs_uploaded = False
+                    logger.error(f"Failed to upload {file}")
+                    error_exception = format_exc()
+                    error_exception = "".join(error_exception.splitlines())
+
+                    logger.error(error_exception)
+
+                    file_processor.append_errors(error_exception, patient_folder_path)
+
+                    continue
+
+                patient_folder["output_files"].append(output_file_path)
+                workflow_output_files.append(output_file_path)
+
+            file_processor.confirm_output_files(
+                patient_folder_path,
+                [file["uploaded_file_path"] for file in output_files],
+                input_last_modified,
             )
-        else:
-            logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
+
+            if outputs_uploaded:
+                patient_folder["output_uploaded"] = True
+                patient_folder["status"] = "success"
+                logger.info(
+                    f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
+                )
+            else:
+                logger.error(
+                    f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
+                )
+
+            workflow_file_dependencies.add_dependency(
+                workflow_input_files, workflow_output_files
             )
 
-        workflow_file_dependencies.add_dependency(
-            workflow_input_files, workflow_output_files
-        )
+            logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
-        logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
+            try:
+                file_processor.upload_json()
+                logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
+            except Exception as e:
+                logger.error(
+                    f"Failed to upload file map to {dependency_folder}/file_map.json"
+                )
+                raise e
 
-        try:
-            file_processor.upload_json()
-            logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
-        except Exception as e:
-            logger.error(
-                f"Failed to upload file map to {dependency_folder}/file_map.json"
-            )
-            raise e
-
-        logger.time(time_estimator.step())
-
-        shutil.rmtree(temp_folder_path)
+            logger.time(time_estimator.step())
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
