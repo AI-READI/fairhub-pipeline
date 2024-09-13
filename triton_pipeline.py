@@ -257,6 +257,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "triton_macula_12x12_octa",
         ]
 
+        logger.debug("Converting dicoms")
+
         try:
             for protocol in protocols:
                 output_folder_path = os.path.join(step4_folder, device, protocol)
@@ -269,7 +271,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 for folder in folders:
+                    logger.debug(f"Converting {folder}")
                     triton_instance.convert(folder, output_folder_path)
+
+            logger.info("Converted dicoms")
 
         except Exception:
             logger.error(f"Failed to convert {original_file_name}")
