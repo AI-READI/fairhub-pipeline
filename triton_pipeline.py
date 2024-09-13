@@ -330,11 +330,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 combined_file_name = "/".join(f2)
 
-                logger.debug(f"Uploading {combined_file_name}")
-
                 output_file_path = (
                     f"{processed_data_output_folder}/{combined_file_name}"
                 )
+
+                logger.debug(f"Uploading {combined_file_name} to {output_file_path}")
 
                 try:
                     output_file_client = file_system_client.get_file_client(
