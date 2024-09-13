@@ -143,15 +143,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     device = "Triton"
 
-    time_estimator = TimeEstimator(len(file_paths))
+    time_estimator = TimeEstimator(total_files)
 
-    for idx, file_item in enumerate(file_paths):
-        log_idx = idx + 1
-
-        # dev
-        # if log_idx == 15:
-        #     break
-
+    for file_item in file_paths:
         # Create a temporary folder on the local machine
         temp_folder_path = tempfile.mkdtemp()
 
@@ -183,9 +177,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
-            logger.debug(
-                f"Skipping {path} - File has not been modified"
-            )
+            logger.debug(f"Skipping {path} - File has not been modified")
 
             continue
 
@@ -202,16 +194,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         download_path = os.path.join(step1_folder, original_file_name)
 
-        logger.debug(
-            f"Downloading {original_file_name} to {download_path}"
-        )
+        logger.debug(f"Downloading {original_file_name} to {download_path}")
 
         with open(file=download_path, mode="wb") as f:
             f.write(input_file_client.download_file().readall())
 
-        logger.info(
-            f"Downloaded {original_file_name} to {download_path}"
-        )
+        logger.info(f"Downloaded {original_file_name} to {download_path}")
 
         zip_files = imaging_utils.list_zip_files(step1_folder)
 
@@ -224,15 +212,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         if not os.path.exists(step2_folder):
             os.makedirs(step2_folder)
 
-        logger.debug(
-            f"Unzipping {original_file_name} to {step2_folder}"
-        )
+        logger.debug(f"Unzipping {original_file_name} to {step2_folder}")
 
         imaging_utils.unzip_fda_file(download_path, step2_folder)
 
-        logger.info(
-            f"Unzipped {original_file_name} to {step2_folder}"
-        )
+        logger.info(f"Unzipped {original_file_name} to {step2_folder}")
 
         step3_folder = os.path.join(temp_folder_path, "step3")
 
@@ -251,9 +235,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 file_item["organize_result"] = json.dumps(organize_result)
         except Exception:
-            logger.error(
-                f"Failed to organize {original_file_name}"
-            )
+            logger.error(f"Failed to organize {original_file_name}")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -290,9 +272,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     triton_instance.convert(folder, output_folder_path)
 
         except Exception:
-            logger.error(
-                f"Failed to convert {original_file_name}"
-            )
+            logger.error(f"Failed to convert {original_file_name}")
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -316,9 +296,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     imaging_utils.format_file(file_name, destination_folder)
                 except Exception:
                     file_item["format_error"] = True
-                    logger.error(
-                        f"Failed to format {file_name}"
-                    )
+                    logger.error(f"Failed to format {file_name}")
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
 
@@ -347,9 +325,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 combined_file_name = "/".join(f2)
 
-                logger.debug(
-                    f"Uploading {combined_file_name}"
-                )
+                logger.debug(f"Uploading {combined_file_name}")
 
                 output_file_path = (
                     f"{processed_data_output_folder}/{combined_file_name}"
@@ -368,11 +344,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     with open(f"{full_file_path}", "rb") as data:
                         output_file_client.upload_data(data, overwrite=True)
+
+                        logger.info(f"Uploaded {combined_file_name}")
                 except Exception:
                     outputs_uploaded = False
-                    logger.error(
-                        f"Failed to upload {combined_file_name}"
-                    )
+                    logger.error(f"Failed to upload {combined_file_name}")
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
 
@@ -487,11 +463,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
     shutil.rmtree(temp_folder_path)
-
-    # dev
-    # move the workflow log file and the json file to the current directory
-    # shutil.move(workflow_log_file_path, "status.csv")
-    # shutil.move(json_file_path, "file_map.json")
 
 
 if __name__ == "__main__":
