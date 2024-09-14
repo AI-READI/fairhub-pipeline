@@ -34,6 +34,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/Optomed"
     processed_data_output_folder = f"{study_id}/pooled-data/Optomed-processed"
     ignore_file = f"{study_id}/ignore/optomed.ignore"
+    participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("optomed", print=True)
 
@@ -52,9 +53,34 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
-    paths = file_system_client.get_paths(path=input_folder, recursive=True)
-
     file_paths = []
+    participant_filter_list = []
+
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="optomed_pipeline_meta_")
+
+    # Get the participant filter list file
+    with contextlib.suppress(Exception):
+        file_client = file_system_client.get_file_client(
+            file_path=participant_filter_list_file
+        )
+
+        temp_participant_filter_list_file = os.path.join(
+            meta_temp_folder_path, "filter_file.csv"
+        )
+
+        with open(file=temp_participant_filter_list_file, mode="wb") as f:
+            f.write(file_client.download_file().readall())
+
+        with open(file=temp_participant_filter_list_file, mode="r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                participant_filter_list.append(row[0])
+
+        # remove the first row
+        participant_filter_list.pop(0)
+
+    paths = file_system_client.get_paths(path=input_folder, recursive=True)
 
     for file_path in paths:
         t = str(file_path.name)
@@ -100,9 +126,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp()
-
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
@@ -113,7 +136,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     time_estimator = TimeEstimator(total_files)
 
-    file_paths = file_paths[:5]
     for file_item in file_paths:
         path = file_item["file_path"]
 
@@ -250,7 +272,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             file, destination_folder
                         )
 
-                        optomed_instance.metadata(full_file_path, metadata_folder)
+                        # optomed_instance.metadata(full_file_path, metadata_folder)
             except Exception:
                 logger.error(f"Failed to format {file_name}")
 
@@ -332,40 +354,42 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.info(f"Uploaded outputs for {file_name}")
 
-            logger.debug(f"Uploading metadata for {file_name}")
+            # logger.debug(f"Uploading metadata for {file_name}")
 
-            for root, dirs, files in os.walk(metadata_folder):
-                for file in files:
-                    full_file_path = os.path.join(root, file)
+            # for root, dirs, files in os.walk(metadata_folder):
+            #     for file in files:
+            #         full_file_path = os.path.join(root, file)
 
-                    f2 = full_file_path.split("/")[-2:]
+            #         f2 = full_file_path.split("/")[-2:]
 
-                    combined_file_name = "/".join(f2)
+            #         combined_file_name = "/".join(f2)
 
-                    output_file_path = (
-                        f"{processed_metadata_output_folder}/{combined_file_name}"
-                    )
+            #         output_file_path = (
+            #             f"{processed_metadata_output_folder}/{combined_file_name}"
+            #         )
 
-                    output_file_client = file_system_client.get_file_client(
-                        file_path=output_file_path
-                    )
+            #         output_file_client = file_system_client.get_file_client(
+            #             file_path=output_file_path
+            #         )
 
-                    logger.debug(
-                        f"Uploading {full_file_path} to {processed_metadata_output_folder}"
-                    )
+            #         logger.debug(
+            #             f"Uploading {full_file_path} to {processed_metadata_output_folder}"
+            #         )
 
-                    # Check if the file already exists in the output folder
-                    if output_file_client.exists():
-                        raise Exception(
-                            f"File {output_file_path} already exists. Throwing exception"
-                        )
+            #         # Check if the file already exists in the output folder
+            #         if output_file_client.exists():
+            #             raise Exception(
+            #                 f"File {output_file_path} already exists. Throwing exception"
+            #             )
 
-                    with open(full_file_path, "rb") as f:
-                        output_file_client.upload_data(f, overwrite=True)
+            #         with open(full_file_path, "rb") as f:
+            #             output_file_client.upload_data(f, overwrite=True)
 
-                        logger.info(
-                            f"Uploaded {file_name} to {processed_metadata_output_folder}"
-                        )
+            #             logger.info(
+            #                 f"Uploaded {file_name} to {processed_metadata_output_folder}"
+            #             )
+
+            # logger.info(f"Uploaded metadata for {file_name}")
 
             # Add the new output files to the file map
             file_processor.confirm_output_files(
