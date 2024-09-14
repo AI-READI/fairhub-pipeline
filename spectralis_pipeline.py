@@ -137,7 +137,6 @@ def pipeline(
             )
 
         logger.debug(f"Added {count} items to the file map - Total: {len(file_paths)}")
-        break
 
     logger.info(f"Found {len(file_paths)} items in {input_folder}")
 
@@ -152,7 +151,6 @@ def pipeline(
 
     time_estimator = TimeEstimator(total_files)
 
-    file_paths = file_paths[:50]
     for file_item in file_paths:
         path = file_item["file_path"]
 
