@@ -1,8 +1,9 @@
-"""Process ecg data files"""
+"""Process optomed data files"""
 
 import os
 import tempfile
 import shutil
+import contextlib
 
 import imaging.imaging_optomed_retinal_photography_root as Optomed
 import imaging.imaging_utils as imaging_utils
@@ -19,7 +20,7 @@ import json
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
-    """Process ecg data files for a study
+    """Process optomed data files for a study
     Args:
         study_id (str): the study id
     """
@@ -29,6 +30,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     input_folder = f"{study_id}/pooled-data/Optomed"
     dependency_folder = f"{study_id}/dependency/Optomed"
+    processed_metadata_output_folder = f"{study_id}/pooled-data/Optomed-metadata"
     pipeline_workflow_log_folder = f"{study_id}/logs/Optomed"
     processed_data_output_folder = f"{study_id}/pooled-data/Optomed-processed"
     ignore_file = f"{study_id}/ignore/optomed.ignore"
@@ -41,12 +43,21 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_system_name="stage-1-container",
     )
 
-    paths = file_system_client.get_paths(path=input_folder)
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_metadata_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
+
+    paths = file_system_client.get_paths(path=input_folder, recursive=True)
 
     file_paths = []
 
-    for path in paths:
-        t = str(path.name)
+    for file_path in paths:
+        t = str(file_path.name)
 
         file_name = t.split("/")[-1]
 
@@ -86,8 +97,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             }
         )
 
-    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
-
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
@@ -100,18 +109,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     total_files = len(file_paths)
 
-    time_estimator = TimeEstimator(len(file_paths))
+    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
 
-    for idx, file_item in enumerate(file_paths):
-        log_idx = idx + 1
+    time_estimator = TimeEstimator(total_files)
 
-        # dev
-        # if log_idx == 10:
-        #     break
-
-        # Create a temporary folder on the local machine
-        temp_folder_path = tempfile.mkdtemp()
-
+    file_paths = file_paths[:5]
+    for file_item in file_paths:
         path = file_item["file_path"]
 
         workflow_input_files = [path]
@@ -119,10 +122,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # get the file name from the path
         file_name = path.split("/")[-1]
 
-        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
-
-        if should_file_be_ignored:
+        if file_processor.is_file_ignored(file_item, path):
             logger.info(f"Ignoring {file_name}")
+
+            logger.time(time_estimator.step())
             continue
 
         # download the file to the temp folder
@@ -133,155 +136,225 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
-            logger.time(time_estimator.step())
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
-            logger.debug(
-                f"Skipping {path} - File has not been modified"
-            )
+            logger.debug(f"Skipping {path} - File has not been modified")
 
+            logger.time(time_estimator.step())
             continue
 
         file_processor.add_entry(path, input_last_modified)
-
         file_processor.clear_errors(path)
 
         logger.debug(f"Processing {path}")
 
-        # get the file name from the path
-        original_file_name = path.split("/")[-1]
+        # Create a temporary folder on the local machine
+        with tempfile.TemporaryDirectory(
+            prefix="optomed_pipeline_"
+        ) as temp_folder_path:
 
-        step1_folder = os.path.join(temp_folder_path, "step1")
+            step1_folder = os.path.join(temp_folder_path, "step1")
 
-        if not os.path.exists(step1_folder):
-            os.makedirs(step1_folder)
+            if not os.path.exists(step1_folder):
+                os.makedirs(step1_folder)
 
-        download_path = os.path.join(step1_folder, original_file_name)
+            download_path = os.path.join(step1_folder, file_name)
 
-        with open(file=download_path, mode="wb") as f:
-            f.write(input_file_client.download_file().readall())
+            logger.debug(f"Downloading {file_name} to {download_path}")
 
-        logger.info(
-            f"Downloaded {file_name} to {download_path}"
-        )
+            with open(file=download_path, mode="wb") as f:
+                f.write(input_file_client.download_file().readall())
 
-        filtered_file_names = imaging_utils.get_filtered_file_names(step1_folder)
+            logger.info(f"Downloaded {file_name} to {download_path}")
 
-        step2_folder = os.path.join(temp_folder_path, "step2")
+            filtered_file_names = imaging_utils.get_filtered_file_names(step1_folder)
 
-        optomed_instance = Optomed.Optomed()
+            step2_folder = os.path.join(temp_folder_path, "step2")
 
-        logger.debug(f"Organizing {original_file_name}")
+            optomed_instance = Optomed.Optomed()
 
-        try:
-            for file in filtered_file_names:
+            logger.debug(f"Organizing {file_name}")
 
-                organize_result = optomed_instance.organize(file, step2_folder)
+            try:
+                for file in filtered_file_names:
+                    organize_result = optomed_instance.organize(file, step2_folder)
 
-                file_item["organize_result"] = json.dumps(organize_result)
-        except Exception:
-            logger.error(
-                f"Failed to organize {original_file_name}"
+                    file_item["organize_result"] = json.dumps(organize_result)
+            except Exception:
+                logger.error(f"Failed to organize {file_name}")
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            logger.info(f"Organized {file_name}")
+
+            file_item["organize_error"] = False
+
+            step3_folder = os.path.join(temp_folder_path, "step3")
+
+            protocols = ["optomed_mac_or_disk_centered_cfp"]
+
+            logger.debug(f"Converting {file_name}")
+
+            try:
+                for protocol in protocols:
+                    output = os.path.join(step3_folder, protocol)
+
+                    if not os.path.exists(output):
+                        os.makedirs(output)
+
+                    files = imaging_utils.get_filtered_file_names(
+                        os.path.join(step2_folder, protocol)
+                    )
+
+                    for file in files:
+                        optomed_instance.convert(file, output)
+            except Exception:
+                logger.error(f"Failed to convert {file_name}")
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            logger.info(f"Converted {file_name}")
+
+            file_item["convert_error"] = False
+
+            device_list = [step3_folder]
+
+            destination_folder = os.path.join(temp_folder_path, "step4")
+
+            metadata_folder = os.path.join(temp_folder_path, "metadata")
+            os.makedirs(metadata_folder, exist_ok=True)
+
+            logger.debug("Formatting files and generating metadata")
+
+            try:
+                for folder in device_list:
+                    filelist = imaging_utils.get_filtered_file_names(folder)
+
+                    for file in filelist:
+                        full_file_path = imaging_utils.format_file(
+                            file, destination_folder
+                        )
+
+                        optomed_instance.metadata(full_file_path, metadata_folder)
+            except Exception:
+                logger.error(f"Failed to format {file_name}")
+
+                error_exception = "".join(format_exc().splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            logger.info(f"Formatted {file_name}")
+
+            file_item["format_error"] = False
+            file_item["processed"] = True
+
+            logger.debug(
+                f"Uploading outputs of {file_name} to {processed_data_output_folder}"
             )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
 
-            logger.error(error_exception)
+            workflow_output_files = []
 
-            file_processor.append_errors(error_exception, path)
-            continue
+            outputs_uploaded = True
 
-        file_item["organize_error"] = False
+            file_processor.delete_preexisting_output_files(path)
 
-        step3_folder = os.path.join(temp_folder_path, "step3")
+            logger.debug(f"Uploading outputs for {file_name}")
 
-        protocols = ["optomed_mac_or_disk_centered_cfp"]
-
-        try:
-            for protocol in protocols:
-                output = os.path.join(step3_folder, protocol)
-
-                if not os.path.exists(output):
-                    os.makedirs(output)
-
-                files = imaging_utils.get_filtered_file_names(
-                    os.path.join(step2_folder, protocol)
-                )
-
+            for root, dirs, files in os.walk(destination_folder):
                 for file in files:
-                    optomed_instance.convert(file, output)
-        except Exception:
-            logger.error(
-                f"Failed to convert {original_file_name}"
-            )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
+                    full_file_path = os.path.join(root, file)
 
-            logger.error(error_exception)
+                    f2 = full_file_path.split("/")[-5:]
 
-            file_processor.append_errors(error_exception, path)
-            continue
+                    combined_file_name = "/".join(f2)
 
-        file_item["convert_error"] = False
+                    output_file_path = (
+                        f"{processed_data_output_folder}/{combined_file_name}"
+                    )
 
-        device_list = [step3_folder]
+                    logger.debug(
+                        f"Uploading {combined_file_name} to {output_file_path}"
+                    )
 
-        destination_folder = os.path.join(temp_folder_path, "step4")
+                    try:
+                        output_file_client = file_system_client.get_file_client(
+                            file_path=output_file_path
+                        )
 
-        try:
-            for folder in device_list:
-                filelist = imaging_utils.get_filtered_file_names(folder)
+                        # Check if the file already exists. If it does, throw an exception
+                        if output_file_client.exists():
+                            raise Exception(
+                                f"File {output_file_path} already exists. Throwing exception"
+                            )
 
-                for file in filelist:
-                    imaging_utils.format_file(file, destination_folder)
-        except Exception:
-            logger.error(
-                f"Failed to format {original_file_name}"
-            )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
+                        with open(full_file_path, "rb") as f:
+                            output_file_client.upload_data(f, overwrite=True)
 
-            logger.error(error_exception)
+                            logger.info(
+                                f"Uploaded {combined_file_name} to {output_file_path}"
+                            )
 
-            file_processor.append_errors(error_exception, path)
-            continue
+                    except Exception:
+                        outputs_uploaded = False
+                        logger.error(f"Failed to upload {combined_file_name}")
 
-        file_item["format_error"] = False
-        file_item["processed"] = True
+                        error_exception = "".join(format_exc().splitlines())
 
-        logger.debug(
-            f"Uploading outputs of {file_name} to {processed_data_output_folder}"
-        )
+                        logger.error(error_exception)
 
-        workflow_output_files = []
+                        file_processor.append_errors(error_exception, path)
 
-        outputs_uploaded = True
+                        logger.time(time_estimator.step())
+                        continue
 
-        file_processor.delete_preexisting_output_files(path)
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
 
-        for root, dirs, files in os.walk(destination_folder):
-            for file in files:
-                full_file_path = os.path.join(root, file)
+            logger.info(f"Uploaded outputs for {file_name}")
 
-                f2 = full_file_path.split("/")[-5:]
+            logger.debug(f"Uploading metadata for {file_name}")
 
-                combined_file_name = "/".join(f2)
+            for root, dirs, files in os.walk(metadata_folder):
+                for file in files:
+                    full_file_path = os.path.join(root, file)
 
-                logger.debug(
-                    f"Uploading {combined_file_name}"
-                )
+                    f2 = full_file_path.split("/")[-2:]
 
-                output_file_path = (
-                    f"{processed_data_output_folder}/{combined_file_name}"
-                )
+                    combined_file_name = "/".join(f2)
 
-                try:
+                    output_file_path = (
+                        f"{processed_metadata_output_folder}/{combined_file_name}"
+                    )
+
                     output_file_client = file_system_client.get_file_client(
                         file_path=output_file_path
                     )
 
-                    # Check if the file already exists. If it does, throw an exception
+                    logger.debug(
+                        f"Uploading {full_file_path} to {processed_metadata_output_folder}"
+                    )
+
+                    # Check if the file already exists in the output folder
                     if output_file_client.exists():
                         raise Exception(
                             f"File {output_file_path} already exists. Throwing exception"
@@ -290,44 +363,31 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     with open(full_file_path, "rb") as f:
                         output_file_client.upload_data(f, overwrite=True)
 
-                except Exception:
-                    outputs_uploaded = False
-                    logger.error(
-                        f"Failed to upload {combined_file_name}"
-                    )
-                    error_exception = format_exc()
-                    error_exception = "".join(error_exception.splitlines())
+                        logger.info(
+                            f"Uploaded {file_name} to {processed_metadata_output_folder}"
+                        )
 
-                    logger.error(error_exception)
-
-                    file_processor.append_errors(error_exception, path)
-                    continue
-
-                file_item["output_files"].append(output_file_path)
-                workflow_output_files.append(output_file_path)
-
-        # Add the new output files to the file map
-        file_processor.confirm_output_files(
-            path, workflow_output_files, input_last_modified
-        )
-
-        if outputs_uploaded:
-            file_item["output_uploaded"] = True
-            file_item["status"] = "success"
-            logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
-            )
-        else:
-            logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
+            # Add the new output files to the file map
+            file_processor.confirm_output_files(
+                path, workflow_output_files, input_last_modified
             )
 
-        workflow_file_dependencies.add_dependency(
-            workflow_input_files, workflow_output_files
-        )
-        logger.time(time_estimator.step())
+            if outputs_uploaded:
+                file_item["output_uploaded"] = True
+                file_item["status"] = "success"
+                logger.info(
+                    f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
+                )
+            else:
+                logger.error(
+                    f"Failed to upload outputs of {file_name} to {processed_data_output_folder}"
+                )
 
-        shutil.rmtree(temp_folder_path)
+            workflow_file_dependencies.add_dependency(
+                workflow_input_files, workflow_output_files
+            )
+
+            logger.time(time_estimator.step())
 
     file_processor.delete_out_of_date_output_files()
 

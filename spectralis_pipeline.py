@@ -61,14 +61,7 @@ def pipeline(
 
     logger.debug(f"Getting batch folder paths in {input_folder}")
 
-    exit_flag = False
-
     for batch_folder_path in batch_folder_paths:
-        if exit_flag:
-            break
-        else:
-            exit_flag = True
-
         t = str(batch_folder_path.name)
 
         batch_folder = t.split("/")[-1]
