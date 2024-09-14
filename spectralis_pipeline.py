@@ -99,7 +99,6 @@ def pipeline(
                     "end_date": end_date,
                     "organize_result": "",
                     "convert_error": True,
-                    "convert_error": True,
                     "output_uploaded": False,
                     "output_files": [],
                 }
@@ -299,13 +298,14 @@ def pipeline(
                         logger.info(f"Uploaded {combined_file_name}")
                 except Exception:
                     outputs_uploaded = False
+
                     logger.error(f"Failed to upload {combined_file_name}")
-                    error_exception = format_exc()
-                    e = "".join(error_exception.splitlines())
 
-                    logger.error(e)
+                    error_exception = "".join(format_exc().splitlines())
 
-                    file_processor.append_errors(e, path)
+                    logger.error(error_exception)
+
+                    file_processor.append_errors(error_exception, path)
                     continue
 
                 file_item["output_files"].append(output_file_path)
