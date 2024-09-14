@@ -175,7 +175,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         with tempfile.TemporaryDirectory(
             prefix="optomed_pipeline_"
         ) as temp_folder_path:
-
             step1_folder = os.path.join(temp_folder_path, "step1")
 
             if not os.path.exists(step1_folder):
