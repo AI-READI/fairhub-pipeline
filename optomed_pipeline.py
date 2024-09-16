@@ -239,11 +239,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         optomed_instance.convert(file, output)
             except Exception:
                 logger.error(f"Failed to convert {file_name}")
-                error_exception = format_exc()
-                error_exception = "".join(error_exception.splitlines())
+
+                error_exception = "".join(format_exc().splitlines())
 
                 logger.error(error_exception)
-
                 file_processor.append_errors(error_exception, path)
 
                 logger.time(time_estimator.step())

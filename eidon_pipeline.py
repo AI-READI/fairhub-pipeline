@@ -17,8 +17,6 @@ from traceback import format_exc
 from utils.time_estimator import TimeEstimator
 import json
 
-# import pprint
-
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
     """Process eidon data files for a study
@@ -275,7 +273,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     for file in filelist:
                         imaging_utils.format_file(file, destination_folder)
 
-                        # eidon_instance.metadata(file, destination_folder)
+                        # eidon_instance.metadata(file, metadata_folder)
             except Exception:
                 logger.error(f"Failed to format {file_name}")
 

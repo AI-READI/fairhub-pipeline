@@ -36,6 +36,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/Cirrus"
     pipeline_workflow_log_folder = f"{study_id}/logs/Cirrus"
     ignore_file = f"{study_id}/ignore/cirrus.ignore"
+    participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("cirrus", print=True)
 
@@ -54,9 +55,32 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
-    paths = file_system_client.get_paths(path=input_folder, recursive=False)
-
     file_paths = []
+    participant_filter_list = []
+
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="cirrus_meta_")
+
+    # Get the participant filter list file
+    with contextlib.suppress(Exception):
+        file_client = file_system_client.get_file_client(
+            file_path=participant_filter_list_file
+        )
+
+        temp_participant_filter_list_file = os.path.join(
+            meta_temp_folder_path, "filter_file.csv"
+        )
+
+        with open(file=temp_participant_filter_list_file, mode="wb") as f:
+            f.write(file_client.download_file().readall())
+
+        with open(file=temp_participant_filter_list_file, mode="r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                participant_filter_list.append(row[0])
+
+        # remove the first row
+        participant_filter_list.pop(0)
 
     # Define items as (VR, VM, description, is_retired flag, keyword)
     #   Leave is_retired flag blank.
@@ -91,6 +115,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Update the reverse mapping from name to tag
     new_names_dict = dict([(val[4], tag) for tag, val in new_dict_items.items()])
     keyword_dict.update(new_names_dict)
+
+    paths = file_system_client.get_paths(path=input_folder, recursive=False)
 
     for path in paths:
         t = str(path.name)
@@ -133,10 +159,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             }
         )
 
-    logger.debug(f"Found {len(file_paths)} items in {input_folder}")
+    total_files = len(file_paths)
 
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="cirrus_meta_")
+    logger.debug(f"Found {total_files} items in {input_folder}")
 
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
@@ -145,15 +170,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
-    total_files = len(file_paths)
-
     device = "Cirrus"
 
     time_estimator = TimeEstimator(total_files)
 
     for file_item in file_paths:
-        # Create a temporary folder on the local machine
-        temp_folder_path = tempfile.mkdtemp()
 
         path = file_item["file_path"]
 
@@ -162,9 +183,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # get the file name from the path
         file_name = path.split("/")[-1]
 
-        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
-
-        if should_file_be_ignored:
+        if file_processor.is_file_ignored(file_item, path):
             logger.info(f"Ignoring {file_name}")
             continue
 
@@ -175,13 +194,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
-            logger.time(time_estimator.step())
-
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
             logger.debug(f"Skipping {path} - File has not been modified")
 
+            logger.time(time_estimator.step())
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -190,143 +208,215 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Processing {path}")
 
-        step_1_folder = os.path.join(temp_folder_path, "step1", device)
-        os.makedirs(step_1_folder, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="cirrus_pipeline_") as temp_folder_path:
+            step_1_folder = os.path.join(temp_folder_path, "step1", device)
+            os.makedirs(step_1_folder, exist_ok=True)
 
-        download_path = os.path.join(step_1_folder, file_name)
+            download_path = os.path.join(step_1_folder, file_name)
 
-        logger.debug(f"Downloading {file_name} to {download_path}")
+            logger.debug(f"Downloading {file_name} to {download_path}")
 
-        with open(file=download_path, mode="wb") as f:
-            f.write(input_file_client.download_file().readall())
+            with open(file=download_path, mode="wb") as f:
+                f.write(input_file_client.download_file().readall())
 
-        logger.info(f"Downloaded {file_name} to {download_path}")
+            logger.info(f"Downloaded {file_name} to {download_path}")
 
-        step2_folder = os.path.join(temp_folder_path, "step2")
-        os.makedirs(step2_folder, exist_ok=True)
+            step2_folder = os.path.join(temp_folder_path, "step2")
+            os.makedirs(step2_folder, exist_ok=True)
 
-        zip_files = imaging_utils.list_zip_files(step_1_folder)
+            logger.debug(f"Unzipping {download_path} to {step2_folder}")
 
-        for zip_file in zip_files:
-            imaging_utils.unzip_fda_file(zip_file, step2_folder)
+            zip_files = imaging_utils.list_zip_files(step_1_folder)
 
-        step2_data_folders = imaging_utils.list_subfolders(
-            os.path.join(step2_folder, device)
-        )
+            for zip_file in zip_files:
+                imaging_utils.unzip_fda_file(zip_file, step2_folder)
 
-        step3_folder = os.path.join(temp_folder_path, "step3")
-        os.makedirs(step3_folder, exist_ok=True)
+            logger.info(f"Unzipped {download_path} to {step2_folder}")
 
-        # process the files
-        cirrus_instance = Cirrus.Cirrus()
-
-        try:
-            for step2_data_folder in step2_data_folders:
-                organize_result = cirrus_instance.organize(
-                    step2_data_folder, os.path.join(step3_folder, device)
-                )
-
-                file_item["organize_result"] = json.dumps(organize_result)
-
-        except Exception:
-            logger.error(f"Failed to organize {file_name}")
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, path)
-
-            logger.time(time_estimator.step())
-            continue
-
-        file_item["organize_error"] = False
-
-        step4_folder = os.path.join(temp_folder_path, "step4")
-        os.makedirs(step4_folder, exist_ok=True)
-
-        protocols = [
-            "cirrus_mac_angiography",
-            "cirrus_mac_macular_cube",
-            "cirrus_onh_angiography",
-            "cirrus_onh_optic_disc_cube",
-        ]
-
-        try:
-            for protocol in protocols:
-                output_folder_path = os.path.join(step4_folder, device, protocol)
-
-            if not os.path.exists(output_folder_path):
-                os.makedirs(output_folder_path)
-
-            folders = imaging_utils.list_subfolders(
-                os.path.join(step3_folder, device, protocol)
+            step2_data_folders = imaging_utils.list_subfolders(
+                os.path.join(step2_folder, device)
             )
 
-            for folder in folders:
-                cirrus_instance.convert(folder, output_folder_path)
+            step3_folder = os.path.join(temp_folder_path, "step3")
+            os.makedirs(step3_folder, exist_ok=True)
 
-        except Exception:
-            logger.error(f"Failed to convert {file_name}")
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
+            # process the files
+            cirrus_instance = Cirrus.Cirrus()
 
-            logger.error(error_exception)
+            logger.debug(f"Organizing {file_name}")
 
-            file_processor.append_errors(error_exception, path)
+            try:
+                for step2_data_folder in step2_data_folders:
+                    organize_result = cirrus_instance.organize(
+                        step2_data_folder, os.path.join(step3_folder, device)
+                    )
 
-            logger.time(time_estimator.step())
-            continue
+                    file_item["organize_result"] = json.dumps(organize_result)
 
-        file_item["convert_error"] = False
+            except Exception:
+                logger.error(f"Failed to organize {file_name}")
 
-        device_list = [os.path.join(step4_folder, device)]
+                error_exception = "".join(format_exc().splitlines())
 
-        destination_folder = os.path.join(temp_folder_path, "step5")
-        os.makedirs(destination_folder, exist_ok=True)
+                logger.error(error_exception)
+                file_processor.append_errors(error_exception, path)
 
-        metadata_folder = os.path.join(temp_folder_path, "metadata")
-        os.makedirs(metadata_folder, exist_ok=True)
+                logger.time(time_estimator.step())
+                continue
 
-        for device_folder in device_list:
-            filelist = imaging_utils.get_filtered_file_names(device_folder)
+            logger.info(f"Organized {file_name}")
 
-            for file in filelist:
-                full_file_path = imaging_utils.format_file(file, destination_folder)
+            file_item["organize_error"] = False
 
-                cirrus_instance.metadata(full_file_path, metadata_folder)
+            step4_folder = os.path.join(temp_folder_path, "step4")
+            os.makedirs(step4_folder, exist_ok=True)
 
-        # Upload the processed files to the output folder
+            protocols = [
+                "cirrus_mac_angiography",
+                "cirrus_mac_macular_cube",
+                "cirrus_onh_angiography",
+                "cirrus_onh_optic_disc_cube",
+            ]
 
-        workflow_output_files = []
+            logger.debug("Converting to nema compliant dicom files")
 
-        outputs_uploaded = True
-        upload_exception = ""
+            try:
+                for protocol in protocols:
+                    output_folder_path = os.path.join(step4_folder, device, protocol)
 
-        file_processor.delete_preexisting_output_files(path)
+                if not os.path.exists(output_folder_path):
+                    os.makedirs(output_folder_path)
 
-        for root, dirs, files in os.walk(destination_folder):
-            for file in files:
-                full_file_path = os.path.join(root, file)
-
-                logger.debug(f"Found file {full_file_path}")
-
-                f2 = full_file_path.split("/")[-5:]
-
-                combined_file_name = "/".join(f2)
-
-                output_file_path = (
-                    f"{processed_data_output_folder}/{combined_file_name}"
+                folders = imaging_utils.list_subfolders(
+                    os.path.join(step3_folder, device, protocol)
                 )
 
-                logger.debug(f"Uploading {combined_file_name} to {output_file_path}")
+                for folder in folders:
+                    cirrus_instance.convert(folder, output_folder_path)
 
-                try:
+            except Exception:
+                logger.error(f"Failed to convert {file_name}")
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            logger.info(f"Converted {file_name}")
+
+            file_item["convert_error"] = False
+
+            device_list = [os.path.join(step4_folder, device)]
+
+            destination_folder = os.path.join(temp_folder_path, "step5")
+            os.makedirs(destination_folder, exist_ok=True)
+
+            metadata_folder = os.path.join(temp_folder_path, "metadata")
+            os.makedirs(metadata_folder, exist_ok=True)
+
+            logger.debug("Formatting files and generating metadata")
+
+            for device_folder in device_list:
+                filelist = imaging_utils.get_filtered_file_names(device_folder)
+
+                for file in filelist:
+                    full_file_path = imaging_utils.format_file(file, destination_folder)
+
+                    cirrus_instance.metadata(full_file_path, metadata_folder)
+
+            file_item["format_error"] = False
+            logger.info(f"Formatted {file_name}")
+
+            # Upload the processed files to the output folder
+            logger.debug(
+                f"Uploading outputs of {file_name} to {processed_data_output_folder}"
+            )
+
+            workflow_output_files = []
+
+            outputs_uploaded = True
+            upload_exception = ""
+
+            file_processor.delete_preexisting_output_files(path)
+
+            logger.debug(f"Uploading outputs for {file_name}")
+
+            for root, dirs, files in os.walk(destination_folder):
+                for file in files:
+                    full_file_path = os.path.join(root, file)
+
+                    logger.debug(f"Found file {full_file_path}")
+
+                    f2 = full_file_path.split("/")[-5:]
+
+                    combined_file_name = "/".join(f2)
+
+                    output_file_path = (
+                        f"{processed_data_output_folder}/{combined_file_name}"
+                    )
+
+                    logger.debug(
+                        f"Uploading {combined_file_name} to {output_file_path}"
+                    )
+
+                    try:
+                        output_file_client = file_system_client.get_file_client(
+                            file_path=output_file_path
+                        )
+
+                        # Check if the file already exists. If it does, throw an exception
+                        if output_file_client.exists():
+                            raise Exception(
+                                f"File {output_file_path} already exists. Throwing exception"
+                            )
+
+                        with open(full_file_path, "rb") as f:
+                            output_file_client.upload_data(f, overwrite=True)
+
+                            logger.info(f"Uploaded {combined_file_name}")
+                    except Exception:
+                        outputs_uploaded = False
+                        logger.error(f"Failed to upload {combined_file_name}")
+
+                        upload_exception = "".join(format_exc().splitlines())
+
+                        logger.error(upload_exception)
+
+                        file_processor.append_errors(upload_exception, path)
+                        continue
+
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
+
+            logger.info(f"Uploaded outputs for {file_name}")
+
+            logger.debug(f"Uploading metadata for {file_name}")
+
+            for root, dirs, files in os.walk(metadata_folder):
+                for file in files:
+                    full_file_path = os.path.join(root, file)
+
+                    f2 = full_file_path.split("/")[-2:]
+
+                    combined_file_name = "/".join(f2)
+
+                    output_file_path = (
+                        f"{processed_metadata_output_folder}/{combined_file_name}"
+                    )
+
                     output_file_client = file_system_client.get_file_client(
                         file_path=output_file_path
                     )
 
-                    # Check if the file already exists. If it does, throw an exception
+                    logger.debug(
+                        f"Uploading {full_file_path} to {processed_metadata_output_folder}"
+                    )
+
+                    # Check if the file already exists in the output folder
                     if output_file_client.exists():
                         raise Exception(
                             f"File {output_file_path} already exists. Throwing exception"
@@ -335,84 +425,33 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     with open(full_file_path, "rb") as f:
                         output_file_client.upload_data(f, overwrite=True)
 
-                        logger.info(f"Uploaded {combined_file_name}")
-                except Exception:
-                    outputs_uploaded = False
-                    logger.error(f"Failed to upload {combined_file_name}")
+                        logger.info(
+                            f"Uploaded {file_name} to {processed_metadata_output_folder}"
+                        )
 
-                    upload_exception = "".join(format_exc().splitlines())
+            logger.info(f"Uploaded metadata for {file_name}")
 
-                    logger.error(upload_exception)
-
-                    file_processor.append_errors(upload_exception, path)
-                    continue
-
-                file_item["output_files"].append(output_file_path)
-                workflow_output_files.append(output_file_path)
-
-        logger.debug(f"Uploading metadata for {file_name}")
-
-        for root, dirs, files in os.walk(metadata_folder):
-            for file in files:
-                full_file_path = os.path.join(root, file)
-
-                f2 = full_file_path.split("/")[-2:]
-
-                combined_file_name = "/".join(f2)
-
-                output_file_path = (
-                    f"{processed_metadata_output_folder}/{combined_file_name}"
-                )
-
-                output_file_client = file_system_client.get_file_client(
-                    file_path=output_file_path
-                )
-
-                logger.debug(
-                    f"Uploading {full_file_path} to {processed_metadata_output_folder}"
-                )
-
-                # Check if the file already exists in the output folder
-                if output_file_client.exists():
-                    raise Exception(
-                        f"File {output_file_path} already exists. Throwing exception"
-                    )
-
-                with open(full_file_path, "rb") as f:
-                    output_file_client.upload_data(f, overwrite=True)
-
-                    logger.info(
-                        f"Uploaded {file_name} to {processed_metadata_output_folder}"
-                    )
-
-        file_processor.confirm_output_files(
-            path, workflow_output_files, input_last_modified
-        )
-
-        if outputs_uploaded:
-            file_item["output_uploaded"] = True
-            file_item["status"] = "success"
-            logger.info(
-                f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
-            )
-        else:
-            file_item["output_uploaded"] = upload_exception
-            logger.error(
-                f"Failed to upload outputs of {file_name} to {processed_data_output_folder}"
+            file_processor.confirm_output_files(
+                path, workflow_output_files, input_last_modified
             )
 
-        workflow_file_dependencies.add_dependency(
-            workflow_input_files, workflow_output_files
-        )
+            if outputs_uploaded:
+                file_item["output_uploaded"] = True
+                file_item["status"] = "success"
+                logger.info(
+                    f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
+                )
+            else:
+                file_item["output_uploaded"] = upload_exception
+                logger.error(
+                    f"Failed to upload outputs of {file_name} to {processed_data_output_folder}"
+                )
 
-        logger.time(time_estimator.step())
+            workflow_file_dependencies.add_dependency(
+                workflow_input_files, workflow_output_files
+            )
 
-        shutil.rmtree(metadata_folder)
-        shutil.rmtree(destination_folder)
-        shutil.rmtree(step4_folder)
-        shutil.rmtree(step3_folder)
-        shutil.rmtree(step2_folder)
-        shutil.rmtree(step_1_folder)
+            logger.time(time_estimator.step())
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
@@ -444,6 +483,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "organize_result",
             "organize_error",
             "convert_error",
+            "format_error",
             "output_uploaded",
             "output_files",
         ]
