@@ -332,7 +332,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     try:
                         imaging_utils.format_file(file_name, destination_folder)
 
-                        maestro2_instance.metadata(file_name, metadata_folder)
+                        # maestro2_instance.metadata(file_name, metadata_folder)
                     except Exception:
                         file_item["format_error"] = True
                         logger.error(f"Failed to format {file_name}")
