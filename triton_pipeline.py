@@ -177,8 +177,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     time_estimator = TimeEstimator(total_files)
 
     for file_item in file_paths:
-        # Create a temporary folder on the local machine
-        temp_folder_path = tempfile.mkdtemp()
 
         path = file_item["file_path"]
 
@@ -208,261 +206,274 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Processing {path}")
 
-        step1_folder = os.path.join(temp_folder_path, "step1")
+        with tempfile.TemporaryDirectory(prefix="triton_pipeline_") as temp_folder_path:
+            step1_folder = os.path.join(temp_folder_path, "step1")
 
-        if not os.path.exists(step1_folder):
-            os.makedirs(step1_folder)
+            if not os.path.exists(step1_folder):
+                os.makedirs(step1_folder)
 
-        download_path = os.path.join(step1_folder, file_name)
+            download_path = os.path.join(step1_folder, file_name)
 
-        logger.debug(f"Downloading {file_name} to {download_path}")
+            logger.debug(f"Downloading {file_name} to {download_path}")
 
-        with open(file=download_path, mode="wb") as f:
-            f.write(input_file_client.download_file().readall())
+            with open(file=download_path, mode="wb") as f:
+                f.write(input_file_client.download_file().readall())
 
-        logger.info(f"Downloaded {file_name} to {download_path}")
+            logger.info(f"Downloaded {file_name} to {download_path}")
 
-        zip_files = imaging_utils.list_zip_files(step1_folder)
+            zip_files = imaging_utils.list_zip_files(step1_folder)
 
-        if len(zip_files) == 0:
-            logger.warn(f"No zip files found in {step1_folder}")
-            continue
+            if len(zip_files) == 0:
+                logger.warn(f"No zip files found in {step1_folder}")
+                continue
 
-        step2_folder = os.path.join(temp_folder_path, "step2")
+            step2_folder = os.path.join(temp_folder_path, "step2")
 
-        if not os.path.exists(step2_folder):
-            os.makedirs(step2_folder)
+            if not os.path.exists(step2_folder):
+                os.makedirs(step2_folder)
 
-        logger.debug(f"Unzipping {file_name} to {step2_folder}")
+            logger.debug(f"Unzipping {file_name} to {step2_folder}")
 
-        imaging_utils.unzip_fda_file(download_path, step2_folder)
+            imaging_utils.unzip_fda_file(download_path, step2_folder)
 
-        logger.info(f"Unzipped {file_name} to {step2_folder}")
+            logger.info(f"Unzipped {file_name} to {step2_folder}")
 
-        step3_folder = os.path.join(temp_folder_path, "step3")
+            step3_folder = os.path.join(temp_folder_path, "step3")
 
-        step2_data_folders = imaging_utils.list_subfolders(
-            os.path.join(step2_folder, device)
-        )
+            step2_data_folders = imaging_utils.list_subfolders(
+                os.path.join(step2_folder, device)
+            )
 
-        # process the files
-        triton_instance = Maestro2_Triton.Maestro2_Triton()
+            # process the files
+            triton_instance = Maestro2_Triton.Maestro2_Triton()
 
-        logger.debug(f"Organizing {file_name}")
+            logger.debug(f"Organizing {file_name}")
 
-        try:
-            for step2_data_folder in step2_data_folders:
-                organize_result = triton_instance.organize(
-                    step2_data_folder, os.path.join(step3_folder, device)
-                )
-
-                file_item["organize_result"] = json.dumps(organize_result)
-        except Exception:
-            logger.error(f"Failed to organize {file_name}")
-
-            error_exception = "".join(format_exc().splitlines())
-
-            logger.error(error_exception)
-            file_processor.append_errors(error_exception, path)
-
-            logger.time(time_estimator.step())
-            continue
-
-        logger.info(f"Organized {file_name}")
-        file_item["organize_error"] = False
-
-        step4_folder = os.path.join(temp_folder_path, "step4")
-
-        if not os.path.exists(step4_folder):
-            os.makedirs(step4_folder)
-
-        protocols = [
-            "triton_3d_radial_oct",
-            "triton_macula_6x6_octa",
-            "triton_macula_12x12_octa",
-        ]
-
-        logger.debug(f"Converting {file_name}")
-
-        try:
-            for protocol in protocols:
-                output_folder_path = os.path.join(step4_folder, device, protocol)
-
-                if not os.path.exists(output_folder_path):
-                    os.makedirs(output_folder_path)
-
-                folders = imaging_utils.list_subfolders(
-                    os.path.join(step3_folder, device, protocol)
-                )
-
-                for folder in folders:
-                    logger.debug(f"Converting {folder}")
-                    triton_instance.convert(folder, output_folder_path)
-
-        except Exception:
-            logger.error(f"Failed to convert {file_name}")
-
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, path)
-            continue
-
-        logger.info(f"Converted {file_name}")
-        file_item["convert_error"] = False
-
-        device_list = [os.path.join(step4_folder, device)]
-
-        destination_folder = os.path.join(temp_folder_path, "step5")
-
-        metadata_folder = os.path.join(temp_folder_path, "metadata")
-        os.makedirs(metadata_folder, exist_ok=True)
-
-        logger.debug("Formatting files and generating metadata")
-
-        for device_folder in device_list:
-            file_list = imaging_utils.get_filtered_file_names(device_folder)
-
-            for file_name in file_list:
-
-                try:
-                    imaging_utils.format_file(file_name, destination_folder)
-
-                    # triton_instance.metadata(file_name, metadata_folder)
-                except Exception:
-                    file_item["format_error"] = True
-                    logger.error(f"Failed to format {file_name}")
-
-                    error_exception = "".join(format_exc().splitlines())
-
-                    logger.error(error_exception)
-                    file_processor.append_errors(error_exception, path)
-
-                    logger.time(time_estimator.step())
-                    continue
-
-        logger.info(f"Formatted {file_name}")
-        file_item["processed"] = True
-
-        logger.debug(
-            f"Uploading outputs of {file_name} to {processed_data_output_folder}"
-        )
-
-        workflow_output_files = []
-
-        outputs_uploaded = True
-
-        file_processor.delete_preexisting_output_files(path)
-
-        logger.debug(f"Uploading outputs for {file_name}")
-
-        for root, dirs, files in os.walk(destination_folder):
-            for file in files:
-                full_file_path = os.path.join(root, file)
-
-                f2 = full_file_path.split("/")[-5:]
-
-                combined_file_name = "/".join(f2)
-
-                output_file_path = (
-                    f"{processed_data_output_folder}/{combined_file_name}"
-                )
-
-                logger.debug(f"Uploading {combined_file_name} to {output_file_path}")
-
-                try:
-                    output_file_client = file_system_client.get_file_client(
-                        file_path=output_file_path
+            try:
+                for step2_data_folder in step2_data_folders:
+                    organize_result = triton_instance.organize(
+                        step2_data_folder, os.path.join(step3_folder, device)
                     )
 
-                    # Check if the file already exists. If it does, throw an exception
-                    if output_file_client.exists():
-                        raise Exception(
-                            f"File {output_file_path} already exists. Throwing exception"
+                    file_item["organize_result"] = json.dumps(organize_result)
+            except Exception:
+                logger.error(f"Failed to organize {file_name}")
+
+                error_exception = "".join(format_exc().splitlines())
+
+                logger.error(error_exception)
+                file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            logger.info(f"Organized {file_name}")
+            file_item["organize_error"] = False
+
+            step4_folder = os.path.join(temp_folder_path, "step4")
+
+            if not os.path.exists(step4_folder):
+                os.makedirs(step4_folder)
+
+            protocols = [
+                "triton_3d_radial_oct",
+                "triton_macula_6x6_octa",
+                "triton_macula_12x12_octa",
+            ]
+
+            logger.debug(f"Converting {file_name}")
+
+            try:
+                for protocol in protocols:
+                    output_folder_path = os.path.join(step4_folder, device, protocol)
+
+                    if not os.path.exists(output_folder_path):
+                        os.makedirs(output_folder_path)
+
+                    folders = imaging_utils.list_subfolders(
+                        os.path.join(step3_folder, device, protocol)
+                    )
+
+                    for folder in folders:
+                        logger.debug(f"Converting {folder}")
+                        triton_instance.convert(folder, output_folder_path)
+
+            except Exception:
+                logger.error(f"Failed to convert {file_name}")
+
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, path)
+                continue
+
+            logger.info(f"Converted {file_name}")
+            file_item["convert_error"] = False
+
+            device_list = [os.path.join(step4_folder, device)]
+
+            destination_folder = os.path.join(temp_folder_path, "step5")
+
+            metadata_folder = os.path.join(temp_folder_path, "metadata")
+            os.makedirs(metadata_folder, exist_ok=True)
+
+            logger.debug("Formatting files and generating metadata")
+
+            for device_folder in device_list:
+                file_list = imaging_utils.get_filtered_file_names(device_folder)
+
+                for file_name in file_list:
+
+                    try:
+                        full_file_path = imaging_utils.format_file(
+                            file_name, destination_folder
                         )
 
-                    with open(f"{full_file_path}", "rb") as data:
-                        # output_file_client.upload_data(data, overwrite=True)
+                        triton_instance.metadata(full_file_path, metadata_folder)
+                    except Exception:
+                        file_item["format_error"] = True
+                        logger.error(f"Failed to format {file_name}")
 
-                        logger.info(f"Uploaded {combined_file_name}")
-                except Exception:
-                    outputs_uploaded = False
-                    logger.error(f"Failed to upload {combined_file_name}")
+                        error_exception = "".join(format_exc().splitlines())
 
-                    error_exception = "".join(format_exc().splitlines())
+                        logger.error(error_exception)
+                        file_processor.append_errors(error_exception, path)
 
-                    logger.error(error_exception)
-                    file_processor.append_errors(error_exception, path)
+                        logger.time(time_estimator.step())
+                        continue
 
-                    continue
+            logger.info(f"Formatted {file_name}")
+            file_item["processed"] = True
 
-                file_item["output_files"].append(output_file_path)
-                workflow_output_files.append(output_file_path)
-
-        logger.info(f"Uploaded outputs for {file_name}")
-
-        # logger.debug(f"Uploading metadata for {file_name}")
-
-        # for root, dirs, files in os.walk(metadata_folder):
-        #     for file in files:
-        #         full_file_path = os.path.join(root, file)
-
-        #         f2 = full_file_path.split("/")[-2:]
-
-        #         combined_file_name = "/".join(f2)
-
-        #         output_file_path = (
-        #             f"{processed_metadata_output_folder}/{combined_file_name}"
-        #         )
-
-        #         output_file_client = file_system_client.get_file_client(
-        #             file_path=output_file_path
-        #         )
-
-        #         logger.debug(
-        #             f"Uploading {full_file_path} to {processed_metadata_output_folder}"
-        #         )
-
-        #         # Check if the file already exists in the output folder
-        #         if output_file_client.exists():
-        #             raise Exception(
-        #                 f"File {output_file_path} already exists. Throwing exception"
-        #             )
-
-        #         with open(full_file_path, "rb") as f:
-        #             output_file_client.upload_data(f, overwrite=True)
-
-        #             logger.info(
-        #                 f"Uploaded {file_name} to {processed_metadata_output_folder}"
-        #             )
-
-        # logger.info(f"Uploaded metadata for {file_name}")
-
-        # Add the new output files to the file map
-        file_processor.confirm_output_files(
-            path, workflow_output_files, input_last_modified
-        )
-
-        if outputs_uploaded:
-            file_item["output_uploaded"] = True
-            file_item["status"] = "success"
-            logger.info(
-                f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
-            )
-        else:
-            logger.error(
-                f"Failed to upload outputs of {file_name} to {processed_data_output_folder}"
+            logger.debug(
+                f"Uploading outputs of {file_name} to {processed_data_output_folder}"
             )
 
-        workflow_file_dependencies.add_dependency(
-            workflow_input_files, workflow_output_files
-        )
+            workflow_output_files = []
 
-        logger.time(time_estimator.step())
+            outputs_uploaded = True
 
-        shutil.rmtree(temp_folder_path)
+            file_processor.delete_preexisting_output_files(path)
+
+            logger.debug(f"Uploading outputs for {file_name}")
+
+            for root, dirs, files in os.walk(destination_folder):
+                for file in files:
+                    full_file_path = os.path.join(root, file)
+
+                    f2 = full_file_path.split("/")[-5:]
+
+                    combined_file_name = "/".join(f2)
+
+                    output_file_path = (
+                        f"{processed_data_output_folder}/{combined_file_name}"
+                    )
+
+                    logger.debug(
+                        f"Uploading {combined_file_name} to {output_file_path}"
+                    )
+
+                    try:
+                        output_file_client = file_system_client.get_file_client(
+                            file_path=output_file_path
+                        )
+
+                        # Check if the file already exists. If it does, throw an exception
+                        if output_file_client.exists():
+                            raise Exception(
+                                f"File {output_file_path} already exists. Throwing exception"
+                            )
+
+                        with open(f"{full_file_path}", "rb") as data:
+                            output_file_client.upload_data(data, overwrite=True)
+
+                            logger.info(f"Uploaded {combined_file_name}")
+                    except Exception:
+                        outputs_uploaded = False
+                        logger.error(f"Failed to upload {combined_file_name}")
+
+                        error_exception = "".join(format_exc().splitlines())
+
+                        logger.error(error_exception)
+                        file_processor.append_errors(error_exception, path)
+
+                        continue
+
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
+
+            logger.info(f"Uploaded outputs for {file_name}")
+
+            logger.debug(f"Uploading metadata for {file_name}")
+
+            for root, dirs, files in os.walk(metadata_folder):
+                for file in files:
+                    full_file_path = os.path.join(root, file)
+
+                    f2 = full_file_path.split("/")[-2:]
+
+                    combined_file_name = "/".join(f2)
+
+                    output_file_path = (
+                        f"{processed_metadata_output_folder}/{combined_file_name}"
+                    )
+
+                    logger.debug(
+                        f"Uploading {full_file_path} to {processed_metadata_output_folder}"
+                    )
+
+                    try:
+                        output_file_client = file_system_client.get_file_client(
+                            file_path=output_file_path
+                        )
+                        # Check if the file already exists in the output folder
+                        if output_file_client.exists():
+                            raise Exception(
+                                f"File {output_file_path} already exists. Throwing exception"
+                            )
+
+                        with open(full_file_path, "rb") as f:
+                            output_file_client.upload_data(f, overwrite=True)
+
+                            logger.info(
+                                f"Uploaded {file_name} to {processed_metadata_output_folder}"
+                            )
+                    except Exception:
+                        outputs_uploaded = False
+                        logger.error(f"Failed to upload {file_name}")
+
+                        error_exception = "".join(format_exc().splitlines())
+                        logger.error(error_exception)
+
+                        file_processor.append_errors(error_exception, path)
+
+                        continue
+
+            logger.info(f"Uploaded metadata for {file_name}")
+
+            # Add the new output files to the file map
+            file_processor.confirm_output_files(
+                path, workflow_output_files, input_last_modified
+            )
+
+            if outputs_uploaded:
+                file_item["output_uploaded"] = True
+                file_item["status"] = "success"
+                logger.info(
+                    f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
+                )
+            else:
+                logger.error(
+                    f"Failed to upload outputs of {file_name} to {processed_data_output_folder}"
+                )
+
+            workflow_file_dependencies.add_dependency(
+                workflow_input_files, workflow_output_files
+            )
+
+            logger.time(time_estimator.step())
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
