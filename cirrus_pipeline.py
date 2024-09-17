@@ -320,13 +320,27 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.debug("Formatting files and generating metadata")
 
-            for device_folder in device_list:
-                filelist = imaging_utils.get_filtered_file_names(device_folder)
+            try:
+                for device_folder in device_list:
+                    filelist = imaging_utils.get_filtered_file_names(device_folder)
 
-                for file in filelist:
-                    full_file_path = imaging_utils.format_file(file, destination_folder)
+                    for file in filelist:
+                        full_file_path = imaging_utils.format_file(
+                            file, destination_folder
+                        )
 
-                    cirrus_instance.metadata(full_file_path, metadata_folder)
+                        cirrus_instance.metadata(full_file_path, metadata_folder)
+
+            except Exception:
+                logger.error(f"Failed to format {file_name}")
+
+                error_exception = "".join(format_exc().splitlines())
+
+                logger.error(error_exception)
+                file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+                continue
 
             file_item["format_error"] = False
             logger.info(f"Formatted {file_name}")
@@ -408,26 +422,37 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         f"{processed_metadata_output_folder}/{combined_file_name}"
                     )
 
-                    output_file_client = file_system_client.get_file_client(
-                        file_path=output_file_path
-                    )
-
                     logger.debug(
                         f"Uploading {full_file_path} to {processed_metadata_output_folder}"
                     )
 
-                    # Check if the file already exists in the output folder
-                    if output_file_client.exists():
-                        raise Exception(
-                            f"File {output_file_path} already exists. Throwing exception"
+                    try:
+                        output_file_client = file_system_client.get_file_client(
+                            file_path=output_file_path
                         )
 
-                    with open(full_file_path, "rb") as f:
-                        output_file_client.upload_data(f, overwrite=True)
+                        # Check if the file already exists in the output folder
+                        if output_file_client.exists():
+                            raise Exception(
+                                f"File {output_file_path} already exists. Throwing exception"
+                            )
 
-                        logger.info(
-                            f"Uploaded {file_name} to {processed_metadata_output_folder}"
-                        )
+                        with open(full_file_path, "rb") as f:
+                            output_file_client.upload_data(f, overwrite=True)
+
+                            logger.info(
+                                f"Uploaded {file_name} to {processed_metadata_output_folder}"
+                            )
+                    except Exception:
+                        outputs_uploaded = False
+                        logger.error(f"Failed to upload {file_name}")
+
+                        error_exception = "".join(format_exc().splitlines())
+
+                        logger.error(error_exception)
+                        file_processor.append_errors(error_exception, path)
+
+                        continue
 
             logger.info(f"Uploaded metadata for {file_name}")
 
