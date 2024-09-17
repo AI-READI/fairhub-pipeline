@@ -75,6 +75,7 @@ def convert_dicom(folder, output):
                 try:
                     cirrus_enface_converter.convert_dicom(
                         file,
+                        seg,
                         flow,
                         struc,
                         ir,
@@ -86,9 +87,9 @@ def convert_dicom(folder, output):
 
             elif "StructuralEnface" in file:
                 try:
-                    cirrus_enface_converter.convert_dicom(
+                    cirrus_enface_structural_converter.convert_dicom(
                         file,
-                        flow,
+                        seg,
                         struc,
                         ir,
                         output,
@@ -150,6 +151,7 @@ def convert_dicom(folder, output):
                 try:
                     cirrus_enface_structural_converter.convert_dicom(
                         file,
+                        seg,
                         struc,
                         ir,
                         output,
@@ -171,5 +173,4 @@ def convert_dicom(folder, output):
             "Correct number of conversion ": boolean,
         }
 
-    print(dic)
     return dic
