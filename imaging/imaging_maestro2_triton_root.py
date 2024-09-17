@@ -1,9 +1,7 @@
 from imaging.imaging_standards import DataDomain
 import imaging.imaging_maestro2_triton_converter as maestro2_triton_conv
 import imaging.imaging_maestro2_triton_organize as maestro2_triton_organize
-
-
-# import imaging.maestro2_triton_metadata as maestro2_triton_meta
+import imaging.imaging_maestro2_triton_metadata as maestro2_triton_meta
 
 
 class Maestro2_Triton(DataDomain):
@@ -55,3 +53,18 @@ class Maestro2_Triton(DataDomain):
         conv_dict = maestro2_triton_conv.convert_dicom(input_folder, output_folder)
 
         return conv_dict
+
+    def metadata(self, input_file, output_folder):
+        """
+        Extracts metadata from the input file and saves it as a JSON file in the output folder.
+
+        Args:
+            input_file (str): Full path to the DICOM *.dcm file.
+            output_folder (str): Full path to the folder where the output metadata JSON file will be saved.
+
+        Returns:
+            dict: A dictionary containing extracted metadata.
+        """
+        meta_dict = maestro2_triton_meta.meta_data_save(input_file, output_folder)
+
+        return meta_dict

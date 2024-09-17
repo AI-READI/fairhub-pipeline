@@ -877,7 +877,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     )
 
     with tempfile.TemporaryDirectory(
-        prefix="env_sensor_manual_"
+        prefix="FitnessTracker_pipeline_manual_"
     ) as manual_temp_folder_path:
         for item in manual_input_folder_contents:
             item_path = str(item.name)

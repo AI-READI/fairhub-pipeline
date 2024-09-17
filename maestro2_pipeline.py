@@ -330,18 +330,22 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                 for file_name in file_list:
                     try:
-                        imaging_utils.format_file(file_name, destination_folder)
+                        full_file_path = imaging_utils.format_file(
+                            file_name, destination_folder
+                        )
 
-                        # maestro2_instance.metadata(file_name, metadata_folder)
+                        maestro2_instance.metadata(full_file_path, metadata_folder)
+
                     except Exception:
                         file_item["format_error"] = True
                         logger.error(f"Failed to format {file_name}")
-                        error_exception = format_exc()
-                        error_exception = "".join(error_exception.splitlines())
+
+                        error_exception = "".join(format_exc().splitlines())
 
                         logger.error(error_exception)
-
                         file_processor.append_errors(error_exception, path)
+
+                        logger.time(time_estimator.step())
                         continue
 
             logger.info(f"Formatted {file_name}")
@@ -404,42 +408,53 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.info(f"Uploaded outputs for {file_name}")
 
-            # logger.debug(f"Uploading metadata for {file_name}")
+            logger.debug(f"Uploading metadata for {file_name}")
 
-            # for root, dirs, files in os.walk(metadata_folder):
-            #     for file in files:
-            #         full_file_path = os.path.join(root, file)
+            for root, dirs, files in os.walk(metadata_folder):
+                for file in files:
+                    full_file_path = os.path.join(root, file)
 
-            #         f2 = full_file_path.split("/")[-2:]
+                    f2 = full_file_path.split("/")[-2:]
 
-            #         combined_file_name = "/".join(f2)
+                    combined_file_name = "/".join(f2)
 
-            #         output_file_path = (
-            #             f"{processed_metadata_output_folder}/{combined_file_name}"
-            #         )
+                    output_file_path = (
+                        f"{processed_metadata_output_folder}/{combined_file_name}"
+                    )
 
-            #         output_file_client = file_system_client.get_file_client(
-            #             file_path=output_file_path
-            #         )
+                    logger.debug(
+                        f"Uploading {full_file_path} to {processed_metadata_output_folder}"
+                    )
 
-            #         logger.debug(
-            #             f"Uploading {full_file_path} to {processed_metadata_output_folder}"
-            #         )
+                    try:
 
-            #         # Check if the file already exists in the output folder
-            #         if output_file_client.exists():
-            #             raise Exception(
-            #                 f"File {output_file_path} already exists. Throwing exception"
-            #             )
+                        output_file_client = file_system_client.get_file_client(
+                            file_path=output_file_path
+                        )
 
-            #         with open(full_file_path, "rb") as f:
-            #             output_file_client.upload_data(f, overwrite=True)
+                        # Check if the file already exists in the output folder
+                        if output_file_client.exists():
+                            raise Exception(
+                                f"File {output_file_path} already exists. Throwing exception"
+                            )
 
-            #             logger.info(
-            #                 f"Uploaded {file_name} to {processed_metadata_output_folder}"
-            #             )
+                        with open(full_file_path, "rb") as f:
+                            output_file_client.upload_data(f, overwrite=True)
 
-            # logger.info(f"Uploaded metadata for {file_name}")
+                            logger.info(
+                                f"Uploaded {file_name} to {processed_metadata_output_folder}"
+                            )
+                    except Exception:
+                        outputs_uploaded = False
+                        logger.error(f"Failed to upload {file_name}")
+
+                        error_exception = "".join(format_exc().splitlines())
+
+                        logger.error(error_exception)
+                        file_processor.append_errors(error_exception, path)
+                        continue
+
+            logger.info(f"Uploaded metadata for {file_name}")
 
             # Add the new output files to the file map
             file_processor.confirm_output_files(
