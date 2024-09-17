@@ -117,8 +117,6 @@ def pipeline(
 
             q = str(dicom_file_path.name)
 
-            original_file_name = q.split("/")[-1]
-
             file_paths.append(
                 {
                     "file_path": q,
@@ -157,7 +155,7 @@ def pipeline(
         workflow_input_files = [path]
 
         # get the file name from the path
-        original_file_name = path.split("/")[-1]
+        file_name = path.split("/")[-1]
 
         # Create a temporary folder on the local machine
         with tempfile.TemporaryDirectory(
@@ -166,10 +164,8 @@ def pipeline(
             step1_folder = os.path.join(temp_folder_path, "step1")
             os.makedirs(step1_folder, exist_ok=True)
 
-            should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
-
-            if should_file_be_ignored:
-                logger.info(f"Ignoring {original_file_name}")
+            if file_processor.is_file_ignored(file_name, path):
+                logger.info(f"Ignoring {file_name}")
 
                 logger.time(time_estimator.step())
                 continue
@@ -208,14 +204,14 @@ def pipeline(
 
             batch_folder = step1_folder
 
-            download_path = os.path.join(step1_folder, original_file_name)
+            download_path = os.path.join(step1_folder, file_name)
 
-            logger.debug(f"Downloading {original_file_name} to {download_path}")
+            logger.debug(f"Downloading {file_name} to {download_path}")
 
             with open(file=download_path, mode="wb") as f:
                 f.write(file_client.download_file().readall())
 
-            logger.info(f"Downloaded {original_file_name} to {download_path}")
+            logger.info(f"Downloaded {file_name} to {download_path}")
 
             spectralis_instance = Spectralis()
 
@@ -228,7 +224,7 @@ def pipeline(
                 batch_folder
             )
 
-            logger.debug(f"Organizing {original_file_name}")
+            logger.debug(f"Organizing {file_name}")
 
             try:
                 for file_name in filtered_list:
@@ -239,7 +235,7 @@ def pipeline(
 
                     file_item["organize_result"] = json.dumps(organize_result)
             except Exception:
-                logger.error(f"Failed to organize {original_file_name}")
+                logger.error(f"Failed to organize {file_name}")
 
                 error_exception = "".join(format_exc().splitlines())
 
@@ -250,7 +246,7 @@ def pipeline(
                 logger.time(time_estimator.step())
                 continue
 
-            logger.info(f"Organized {original_file_name}")
+            logger.info(f"Organized {file_name}")
 
             # convert dicom files to nema compliant dicom files
             protocols = [
@@ -279,7 +275,7 @@ def pipeline(
                 for file in files:
                     spectralis_instance.convert(file, output)
 
-            logger.info(f"Converted {original_file_name}")
+            logger.info(f"Converted {file_name}")
 
             step4_folder = os.path.join(temp_folder_path, "step4")
             os.makedirs(step4_folder, exist_ok=True)
@@ -306,7 +302,7 @@ def pipeline(
 
             file_processor.delete_preexisting_output_files(path)
 
-            logger.debug(f"Uploading outputs for {original_file_name}")
+            logger.debug(f"Uploading outputs for {file_name}")
 
             for root, dirs, files in os.walk(step4_folder):
                 for file in files:
@@ -353,7 +349,7 @@ def pipeline(
                     file_item["output_files"].append(output_file_path)
                     workflow_output_files.append(output_file_path)
 
-            logger.info(f"Uploaded outputs for {original_file_name}")
+            logger.info(f"Uploaded outputs for {file_name}")
 
             logger.debug(f"Uploading metadata for {file_name}")
 
@@ -400,12 +396,12 @@ def pipeline(
                 file_item["output_uploaded"] = True
                 file_item["status"] = "success"
                 logger.info(
-                    f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
+                    f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
                 )
             else:
                 file_item["output_uploaded"] = upload_exception
                 logger.error(
-                    f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
+                    f"Failed to upload outputs of {file_name} to {processed_data_output_folder}"
                 )
 
             workflow_file_dependencies.add_dependency(

@@ -146,7 +146,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # get the file name from the path
         original_file_name = path.split("/")[-1]
 
-        should_file_be_ignored = file_processor.is_file_ignored(file_item, path)
+        should_file_be_ignored = file_processor.is_file_ignored(
+            original_file_name, path
+        )
 
         if should_file_be_ignored:
             logger.info(f"Ignoring {original_file_name}")

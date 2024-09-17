@@ -151,7 +151,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # get the file name from the path. It's in the format Clarity_Export_AIREADI_{id}_*.csv
         file_name = path.split("/")[-1]
 
-        if file_processor.is_file_ignored(file_item, path):
+        if file_processor.is_file_ignored(file_name, path):
             logger.info(f"Ignoring {file_name} because it is in the ignore file")
             logger.time(time_estimator.step())
             continue
