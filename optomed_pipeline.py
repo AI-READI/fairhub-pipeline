@@ -270,7 +270,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             file, destination_folder
                         )
 
-                        # optomed_instance.metadata(full_file_path, metadata_folder)
+                        optomed_instance.metadata(full_file_path, metadata_folder)
             except Exception:
                 logger.error(f"Failed to format {file_name}")
 
@@ -352,42 +352,42 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.info(f"Uploaded outputs for {file_name}")
 
-            # logger.debug(f"Uploading metadata for {file_name}")
+            logger.debug(f"Uploading metadata for {file_name}")
 
-            # for root, dirs, files in os.walk(metadata_folder):
-            #     for file in files:
-            #         full_file_path = os.path.join(root, file)
+            for root, dirs, files in os.walk(metadata_folder):
+                for file in files:
+                    full_file_path = os.path.join(root, file)
 
-            #         f2 = full_file_path.split("/")[-2:]
+                    f2 = full_file_path.split("/")[-2:]
 
-            #         combined_file_name = "/".join(f2)
+                    combined_file_name = "/".join(f2)
 
-            #         output_file_path = (
-            #             f"{processed_metadata_output_folder}/{combined_file_name}"
-            #         )
+                    output_file_path = (
+                        f"{processed_metadata_output_folder}/{combined_file_name}"
+                    )
 
-            #         output_file_client = file_system_client.get_file_client(
-            #             file_path=output_file_path
-            #         )
+                    output_file_client = file_system_client.get_file_client(
+                        file_path=output_file_path
+                    )
 
-            #         logger.debug(
-            #             f"Uploading {full_file_path} to {processed_metadata_output_folder}"
-            #         )
+                    logger.debug(
+                        f"Uploading {full_file_path} to {processed_metadata_output_folder}"
+                    )
 
-            #         # Check if the file already exists in the output folder
-            #         if output_file_client.exists():
-            #             raise Exception(
-            #                 f"File {output_file_path} already exists. Throwing exception"
-            #             )
+                    # Check if the file already exists in the output folder
+                    if output_file_client.exists():
+                        raise Exception(
+                            f"File {output_file_path} already exists. Throwing exception"
+                        )
 
-            #         with open(full_file_path, "rb") as f:
-            #             output_file_client.upload_data(f, overwrite=True)
+                    with open(full_file_path, "rb") as f:
+                        output_file_client.upload_data(f, overwrite=True)
 
-            #             logger.info(
-            #                 f"Uploaded {file_name} to {processed_metadata_output_folder}"
-            #             )
+                        logger.info(
+                            f"Uploaded {file_name} to {processed_metadata_output_folder}"
+                        )
 
-            # logger.info(f"Uploaded metadata for {file_name}")
+            logger.info(f"Uploaded metadata for {file_name}")
 
             # Add the new output files to the file map
             file_processor.confirm_output_files(

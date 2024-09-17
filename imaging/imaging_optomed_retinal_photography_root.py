@@ -1,7 +1,7 @@
 from imaging.imaging_standards import DataDomain
 import imaging.imaging_optomed_retinal_photography_converter as optomed_conv
 import imaging.imaging_optomed_retinal_photography_organize as optomed_organize
-import imaging_optomed_retinal_photography_metadata as optomed_meta
+import imaging.imaging_optomed_retinal_photography_metadata as optomed_meta
 
 
 class Optomed(DataDomain):
