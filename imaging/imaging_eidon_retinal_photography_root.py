@@ -1,7 +1,7 @@
 from imaging.imaging_standards import DataDomain
 import imaging.imaging_eidon_retinal_photography_converter as eidon_conv
 import imaging.imaging_eidon_retinal_photography_organize as eidon_organize
-import imaging_eidon_retinal_photography_metadata as eidon_meta
+import imaging.imaging_eidon_retinal_photography_metadata as eidon_meta
 
 
 class Eidon(DataDomain):
