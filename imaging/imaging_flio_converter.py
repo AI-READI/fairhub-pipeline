@@ -1,14 +1,13 @@
 import os
 import pydicom
 from bs4 import BeautifulSoup
-import flio_reader
+import flio.flio_reader as flio_reader
 from pydicom.dataset import Dataset, FileMetaDataset
-from pydicom.uid import ImplicitVRLittleEndian
-from flio_reader import get_array
+from flio.flio_reader import get_array
 import numpy as np
 import json
 import re
-import imaging_utils
+import imaging.imaging_utils as imaging_utils
 
 
 def get_all_file_names(folder_path):
