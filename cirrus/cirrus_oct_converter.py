@@ -526,6 +526,10 @@ def write_dicom(inputfile, protocol, dicom_dict_list, file_path):
         .PixelMeasuresSequence[0]
         .PixelSpacing[1]
     )
+
+    dataset.DimensionOrganizationSequence[0].DimensionOrganizationUID = (
+        dataset.DimensionIndexSequence[0].DimensionOrganizationUID
+    )
     pydicom.filewriter.write_file(file_path, dataset, write_like_original=False)
 
 

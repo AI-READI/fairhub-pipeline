@@ -8,7 +8,7 @@ from cirrus.cirrus_enface_converter_functional_groups import (
     ophthalmic_image_type_code_sequence,
     ophthalmic_frame_location_sequence,
 )
-import imaging.imaging_classifying_rules as imaging_classifying_rules
+
 
 KEEP = 0
 BLANK = 1
@@ -412,7 +412,7 @@ def extract_dicom_dict(file, tags):
     return output, transfersyntax, pixel_data
 
 
-def write_dicom(protocol, dicom_dict_list, opt, op, opt_file, enface_file, file_path):
+def write_dicom(protocol, dicom_dict_list, seg, opt, op, opt_file, op_file, file_path):
     """
     Writes a DICOM file based on a specified protocol and input data.
 
@@ -547,16 +547,16 @@ def write_dicom(protocol, dicom_dict_list, opt, op, opt_file, enface_file, file_
 
         source_image_sequence(dataset, dicom_dict_list)
         ophthalmic_image_type_code_sequence(dataset, dicom_dict_list)
-        referenced_series_sequence_structural(dataset, dicom_dict_list, opt, op)
+        referenced_series_sequence_structural(dataset, dicom_dict_list, seg, opt, op)
         derivation_algorithm_sequence(dataset, dicom_dict_list)
         enface_volume_descriptor_sequence(dataset, dicom_dict_list)
-        ophthalmic_frame_location_sequence(dataset, dicom_dict_list, opt_file)
+        ophthalmic_frame_location_sequence(dataset, dicom_dict_list, opt_file, op_file)
 
     pydicom.filewriter.write_file(file_path, dataset, write_like_original=False)
 
 
 def convert_dicom(
-    inputenface, inputopt, inputop, output
+    inputenface, inputseg, inputopt, inputop, output
 ):  # inputseg, inputoct, inputop,
     """
     Convert DICOM data using a specific conversion rule.
@@ -589,6 +589,7 @@ def convert_dicom(
         ]
     )
     enf = extract_dicom_dict(inputenface, tags)
+    seg = extract_dicom_dict(inputseg, ["0020000D", "0020000E", "00080016", "00080018"])
     opt = extract_dicom_dict(inputopt, ["0020000D", "0020000E", "00080016", "00080018"])
     op = extract_dicom_dict(inputop, ["0020000D", "0020000E", "00080016", "00080018"])
 
@@ -597,9 +598,10 @@ def convert_dicom(
     write_dicom(
         conversion_rule,
         enf,
+        seg,
         opt,
         op,
         inputopt,
-        inputenface,
+        inputop,
         f"{output}/converted_{filename}",
     )

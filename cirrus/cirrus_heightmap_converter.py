@@ -455,7 +455,7 @@ heightmap = ConversionRule(
         Element("ReferringPhysicianName", "00080090", "PN", BLANK),
         Element("StudyID", "00200010", "SH", BLANK),
         Element("AccessionNumber", "00080050", "SH", BLANK),
-        Element("Modality", "00080060", "CS"),
+        Element("Modality", "00080060", "CS", HARMONIZE, "SEG"),
         Element("SeriesInstanceUID", "0020000E", "UI"),
         Element("SeriesNumber", "00200011", "IS"),
         Element("FrameOfReferenceUID", "00200052", "UI"),
