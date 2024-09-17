@@ -538,5 +538,5 @@ def convert_dicom(input, output):
         "Input": input,
         "Output": f"{output}/converted_{filename}",
     }
-    print(dic)
+
     return dic
