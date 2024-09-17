@@ -1,6 +1,7 @@
 from imaging.imaging_standards import DataDomain
 import imaging.imaging_optomed_retinal_photography_converter as optomed_conv
 import imaging.imaging_optomed_retinal_photography_organize as optomed_organize
+import imaging_optomed_retinal_photography_metadata as optomed_meta
 
 
 class Optomed(DataDomain):
@@ -36,3 +37,18 @@ class Optomed(DataDomain):
         conv_dict = optomed_conv.convert_dicom(input_dicom_file, output_dicom_file)
 
         return conv_dict
+
+    def metadata(self, input_file, output_folder):
+        """
+        Extracts metadata from the input file and saves it as a JSON file in the output folder.
+
+        Args:
+            input_file (str): Full path to the DICOM *.dcm file.
+            output_folder (str): Full path to the folder where the output metadata JSON file will be saved.
+
+        Returns:
+            dict: A dictionary containing extracted metadata.
+        """
+        meta_dict = optomed_meta.meta_data_save(input_file, output_folder)
+
+        return meta_dict

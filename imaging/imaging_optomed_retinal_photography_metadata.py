@@ -202,7 +202,6 @@ def meta_data_save(filename, output_folder):
 
         # Extracting metadata
         patient_id = dataset.get("PatientID", "")
-        rule = dataset.ProtocolName
 
         try:
             manufacturer = get_list_from_filename_oct(filename)[0]

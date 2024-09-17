@@ -51,7 +51,6 @@ def filter_spectralis_files(file, outputfolder):
             "Output": output_path,
             "Error": error,
         }
-        print(dic)
 
     else:
         filename = file.split("/")[-1]
@@ -68,6 +67,5 @@ def filter_spectralis_files(file, outputfolder):
             "Output": output_path,
             "Error": error,
         }
-        print(dic)
 
     return dic

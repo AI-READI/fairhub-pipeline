@@ -6,7 +6,9 @@ from maestro2_triton.maestro2_triton_enface_converter_functional_groups import (
     enface_volume_descriptor_sequence,
     referenced_series_sequence,
     ophthalmic_image_type_code_sequence,
+    ophthalmic_frame_location_sequence,
 )
+
 
 KEEP = 0
 BLANK = 1
@@ -217,6 +219,7 @@ enface = ConversionRule(
         Element("ImageType", "00080008", "CS"),
         Element("InstanceNumber", "00200013", "IS"),
         Element("PixelSpacing", "00280030", "DS"),
+        Element("ImageOrientationPatient", "00200037", "DS"),
         Element("ContentTime", "00080033", "TM"),
         Element("ContentDate", "00080023", "DA"),
         Element("OphthalmicImageTypeDescription", "00221616", "LO"),
@@ -358,6 +361,7 @@ def extract_dicom_dict(file, tags):
 
     dataset = pydicom.dcmread(file)
     dataset.PatientOrientation = ["L", "F"]
+    dataset.ImageOrientationPatient = [-1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 
     header_elements = {
         "00020000": {
@@ -407,7 +411,9 @@ def extract_dicom_dict(file, tags):
     return output, transfersyntax, pixel_data
 
 
-def write_dicom(protocol, dicom_dict_list, seg, vol, opt, op, file_path):
+def write_dicom(
+    protocol, dicom_dict_list, seg, vol, opt, op, opt_file, op_file, file_path
+):
     """
     Writes a DICOM file based on a specified protocol and input data.
 
@@ -545,12 +551,13 @@ def write_dicom(protocol, dicom_dict_list, seg, vol, opt, op, file_path):
         referenced_series_sequence(dataset, dicom_dict_list, seg, vol, opt, op)
         derivation_algorithm_sequence(dataset, dicom_dict_list)
         enface_volume_descriptor_sequence(dataset, dicom_dict_list, seg)
+        ophthalmic_frame_location_sequence(dataset, dicom_dict_list, opt_file, op_file)
 
     pydicom.filewriter.write_file(file_path, dataset, write_like_original=False)
 
 
 def convert_dicom(
-    inputenface, inputseg, inputvol, inputopt, inputop, output
+    inputenface, inputseg, inputvol, inputop, inputopt, output
 ):  # inputseg, inputoct, inputop,
     """
     Convert DICOM data using a specific conversion rule.
@@ -580,6 +587,7 @@ def convert_dicom(
             "00660031",
             "00081115",
             "00221615",
+            "00220031",
         ]
     )
     enf = extract_dicom_dict(inputenface, tags)
@@ -591,5 +599,13 @@ def convert_dicom(
     filename = inputenface.split("/")[-1]
 
     write_dicom(
-        conversion_rule, enf, seg, vol, opt, op, f"{output}/converted_{filename}"
+        conversion_rule,
+        enf,
+        seg,
+        vol,
+        opt,
+        op,
+        inputopt,
+        inputop,
+        f"{output}/converted_{filename}",
     )
