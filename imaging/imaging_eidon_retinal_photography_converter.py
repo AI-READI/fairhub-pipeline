@@ -2,6 +2,7 @@ import os
 import pydicom
 import imaging.imaging_classifying_rules as imaging_classifying_rules
 
+
 KEEP = 0
 BLANK = 1
 HARMONIZE = 2
@@ -34,11 +35,17 @@ class ConversionRule:
         self.sequences = sequences
 
     def header_tags(self):
-        headertags = {header_element.tag for header_element in self.header_elements}
+        headertags = set()
+        for header_element in self.header_elements:
+            headertags.add(header_element.tag)
+
         return list(headertags)
 
     def tags(self):
-        tags = {element.tag for element in self.elements}
+        tags = set()
+        for element in self.elements:
+            tags.add(element.tag)
+
         return list(tags)
 
     def sequence_tags(self):
@@ -235,7 +242,7 @@ def process_tags(tags, dicom):
         dict: Dictionary where keys are DICOM tags and values are DicomEntry instances.
 
     """
-    output = {}
+    output = dict()
     for tag in tags:
         if tag in dicom:
             element_name = pydicom.tag.Tag(tag)
@@ -307,8 +314,11 @@ def extract_dicom_dict(file, tags):
     if not os.path.exists(file):
         raise FileNotFoundError(f"File {file} not found.")
 
-    output = {"filepath": file}
+    output = dict()
+    output["filepath"] = file
+
     dataset = pydicom.dcmread(file)
+
     dataset.PatientOrientation = ["L", "F"]
 
     if "visible" in file:
@@ -329,7 +339,10 @@ def extract_dicom_dict(file, tags):
             "vr": "OB",
             "Value": [dataset.file_meta.FileMetaInformationVersion],
         },
-        "00020002": {"vr": "UI", "Value": [dataset.file_meta.MediaStorageSOPClassUID]},
+        "00020002": {
+            "vr": "UI",
+            "Value": [dataset.file_meta.MediaStorageSOPInstanceUID],
+        },
         "00020003": {
             "vr": "UI",
             "Value": [dataset.file_meta.MediaStorageSOPInstanceUID],
@@ -347,7 +360,8 @@ def extract_dicom_dict(file, tags):
             "Value": [dataset.file_meta.ImplementationVersionName],
         },
     }
-    json_dict = dict(header_elements)
+    json_dict = {}
+    json_dict.update(header_elements)
     info = dataset.to_json_dict()
 
     patient_name = dataset.PatientName
@@ -367,9 +381,9 @@ def extract_dicom_dict(file, tags):
     modified_uid = (
         seriesinstanceuid[:last_dot_index] + seriesinstanceuid[last_dot_index + 1 :]
     )
-
     info["0020000E"]["Value"] = str(modified_uid)
-    json_dict |= info
+
+    json_dict.update(info)
     dicom = json_dict
     output = process_tags(tags, dicom)
     transfersyntax = [dataset.is_little_endian, dataset.is_implicit_VR]
@@ -512,17 +526,18 @@ def convert_dicom(input, output):
     )
     x = extract_dicom_dict(input, tags)
     filename = input.split("/")[-1]
-
-    write_dicom(conversion_rule, x, f"{output}/converted_{filename}")
-
     b = imaging_classifying_rules.extract_dicom_entry(input)
     rule = imaging_classifying_rules.find_rule(input)
+
+    convert = "no"
+    write_dicom(conversion_rule, x, f"{output}/converted_{filename}")
+    convert = "yes"
+
     dic = {
         "Rule": rule,
-        "PatientID": b.patientid,
-        "Laterality": b.laterality,
-        "Rows": b.rows,
-        "Columns": b.columns,
+        "Converted": convert,
+        "Input": input,
+        "Output": f"{output}/converted_{filename}",
     }
-    print(dic)
+
     return dic

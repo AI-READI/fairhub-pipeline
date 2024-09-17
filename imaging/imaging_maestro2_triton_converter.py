@@ -59,10 +59,10 @@ def convert_dicom(folder, output):
         ):
             maestro2_triton_enface_converter.convert_dicom(
                 i,
-                uids_sorted[3],
-                uids_sorted[4],
-                uids_sorted[1],
-                uids_sorted[0],
+                uids_sorted[3],  # seg
+                uids_sorted[4],  # vol
+                uids_sorted[1],  # op
+                uids_sorted[0],  # opt
                 output,
             )
             conversion_num += 1
@@ -71,10 +71,9 @@ def convert_dicom(folder, output):
     boolean = file_num == conversion_num
 
     dic = {
-        "Foldername": folder,
+        "Input": folder,
         "Number of files": file_num,
         "Correct number of conversion ": boolean,
     }
 
-    print(dic)
     return dic

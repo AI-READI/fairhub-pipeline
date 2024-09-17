@@ -24,7 +24,11 @@ class ClassifyingRule:
         self.conditions = conditions
 
     def apply(self, dicom_entry):
-        return all(condition(dicom_entry) for condition in self.conditions)
+        # Apply all conditions to the DICOM entry
+        for condition in self.conditions:
+            if not condition(dicom_entry):
+                return False
+        return True
 
 
 # List of classification rules
@@ -185,6 +189,7 @@ rules = [
             and str(entry.rows) == "496"
             and str(entry.columns) == "768"
             and 25 < entry.framenumber < 29
+            and entry.filesize > 10  # 30
         ],
     ),
     # 496, 768, 61
@@ -197,6 +202,7 @@ rules = [
             and str(entry.rows) == "496"
             and str(entry.columns) == "768"
             and 59 < entry.framenumber < 63
+            and entry.filesize > 70
         ],
     ),
     # 496, 1536, 61
@@ -208,6 +214,7 @@ rules = [
             and str(entry.rows) == "496"
             and str(entry.columns) == "1536"
             and 59 < entry.framenumber < 63
+            and entry.filesize > 45
         ],
     ),  # 496, 512, 512
     ClassifyingRule(
@@ -218,6 +225,7 @@ rules = [
             and str(entry.rows) == "496"
             and str(entry.columns) == "512"
             and 510 < entry.framenumber < 514
+            and entry.filesize > 130
         ],
     ),
     # 496, 384, 284
@@ -229,6 +237,7 @@ rules = [
             and str(entry.rows) == "496"
             and str(entry.columns) == "384"
             and 382 < entry.framenumber < 386
+            and entry.filesize > 219
         ],
     ),
     # 768, 768
@@ -242,6 +251,7 @@ rules = [
             and str(entry.columns) == "768"
             and str(entry.gaze) == "Primary gaze"
             and str(entry.privatetag) == "N/A"
+            and entry.filesize > 1
         ],
     ),
     # 1536, 1536
@@ -255,6 +265,7 @@ rules = [
             and str(entry.columns) == "1536"
             and str(entry.gaze) == "Primary gaze"
             and str(entry.privatetag) == "N/A"
+            and entry.filesize > 5
         ],
     ),
     # 1536 1536
@@ -266,6 +277,7 @@ rules = [
             and entry.seriesdescription == "IR"
             and str(entry.rows) == "1536"
             and str(entry.columns) == "1536"
+            and entry.filesize > 5
         ],
     ),
     # 768, 768
@@ -278,6 +290,7 @@ rules = [
             and str(entry.rows) == "768"
             and str(entry.columns) == "768"
             and str(entry.privatetag) == "Super Slim"
+            and entry.filesize > 1
         ],
     ),
     # 1536 1536
@@ -288,6 +301,7 @@ rules = [
             and entry.sopclassuid.startswith("1.2.840.10008.5.1.4.1.1.77.1.5.1")
             and str(entry.rows) == "512"
             and str(entry.columns) == "512"
+            and entry.filesize > 0.6
         ],
     ),
     ClassifyingRule(
@@ -460,12 +474,13 @@ def extract_dicom_entry(file):
 
     dicom = pydicom.dcmread(file).to_json_dict()
     ds = pydicom.dcmread(file)
+
     filename = os.path.basename(file)
     bottom_file_name = os.path.basename(file)
     directory_one_level_up = os.path.dirname(file)
     second_to_bottom_file_name = os.path.basename(directory_one_level_up)
 
-    filesize = os.path.getsize(file) / (1024 * 1024)
+    filesize = os.path.getsize(file) / (1000 * 1000)
     folder_path = os.path.dirname(file)
     folder_files = os.listdir(folder_path)
     error = "no"
@@ -653,7 +668,7 @@ def extract_dicom_summary(file):
     performedprotocol = dicomentry.performedprotocol
     description = find_rule(file)
 
-    return DicomSummary(
+    output = DicomSummary(
         filename,
         patientid,
         laterality,
@@ -661,6 +676,8 @@ def extract_dicom_summary(file):
         acquisitiondatetime,
         sopinstanceuid,
     )
+    # output = DicomSummaryDetail(domain, modality, patientid, laterality, description,sopinstanceuid,referencedsopinstance)
+    return output
 
 
 def get_summary(file):

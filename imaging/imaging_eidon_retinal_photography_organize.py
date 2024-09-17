@@ -42,17 +42,13 @@ def filter_eidon_files(file, outputfolder):
         dic = {
             "Rule": rule,
             "PatientID": patientid,
-            "PatientName": name,
-            "Laterality": laterality,
             "Rows": rows,
             "Columns": columns,
-            "SOPInstanceuid": uid,
-            "SeriesInstanceuid": seriesuid,
-            "Filename": filename,
-            "Path": file,
+            "Laterality": laterality,
+            "Input": file,
+            "Output": output_path,
             "Error": error,
         }
-        print(dic)
 
     else:
         filename = file.split("/")[-1]
@@ -64,10 +60,9 @@ def filter_eidon_files(file, outputfolder):
         shutil.copyfile(original_path, output_path)
 
         dic = {
-            "Filename": filename,
-            "Path": file,
+            "Input": file,
+            "Output": output_path,
             "Error": error,
         }
-        print(dic)
 
     return dic
