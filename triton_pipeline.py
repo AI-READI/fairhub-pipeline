@@ -301,6 +301,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         except Exception:
             logger.error(f"Failed to convert {file_name}")
+
             error_exception = format_exc()
             error_exception = "".join(error_exception.splitlines())
 
@@ -383,18 +384,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         )
 
                     with open(f"{full_file_path}", "rb") as data:
-                        output_file_client.upload_data(data, overwrite=True)
+                        # output_file_client.upload_data(data, overwrite=True)
 
                         logger.info(f"Uploaded {combined_file_name}")
                 except Exception:
                     outputs_uploaded = False
                     logger.error(f"Failed to upload {combined_file_name}")
-                    error_exception = format_exc()
-                    error_exception = "".join(error_exception.splitlines())
+
+                    error_exception = "".join(format_exc().splitlines())
 
                     logger.error(error_exception)
-
                     file_processor.append_errors(error_exception, path)
+
                     continue
 
                 file_item["output_files"].append(output_file_path)

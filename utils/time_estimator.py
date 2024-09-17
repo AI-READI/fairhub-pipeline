@@ -107,7 +107,17 @@ class TimeEstimator:
         finish_time = current_time + datetime.timedelta(seconds=self.eta)
         return finish_time.strftime("%H:%M:%S")
 
+    def currenttz(self):
+        if time.daylight:
+            return datetime.timezone(
+                datetime.timedelta(seconds=-time.altzone), time.tzname[1]
+            )
+        else:
+            return datetime.timezone(
+                datetime.timedelta(seconds=-time.timezone), time.tzname[0]
+            )
+
     def step(self):
         self.total_processed_files += 1
 
-        return f"{self.total_processed_files}/{self.total_number_of_files} [{self.total_processed_files / self.total_number_of_files * 100:.2f}%] in {human_time(self.elapsed_time)} ~ {human_time(self.elapsed_time / self.total_processed_files)} per item | ETA: in about {human_time(self.eta)} or at {self.finish_time}"
+        return f"{self.total_processed_files}/{self.total_number_of_files} [{self.total_processed_files / self.total_number_of_files * 100:.2f}%] in {human_time(self.elapsed_time)} ~ {human_time(self.elapsed_time / self.total_processed_files)} per item | ETA: in about {human_time(self.eta)} or at {self.finish_time} {self.currenttz()}"
