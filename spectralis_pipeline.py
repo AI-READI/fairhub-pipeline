@@ -128,7 +128,9 @@ def pipeline(
                     "start_date": start_date,
                     "end_date": end_date,
                     "organize_result": "",
+                    "organize_error": True,
                     "convert_error": True,
+                    "format_error": True,
                     "output_uploaded": False,
                     "output_files": [],
                 }
@@ -159,7 +161,7 @@ def pipeline(
 
         # Create a temporary folder on the local machine
         with tempfile.TemporaryDirectory(
-            prefix="optomed_pipeline_"
+            prefix="spectralis_pipeline_"
         ) as temp_folder_path:
             step1_folder = os.path.join(temp_folder_path, "step1")
             os.makedirs(step1_folder, exist_ok=True)
@@ -263,18 +265,30 @@ def pipeline(
 
             logger.debug("Converting to nema compliant dicom files")
 
-            for protocol in protocols:
-                output = f"{step3_folder}/{protocol}"
-                if not os.path.exists(output):
-                    os.makedirs(output)
+            try:
+                for protocol in protocols:
+                    output = f"{step3_folder}/{protocol}"
+                    if not os.path.exists(output):
+                        os.makedirs(output)
 
-                files = imaging_utils.get_filtered_file_names(
-                    f"{step2_folder}/{protocol}"
-                )
+                    files = imaging_utils.get_filtered_file_names(
+                        f"{step2_folder}/{protocol}"
+                    )
 
-                for file in files:
-                    spectralis_instance.convert(file, output)
+                    for file in files:
+                        spectralis_instance.convert(file, output)
+            except Exception:
+                logger.error(f"Failed to convert {file_name}")
 
+                error_exception = "".join(format_exc().splitlines())
+
+                logger.error(error_exception)
+                file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            file_item["convert_error"] = False
             logger.info(f"Converted {file_name}")
 
             step4_folder = os.path.join(temp_folder_path, "step4")
@@ -285,13 +299,26 @@ def pipeline(
 
             logger.debug("Formatting files and generating metadata")
 
-            for folder in [step3_folder]:
-                filelist = imaging_utils.get_filtered_file_names(folder)
+            try:
+                for folder in [step3_folder]:
+                    filelist = imaging_utils.get_filtered_file_names(folder)
 
-                for file in filelist:
-                    full_file_path = imaging_utils.format_file(file, step4_folder)
+                    for file in filelist:
+                        full_file_path = imaging_utils.format_file(file, step4_folder)
 
-                    spectralis_instance.metadata(full_file_path, metadata_folder)
+                        spectralis_instance.metadata(full_file_path, metadata_folder)
+            except Exception:
+                logger.error(f"Failed to format {file_name}")
+
+                error_exception = "".join(format_exc().splitlines())
+
+                logger.error(error_exception)
+                file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+                continue
+
+            file_item["format_error"] = False
 
             # Upload the processed files to the output folder
 
@@ -365,27 +392,37 @@ def pipeline(
                         f"{processed_metadata_output_folder}/{combined_file_name}"
                     )
 
-                    output_file_client = file_system_client.get_file_client(
-                        file_path=output_file_path
-                    )
-
-                    logger.debug(
-                        f"Uploading {full_file_path} to {processed_metadata_output_folder}"
-                    )
-
-                    # Check if the file already exists in the output folder
-                    if output_file_client.exists():
-                        raise Exception(
-                            f"File {output_file_path} already exists. Throwing exception"
+                    try:
+                        output_file_client = file_system_client.get_file_client(
+                            file_path=output_file_path
                         )
 
-                    with open(full_file_path, "rb") as f:
-                        output_file_client.upload_data(f, overwrite=True)
-
-                        logger.info(
-                            f"Uploaded {file_name} to {processed_metadata_output_folder}"
+                        logger.debug(
+                            f"Uploading {full_file_path} to {processed_metadata_output_folder}"
                         )
 
+                        # Check if the file already exists in the output folder
+                        if output_file_client.exists():
+                            raise Exception(
+                                f"File {output_file_path} already exists. Throwing exception"
+                            )
+
+                        with open(full_file_path, "rb") as f:
+                            output_file_client.upload_data(f, overwrite=True)
+
+                            logger.info(
+                                f"Uploaded {file_name} to {processed_metadata_output_folder}"
+                            )
+                    except Exception:
+                        outputs_uploaded = False
+                        logger.error(f"Failed to upload {file_name}")
+
+                        error_exception = "".join(format_exc().splitlines())
+
+                        logger.error(error_exception)
+                        file_processor.append_errors(error_exception, path)
+
+                        continue
             # Add the new output files to the file map
 
             file_processor.confirm_output_files(
@@ -441,6 +478,7 @@ def pipeline(
             "organize_result",
             "organize_error",
             "convert_error",
+            "format_error",
             "output_uploaded",
             "output_files",
         ]
