@@ -343,7 +343,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                         file_processor.append_errors(error_exception, path)
 
-                        logger.time(time_estimator.step())
                         continue
 
                     file_item["output_files"].append(output_file_path)
