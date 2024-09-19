@@ -151,7 +151,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         patient_id = cleaned_file_name.split("-")[1]
 
         if str(patient_id) not in participant_filter_list:
-            logger.debug(
+            print(
                 f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
             )
             continue
@@ -193,8 +193,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     manifest = garmin_metadata.GarminManifest(processed_data_output_folder)
 
     manifest.read_redcap_file(red_cap_export_file_path)
-
-    return
 
     # file_paths = file_paths[:5]
     for patient_folder in file_paths:

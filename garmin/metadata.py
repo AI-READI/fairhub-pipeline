@@ -27,7 +27,8 @@ class GarminManifest:
         }
 
         with open(file_path, mode="r") as file:
-            reader = csv.DictReader(file, delimiter="\t")
+            reader = csv.DictReader(file)
+
             for row in reader:
                 participant_id = row["studyid"]
                 dominant_hand_code = row["dvamwenhand"]
