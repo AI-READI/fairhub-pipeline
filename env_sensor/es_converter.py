@@ -288,12 +288,8 @@ def convert_env_sensor(
 
     # cleanup
     if not extended_conv_dict:
-        s["t"][
-            "fw_version_list"
-        ] = []  # list of all FW versions found in the headers of raw csv files
-        s["t"][
-            "sen55_list"
-        ] = []  # list of all SEN55 IDs found in the headers of raw csv files
+        s["t"]["fw_version_list"] = []  # list of all FW versions found in the headers of raw csv files
+        s["t"]["sen55_list"] = []  # list of all SEN55 IDs found in the headers of raw csv files
         s["t"]["column_dict"] = []  # is this still used
         s["t"]["data_list"] = []  # consumes a lot of memory - delete if not needed
         s.pop("t", None)  # completely remove 't'
