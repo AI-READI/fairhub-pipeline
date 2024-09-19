@@ -233,6 +233,10 @@ def pipeline_get_p_visit(s, visit_dict):
         # pppp is presumed correct since it exists in visit_dict
         s['r']['pppp'] = s['t']['pppp_fname']
         s['r']['location'] = p_visit['location']
+        if 'export_group' in p_visit.keys():
+            s['r']['export_group'] = p_visit['export_group']
+        else:
+            s['r']['export_group'] = 'TBD'
         s['qa']['pppp_in_visit_dict']['ok'] = True
         s['qa']['pppp_in_visit_dict']['set_by'] = inspect.stack()[0][3]
 
@@ -1071,6 +1075,7 @@ def build_visit_dict(visit_csv):
                            'appt_date': '2023-07-02',
                            'visit_date': '2023-07-02',
                            'av_dates_match': True,
+                           'export_group': 'TBD',
                            'esID': '000', 'return_date': 'TBD',
                            'location': 'TBD', 'es_data_ok': 'yes'}
     visit_dict = dict()
