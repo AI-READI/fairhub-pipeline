@@ -1,6 +1,6 @@
 import logging
 
-from .standards import DataDomain
+from .es_standards import DataDomain
 
 from . import es_converter as es_conv
 from . import es_metadata as es_meta
