@@ -3,7 +3,8 @@ from abc import abstractmethod
 
 class DataDomain:
     def __init__(self):
-        print("in standards init")
+        pass
+        # print("in standards init")
 
     @abstractmethod
     def convert(self, infile, outfile, **kwargs):
