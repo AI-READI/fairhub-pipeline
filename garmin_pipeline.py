@@ -74,7 +74,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     ignore_file = f"{study_id}/ignore/fitnessTracker.ignore"
     manual_input_folder = f"{study_id}/pooled-data/FitnessTracker-manual"
     manifest_folder = f"{study_id}/pooled-data/FitnessTracker-manifest"
-    red_cap_export_file = f"{study_id}/pooled-data/REDCap/AIREADI-Garmin.tsv"
+    red_cap_export_file = (
+        f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep13_EnviroPhysSensorInfo.csv"
+    )
     participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("fitness_tracker", print=True)
@@ -191,6 +193,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     manifest = garmin_metadata.GarminManifest(processed_data_output_folder)
 
     manifest.read_redcap_file(red_cap_export_file_path)
+
+    return
 
     # file_paths = file_paths[:5]
     for patient_folder in file_paths:
