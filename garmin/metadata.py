@@ -18,15 +18,28 @@ class GarminManifest:
         """
         Reads the REDCap.tsv file and stores wrist_worn_on and dominant_hand for each participant.
         """
+        # Mapping of numerical codes to textual descriptions
+        value_mapping = {
+            "1": "Right",
+            "2": "Left",
+            "3": "Not provided",
+            "4": "Neither (ambidextrous)",
+        }
+
         with open(file_path, mode="r") as file:
             reader = csv.DictReader(file, delimiter="\t")
             for row in reader:
-                participant_id = row["participant_id"]
-                wrist_worn_on = row["wrist_worn_on"]
-                dominant_hand = row["dominant_hand"]
+                participant_id = row["studyid"]
+                dominant_hand_code = row["dvamwenhand"]
+                wrist_worn_on_code = row["dvamwendhand"]
+
+                # Map numerical codes to textual descriptions
+                dominant_hand = value_mapping.get(dominant_hand_code, "None")
+                wrist_worn_on = value_mapping.get(wrist_worn_on_code, "None")
+
                 self.redcap_data[participant_id] = {
-                    "wrist_worn_on": wrist_worn_on or None,  # Assign None if missing
-                    "dominant_hand": dominant_hand or None,  # Assign None if missing
+                    "wrist_worn_on": wrist_worn_on,
+                    "dominant_hand": dominant_hand,
                 }
 
     def add_to_participant_data(
@@ -88,7 +101,7 @@ class GarminManifest:
                                 )
                                 participant_id = os.path.basename(root)
 
-                                output_file_path = f"{self.processed_data_output_folder}/{key_prefix}/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = f"{key_prefix}/garmin_vivosmart5/{participant_id}/{file}"
 
                                 self.add_to_participant_data(
                                     participant_id,
@@ -147,7 +160,7 @@ class GarminManifest:
                                     else 0
                                 )
 
-                                output_file_path = f"{self.processed_data_output_folder}/physical_activity_calorie/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = f"physical_activity_calorie/garmin_vivosmart5/{participant_id}/{file}"
 
                                 self.add_to_participant_data(
                                     participant_id,
@@ -206,7 +219,9 @@ class GarminManifest:
                                     else 0
                                 )
 
-                                output_file_path = f"{self.processed_data_output_folder}/sleep/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = (
+                                    f"sleep/garmin_vivosmart5/{participant_id}/{file}"
+                                )
 
                                 self.add_to_participant_data(
                                     participant_id,
@@ -280,7 +295,7 @@ class GarminManifest:
                                     else 0
                                 )
 
-                                output_file_path = f"{self.processed_data_output_folder}/physical_activity/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = f"physical_activity/garmin_vivosmart5/{participant_id}/{file}"
 
                                 # Store the average and other details in the participant's data dictionary
                                 # print ("num_unique_days:" + str(num_unique_days))
@@ -430,30 +445,30 @@ class GarminManifest:
                 writer.writerow(row)
 
 
-def main():
-    directories = {
-        "heart_rate": "wearable_activity_monitor/heart_rate/garmin_vivosmart5",
-        "oxygen_saturation": "wearable_activity_monitor/oxygen_saturation/garmin_vivosmart5",
-        "stress": "wearable_activity_monitor/stress/garmin_vivosmart5",
-        "sleep": "wearable_activity_monitor/sleep/garmin_vivosmart5",
-        "respiratory_rate": "wearable_activity_monitor/respiratory_rate/garmin_vivosmart5",
-        "activity": "wearable_activity_monitor/physical_activity/garmin_vivosmart5",
-        "calories": "wearable_activity_monitor/physical_activity_calorie/garmin_vivosmart5",
-    }
+# def main():
+#     directories = {
+#         "heart_rate": "wearable_activity_monitor/heart_rate/garmin_vivosmart5",
+#         "oxygen_saturation": "wearable_activity_monitor/oxygen_saturation/garmin_vivosmart5",
+#         "stress": "wearable_activity_monitor/stress/garmin_vivosmart5",
+#         "sleep": "wearable_activity_monitor/sleep/garmin_vivosmart5",
+#         "respiratory_rate": "wearable_activity_monitor/respiratory_rate/garmin_vivosmart5",
+#         "activity": "wearable_activity_monitor/physical_activity/garmin_vivosmart5",
+#         "calories": "wearable_activity_monitor/physical_activity_calorie/garmin_vivosmart5",
+#     }
 
-    # Read wrist_worn_on and dominant_hand data from REDCap.tsv
-    # read_redcap_file("REDCap.tsv")
+#     # Read wrist_worn_on and dominant_hand data from REDCap.tsv
+#     read_redcap_file("REDCap.tsv")
 
-    for data_type, directory in directories.items():
-        globals()[f"process_{data_type}"](directory)
+#     for data_type, directory in directories.items():
+#         globals()[f"process_{data_type}"](directory)
 
-    # Calculate sensor sampling duration based on heart rate data
-    # calculate_sensor_sampling_duration(directories["heart_rate"])
+#     # Calculate sensor sampling duration based on heart rate data
+#     calculate_sensor_sampling_duration(directories["heart_rate"])
 
-    # Write out the participants data as a TSV file
-    # output_file = "manifest.tsv"
-    # write_tsv(output_file, participants_data)
+#     # Write out the participants data as a TSV file
+#     output_file = "manifest.tsv"
+#     write_tsv(output_file, participants_data)
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
