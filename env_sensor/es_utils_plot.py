@@ -259,8 +259,6 @@ def snapshot(df, plot_ht=4, yaxis_adjusts_to_data=False, verbose=False):
     time_span_days = time_span.days
 
     if time_span_days > 1:  # only do 12 hr tick spacing if >> 12 hrs in plot
-        if verbose:
-            print("DEBUG .. snapshot date tick interval start")
         ax5 = ax[5]
         ax5.xaxis.set_major_locator(mdates.HourLocator(byhour=12))  # each day @ noon
         ax5.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d %H:%M"))
@@ -364,7 +362,7 @@ def plot_time_and_spectral(
         x_label_5 = x_axis_5.get_label()
         x_label_5.set_visible(False)
     else:  # experiments
-        print("DEBUG: setting date ticks at 12h intervals")
+        # print("DEBUG: setting date ticks at 12h intervals")
         ax[1].tick_params(labelbottom=True)
         x_axis_5 = ax[1].axes.get_xaxis()
 
