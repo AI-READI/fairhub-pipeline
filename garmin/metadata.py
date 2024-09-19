@@ -67,6 +67,7 @@ class GarminManifest:
         is_nan_check=False,
     ):
         date_format = "%Y-%m-%dT%H:%M:%SZ"
+
         for root, dirs, files in sorted(os.walk(directory)):
             dirs.sort()
             for file in sorted(files):
@@ -92,7 +93,10 @@ class GarminManifest:
                                         and "value" in record[value_key]
                                     ):
                                         record_value = record[value_key]["value"]
-                                        if is_nan_check and math.isnan(record_value):
+                                        if is_nan_check and (
+                                            record_value is None
+                                            or math.isnan(record_value)
+                                        ):
                                             continue
                                         total_value += record_value
                                         num_records += 1
@@ -127,7 +131,6 @@ class GarminManifest:
         """
         Processes calorie-related JSON files, calculates total and average calories burned.
         """
-        # date_format = "%Y-%m-%dT%H:%M:%SZ"
         for root, dirs, files in sorted(os.walk(directory)):
             dirs.sort()
             for file in sorted(files):
@@ -176,7 +179,7 @@ class GarminManifest:
         """
         Processes sleep JSON files, calculates total and average sleep duration.
         """
-        # date_format = "%Y-%m-%dT%H:%M:%SZ"
+        date_format = "%Y-%m-%dT%H:%M:%SZ"
         for root, dirs, files in sorted(os.walk(directory)):
             dirs.sort()
             for file in sorted(files):
@@ -188,7 +191,6 @@ class GarminManifest:
                             data = json.load(json_file)
                             if "body" in data and "sleep" in data["body"]:
                                 sleep_data = data["body"]["sleep"]
-
                                 sleep_sorted = sorted(
                                     sleep_data,
                                     key=lambda x: x["sleep_stage_time_frame"][
@@ -295,17 +297,19 @@ class GarminManifest:
                                     else 0
                                 )
 
+                                # Store the average and other details in the participant's data dictionary
                                 output_file_path = f"physical_activity/garmin_vivosmart5/{participant_id}/{file}"
 
-                                # Store the average and other details in the participant's data dictionary
-                                # print ("num_unique_days:" + str(num_unique_days))
-                                self.add_to_participant_data(
-                                    participant_id,
-                                    "physical_activity",
-                                    output_file_path,
-                                    num_unique_days,
-                                    average_steps_per_day,
-                                )
+                                self.participants_data[participant_id][
+                                    "physical_activity_filepath"
+                                ] = output_file_path
+                                self.participants_data[participant_id][
+                                    "physical_activity_num_days"
+                                ] = num_unique_days
+                                self.participants_data[participant_id][
+                                    "average_physical_activity"
+                                ] = f"{average_steps_per_day:.2f}"
+
                     except Exception as e:
                         print(f"Error processing file {file_path}: {e}")
 
@@ -364,6 +368,7 @@ class GarminManifest:
                                 self.participants_data[participant_id][
                                     "sensor_sampling_duration_days"
                                 ] = len(unique_days)
+
                     except Exception as e:
                         print(
                             f"Error calculating sensor sampling duration for {file_path}: {e}"
@@ -383,8 +388,8 @@ class GarminManifest:
             "oxygen_saturation_filepath",
             "oxygen_saturation_record_count",
             "average_oxygen_saturation",
-            "stress_level_filepath",
-            "stress_level_record_count",
+            "stress_filepath",
+            "stress_record_count",
             "average_stress",
             "sleep_filepath",
             "sleep_record_count",
@@ -433,7 +438,7 @@ class GarminManifest:
                     data[participant_id].get("respiratory_rate_record_count", "None"),
                     data[participant_id].get("average_respiratory_rate", "None"),
                     data[participant_id].get("physical_activity_filepath", "None"),
-                    data[participant_id].get("physical_activity_record_count", "None"),
+                    data[participant_id].get("physical_activity_num_days", "None"),
                     data[participant_id].get("average_physical_activity", "None"),
                     data[participant_id].get("active_calories_filepath", "None"),
                     data[participant_id].get("active_calories_record_count", "None"),
