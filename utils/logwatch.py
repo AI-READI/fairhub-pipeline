@@ -1,4 +1,5 @@
 import requests
+import contextlib
 import config
 from colorama import just_fix_windows_console, Fore, Back, Style
 
@@ -51,40 +52,47 @@ class Logwatch:
         """Send an info message to the logwatch server"""
         if self.print:
             print(Fore.CYAN + message + Style.RESET_ALL)
-        requests.post(self.drain, json={"level": "info", "message": message})
+        with contextlib.suppress(Exception):
+            requests.post(self.drain, json={"level": "info", "message": message})
 
     def error(self, message: str):
         """Send an error message to the logwatch server"""
         if self.print:
             print(Fore.RED + message + Style.RESET_ALL)
-        requests.post(self.drain, json={"level": "error", "message": message})
+        with contextlib.suppress(Exception):
+            requests.post(self.drain, json={"level": "error", "message": message})
 
     def warn(self, message: str):
         """Send a warning message to the logwatch server"""
         if self.print:
             print(Fore.YELLOW + message + Style.RESET_ALL)
-        requests.post(self.drain, json={"level": "warning", "message": message})
+        with contextlib.suppress(Exception):
+            requests.post(self.drain, json={"level": "warning", "message": message})
 
     def debug(self, message: str):
         """Send a debug message to the logwatch server"""
         if self.print:
             print(Fore.BLUE + message + Style.RESET_ALL)
-        requests.post(self.drain, json={"level": "debug", "message": message})
+        with contextlib.suppress(Exception):
+            requests.post(self.drain, json={"level": "debug", "message": message})
 
     def critical(self, message: str):
         """Send a critical message to the logwatch server"""
         if self.print:
             print(Back.RED + Fore.WHITE + message + Style.RESET_ALL)
-        requests.post(self.drain, json={"level": "critical", "message": message})
+        with contextlib.suppress(Exception):
+            requests.post(self.drain, json={"level": "critical", "message": message})
 
     def trace(self, message: str):
         """Send a trace message to the logwatch server"""
         if self.print:
             print(Style.DIM + message + Style.RESET_ALL)
-        requests.post(self.drain, json={"level": "trace", "message": message})
+        with contextlib.suppress(Exception):
+            requests.post(self.drain, json={"level": "trace", "message": message})
 
     def time(self, message: str):
         """Send a time message to the logwatch server"""
         if self.print:
             print(Back.GREEN + Fore.WHITE + message + Style.RESET_ALL)
-        requests.post(self.drain, json={"level": "time", "message": message})
+        with contextlib.suppress(Exception):
+            requests.post(self.drain, json={"level": "time", "message": message})
