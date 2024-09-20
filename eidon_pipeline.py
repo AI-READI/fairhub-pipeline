@@ -271,11 +271,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     filelist = imaging_utils.get_filtered_file_names(folder)
 
                     for file in filelist:
-                        full_file_path = imaging_utils.format_file(
+                        if full_file_path := imaging_utils.format_file(
                             file, destination_folder
-                        )
-
-                        eidon_instance.metadata(full_file_path, metadata_folder)
+                        ):
+                            eidon_instance.metadata(full_file_path, metadata_folder)
             except Exception:
                 logger.error(f"Failed to format {file_name}")
 
@@ -322,12 +321,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             file_path=output_file_path
                         )
 
-                        # Check if the file already exists. If it does, throw an exception
-                        if output_file_client.exists():
-                            raise Exception(
-                                f"File {output_file_path} already exists. Throwing exception"
-                            )
-
                         with open(f"{full_file_path}", "rb") as data:
                             output_file_client.upload_data(data, overwrite=True)
 
@@ -369,12 +362,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         output_file_client = file_system_client.get_file_client(
                             file_path=output_file_path
                         )
-
-                        # Check if the file already exists in the output folder
-                        if output_file_client.exists():
-                            raise Exception(
-                                f"File {output_file_path} already exists. Throwing exception"
-                            )
 
                         with open(full_file_path, "rb") as f:
                             output_file_client.upload_data(f, overwrite=True)

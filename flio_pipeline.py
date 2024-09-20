@@ -272,11 +272,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             try:
                 for file_name in filtered_list:
                     if "flio" in file_name:
-                        full_file_path = imaging_utils.format_file(
+                        if full_file_path := imaging_utils.format_file(
                             file_name, step5_folder
-                        )
-
-                        flio_instance.metadata(full_file_path, metadata_folder)
+                        ):
+                            flio_instance.metadata(full_file_path, metadata_folder)
             except Exception:
                 logger.error(f"Failed to format {file_name}")
 
@@ -332,12 +331,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             output_file_path
                         )
 
-                        # Check if the file already exists. If it does, throw an exception
-                        if output_file_client.exists():
-                            raise Exception(
-                                f"File {output_file_path} already exists. Throwing exception"
-                            )
-
                         with open(full_file_path, "rb") as f:
                             output_file_client.upload_data(f, overwrite=True)
                             logger.info(f"Uploaded {combined_file_name}")
@@ -379,12 +372,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         logger.debug(
                             f"Uploading {full_file_path} to {processed_metadata_output_folder}"
                         )
-
-                        # Check if the file already exists in the output folder
-                        if output_file_client.exists():
-                            raise Exception(
-                                f"File {output_file_path} already exists. Throwing exception"
-                            )
 
                         with open(full_file_path, "rb") as f:
                             output_file_client.upload_data(f, overwrite=True)

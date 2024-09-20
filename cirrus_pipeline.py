@@ -274,6 +274,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 logger.time(time_estimator.step())
                 continue
 
+            for root, dirs, files in os.walk(step3_folder):
+                for file in files:
+                    full_file_path = os.path.join(root, file)
+
+                    print(full_file_path)
+
             logger.info(f"Organized {file_name}")
 
             file_item["organize_error"] = False
