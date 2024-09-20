@@ -38,13 +38,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     ignore_file = f"{study_id}/ignore/cirrus.ignore"
     participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
-    dev_allowed_list = [
-        "UAB_Cirrus_20231201-20231231_1.fda.zip",
-        "UAB_Cirrus_20231201-20231231_2.fda.zip",
-        "UAB_Cirrus_20231201-20231231_3.fda.zip",
-        "UAB_Cirrus_20231201-20231231_4.fda.zip",
-    ]
-
     logger = logging.Logwatch("cirrus", print=True)
 
     # Get the list of blobs in the input folder
@@ -129,9 +122,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         t = str(path.name)
 
         file_name = t.split("/")[-1]
-
-        if file_name not in dev_allowed_list:
-            continue
 
         # Check if the item is an .fda.zip file
         if not file_name.endswith(".fda.zip"):

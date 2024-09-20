@@ -842,17 +842,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 workflow_input_files, workflow_output_files
             )
 
-            logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
-
-            try:
-                file_processor.upload_json()
-                logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
-            except Exception as e:
-                logger.error(
-                    f"Failed to upload file map to {dependency_folder}/file_map.json"
-                )
-                raise e
-
             logger.time(time_estimator.step())
 
     file_processor.delete_out_of_date_output_files()
