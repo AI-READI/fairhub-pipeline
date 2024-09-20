@@ -195,13 +195,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
-            logger.time(time_estimator.step())
-
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
             logger.debug(f"Skipping {path} - File has not been modified")
 
+            logger.time(time_estimator.step())
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -325,26 +324,26 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.debug("Formatting files and generating metadata")
 
-            for device_folder in device_list:
-                file_list = imaging_utils.get_filtered_file_names(device_folder)
+            try:
+                for device_folder in device_list:
+                    file_list = imaging_utils.get_filtered_file_names(device_folder)
 
-                try:
                     for file in file_list:
                         if full_file_path := imaging_utils.format_file(
                             file, destination_folder
                         ):
                             maestro2_instance.metadata(full_file_path, metadata_folder)
-                except Exception:
-                    file_item["format_error"] = True
-                    logger.error(f"Failed to format {file_name}")
+            except Exception:
+                file_item["format_error"] = True
+                logger.error(f"Failed to format {file_name}")
 
-                    error_exception = "".join(format_exc().splitlines())
+                error_exception = "".join(format_exc().splitlines())
 
-                    logger.error(error_exception)
-                    file_processor.append_errors(error_exception, path)
+                logger.error(error_exception)
+                file_processor.append_errors(error_exception, path)
 
-                    logger.time(time_estimator.step())
-                    continue
+                logger.time(time_estimator.step())
+                continue
 
             logger.info(f"Formatted {file_name}")
 

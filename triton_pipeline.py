@@ -321,28 +321,26 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.debug("Formatting files and generating metadata")
 
-            for device_folder in device_list:
-                file_list = imaging_utils.get_filtered_file_names(device_folder)
+            try:
+                for device_folder in device_list:
+                    file_list = imaging_utils.get_filtered_file_names(device_folder)
 
-                for file_name in file_list:
+                    for file in file_list:
+                        if full_file_path := imaging_utils.format_file(
+                            file, destination_folder
+                        ):
+                            triton_instance.metadata(full_file_path, metadata_folder)
+            except Exception:
+                file_item["format_error"] = True
+                logger.error(f"Failed to format {file_name}")
 
-                    try:
-                        full_file_path = imaging_utils.format_file(
-                            file_name, destination_folder
-                        )
+                error_exception = "".join(format_exc().splitlines())
 
-                        triton_instance.metadata(full_file_path, metadata_folder)
-                    except Exception:
-                        file_item["format_error"] = True
-                        logger.error(f"Failed to format {file_name}")
+                logger.error(error_exception)
+                file_processor.append_errors(error_exception, path)
 
-                        error_exception = "".join(format_exc().splitlines())
-
-                        logger.error(error_exception)
-                        file_processor.append_errors(error_exception, path)
-
-                        logger.time(time_estimator.step())
-                        continue
+                logger.time(time_estimator.step())
+                continue
 
             logger.info(f"Formatted {file_name}")
             file_item["processed"] = True
@@ -379,12 +377,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         output_file_client = file_system_client.get_file_client(
                             file_path=output_file_path
                         )
-
-                        # Check if the file already exists. If it does, throw an exception
-                        if output_file_client.exists():
-                            raise Exception(
-                                f"File {output_file_path} already exists. Throwing exception"
-                            )
 
                         with open(f"{full_file_path}", "rb") as data:
                             output_file_client.upload_data(data, overwrite=True)
@@ -428,11 +420,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         output_file_client = file_system_client.get_file_client(
                             file_path=output_file_path
                         )
-                        # Check if the file already exists in the output folder
-                        if output_file_client.exists():
-                            raise Exception(
-                                f"File {output_file_path} already exists. Throwing exception"
-                            )
 
                         with open(full_file_path, "rb") as f:
                             output_file_client.upload_data(f, overwrite=True)
