@@ -704,11 +704,8 @@ modality_folder_mapping = {
 
 cirrus_modality_folder_mapping = {
     "ir_": "retinal_photography",
-    "segmentation": "retinal_oct",
+    "segmentation": "retinal_octa",
     "enface_projection": "retinal_octa",
-    "enface_projection": "retinal_octa",
-    "enface_structural": "retinal_oct",
-    "enface_structural": "retinal_oct",
     "enface_l": "retinal_octa",
     "enface_r": "retinal_octa",
     "_oct_oct_": "retinal_oct",
@@ -721,8 +718,6 @@ cirrus_submodality_folder_mapping = {
     "_oct_oct_": "oct_structural_scan",
     "_octa_oct_": "oct_structural_scan",
     "flow_cube": "flow_cube",
-    "enface_structural": "structural_enface",
-    "enface_structural": "structural_enface",
     "segmentation": "segmentation",
     "enface_projection": "enface",
     "enface_l": "enface",
@@ -878,92 +873,104 @@ def format_file(file, output):
         full_file_path = os.path.join(full_dir_path, filename)
         shutil.copy(file, full_file_path)
     else:
-        id = find_id(str(dataset.PatientID), str(dataset.PatientName))
-
-        if id == "noid":
-            full_dir_path = output + "/missing_critical_info/no_id/"
+        try:
+            # Check if dataset has pixel data
+            pixel = dataset.pixel_array
+        except Exception:
+            # Handle case where pixel_array is not available
+            full_dir_path = output + "/error_pixel_data/"
             os.makedirs(full_dir_path, exist_ok=True)
             filename = os.path.basename(file)
             full_file_path = os.path.join(full_dir_path, filename)
-            dataset.save_as(full_file_path)
+            shutil.copy(file, full_file_path)
 
         else:
-            uid = dataset.SOPInstanceUID
+            id = find_id(str(dataset.PatientID), str(dataset.PatientName))
 
-            dataset.PatientID = id
-            dataset.PatientName = ""
-            dataset.PatientSex = "M"
-            dataset.PatientBirthDate = ""
-
-            if "cirrus" in file:
-                dataset.ProtocolName = dataset.ProtocolName
-
-            else:
-                protocol = get_description(file, protocol_mapping)
-                dataset.ProtocolName = protocol
-
-            laterality = dataset.ImageLaterality.lower()
-            patientid = id
-
-            modality = get_description(file, name_mapping)
-
-            submodality = ""
-
-            if "maestro2" in file or "triton" in file:
-
-                submodality = topcon_submodality(file)
-                submodality = f"{submodality}"
-                filename = f"{id}_{modality}_{submodality}_{laterality}_{uid}.dcm"
-
-            elif "cirrus" in file:
-                submodality = get_description(file, cirrus_submodality_mapping)
-                # n = f"{n}"
-                submodality = f"{submodality}"
-
-                filename = f"{id}_{modality}_{submodality}_{laterality}_{uid}.dcm"
-
-            elif "flio" in file:
-                submodality = next(
-                    (
-                        submodality
-                        for submodality in ["short_wavelength", "long_wavelength"]
-                        if submodality in file
-                    ),
-                    "unknown_submodality",
-                )
-                filename = f"{id}_{modality}_{submodality}_{laterality}_{uid}.dcm"
+            if id == "noid":
+                full_dir_path = output + "/missing_critical_info/no_id/"
+                os.makedirs(full_dir_path, exist_ok=True)
+                filename = os.path.basename(file)
+                full_file_path = os.path.join(full_dir_path, filename)
+                dataset.save_as(full_file_path)
 
             else:
-                filename = f"{id}_{modality}_{laterality}_{uid}.dcm"
+                uid = dataset.SOPInstanceUID
 
-            if "cirrus" in filename:
-                modality_folder = get_description(
-                    filename, cirrus_modality_folder_mapping
+                dataset.PatientID = id
+                dataset.PatientName = ""
+                dataset.PatientSex = "M"
+                dataset.PatientBirthDate = ""
+
+                if "cirrus" in file:
+                    dataset.ProtocolName = dataset.ProtocolName
+
+                else:
+                    protocol = get_description(file, protocol_mapping)
+                    dataset.ProtocolName = protocol
+
+                laterality = dataset.ImageLaterality.lower()
+                patientid = id
+
+                modality = get_description(file, name_mapping)
+
+                submodality = ""
+
+                if "maestro2" in file or "triton" in file:
+
+                    submodality = topcon_submodality(file)
+                    submodality = f"{submodality}"
+                    filename = f"{id}_{modality}_{submodality}_{laterality}_{uid}.dcm"
+
+                elif "cirrus" in file:
+                    submodality = get_description(file, cirrus_submodality_mapping)
+                    # n = f"{n}"
+                    submodality = f"{submodality}"
+
+                    filename = f"{id}_{modality}_{submodality}_{laterality}_{uid}.dcm"
+
+                elif "flio" in file:
+                    submodality = next(
+                        (
+                            submodality
+                            for submodality in ["short_wavelength", "long_wavelength"]
+                            if submodality in file
+                        ),
+                        "unknown_submodality",
+                    )
+                    filename = f"{id}_{modality}_{submodality}_{laterality}_{uid}.dcm"
+
+                else:
+                    filename = f"{id}_{modality}_{laterality}_{uid}.dcm"
+
+                if "cirrus" in filename:
+                    modality_folder = get_description(
+                        filename, cirrus_modality_folder_mapping
+                    )
+                    submodality_folder = get_description(
+                        filename, cirrus_submodality_folder_mapping
+                    )
+                    device_folder = get_description(filename, device_folder_mapping)
+                else:
+                    modality_folder = get_description(filename, modality_folder_mapping)
+                    submodality_folder = get_description(
+                        filename, submodality_folder_mapping
+                    )
+                    device_folder = get_description(filename, device_folder_mapping)
+
+                folderpath = (
+                    f"/{modality_folder}/{submodality_folder}/{device_folder}/{id}/"
                 )
-                submodality_folder = get_description(
-                    filename, cirrus_submodality_folder_mapping
-                )
-                device_folder = get_description(filename, device_folder_mapping)
-            else:
-                modality_folder = get_description(filename, modality_folder_mapping)
-                submodality_folder = get_description(
-                    filename, submodality_folder_mapping
-                )
-                device_folder = get_description(filename, device_folder_mapping)
 
-            folderpath = (
-                f"/{modality_folder}/{submodality_folder}/{device_folder}/{id}/"
-            )
+                full_dir_path = output + folderpath
 
-            full_dir_path = output + folderpath
+                os.makedirs(full_dir_path, exist_ok=True)
 
-            os.makedirs(full_dir_path, exist_ok=True)
+                full_file_path = os.path.join(full_dir_path, filename)
 
-            full_file_path = os.path.join(full_dir_path, filename)
+                dataset.save_as(full_file_path)
 
-            dataset.save_as(full_file_path)
-
-            return full_file_path
+                return full_file_path
 
 
 def update_pydicom_dicom_dictionary(file_path):

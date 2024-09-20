@@ -454,6 +454,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         file_processor.append_errors(error_exception, path)
                         continue
 
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
+
             logger.info(f"Uploaded metadata for {file_name}")
 
             # Add the new output files to the file map

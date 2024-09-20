@@ -337,10 +337,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         logger.error(f"Failed to upload {combined_file_name}")
 
                         error_exception = "".join(format_exc().splitlines())
-
                         logger.error(error_exception)
-                        file_processor.append_errors(error_exception, path)
 
+                        file_processor.append_errors(error_exception, path)
                         continue
 
                     file_item["output_files"].append(output_file_path)
@@ -392,6 +391,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                         file_processor.append_errors(error_exception, path)
                         continue
+
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
 
             logger.info(f"Uploaded metadata for {file_name}")
 

@@ -96,6 +96,19 @@ def filter_cirrus_files(folder, output):
                                 new_filename = (
                                     f"{protocol}_{patientid}_{laterality}_{file}"
                                 )
+                                if (
+                                    "StructuralEnface" in new_filename
+                                    or (
+                                        "512x128" in new_filename
+                                        and "Seg.dcm" in new_filename
+                                    )
+                                    or (
+                                        "200x200" in new_filename
+                                        and "Seg.dcm" in new_filename
+                                    )
+                                ):
+                                    continue  # Skip this file and move to the next one
+
                                 destination = os.path.join(outputfolder, new_filename)
 
                                 # Copy the file

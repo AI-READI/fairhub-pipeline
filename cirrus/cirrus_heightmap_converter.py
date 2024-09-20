@@ -103,7 +103,7 @@ class ZeissSegmentationConverter:
         """
         # Initialize the transformed data array
         self.final_array = np.zeros(
-            (2, self.pixel_array.shape[0], self.pixel_array.shape[2]), dtype=float
+            (2, self.pixel_array.shape[0], self.pixel_array.shape[2]), dtype=np.float32
         )
 
         # Populate the final array using the change_indices_dict
@@ -150,6 +150,24 @@ def get_heightmap_float_pixel_data(seg_file):
     pixel_array = converter.zeiss_segmentation_to_heightmap()
     floatpixeldata = pixel_array.tobytes()
     return floatpixeldata
+
+
+def get_heightmap_array(seg_file):
+    """
+    Convert the segmentation data from a Zeiss OCT DICOM file to a heightmap and return the pixel data in byte format.
+
+    This function uses the ZeissSegmentationConverter class to process the segmentation file
+    and extract heightmap data, then converts this data to byte format for further use.
+
+    Args:
+        seg_file (str): Path to the Zeiss OCT segmentation DICOM file.
+
+    Returns:
+        bytes: The heightmap pixel data in byte format.
+    """
+    converter = ZeissSegmentationConverter(segmentation_file=seg_file)
+    pixel_array = converter.zeiss_segmentation_to_heightmap()
+    return pixel_array
 
 
 KEEP = 0
@@ -375,8 +393,8 @@ class Map:
         self.mappedtags = mappedtags
 
 
-maestro_octa = MappingRule(
-    "maestro_octs",
+cirrus_octa = MappingRule(
+    "cirrus_octs",
     [
         Map("Rows", "00280010", "OCT", "NumberOfFrames", ["00280008"]),
         Map("Columns", "00280011", "OCT", "Columns", ["00280011"]),
@@ -470,19 +488,20 @@ heightmap = ConversionRule(
         Element("ContentTime", "00080033", "TM"),
         Element("NumberOfFrames", "00280008", "IS", HARMONIZE, 2),
         Element(
-            "SamplePerPixel", "00280002", "US", DESIGNATE, 0, ["00280002", maestro_octa]
+            "SamplePerPixel", "00280002", "US", DESIGNATE, 0, ["00280002", cirrus_octa]
         ),
-        Element("Rows", "00280010", "US", DESIGNATE, 0, ["00280010", maestro_octa]),
+        Element("Rows", "00280010", "US", DESIGNATE, 0, ["00280010", cirrus_octa]),
         Element(
             "PhotometricInterpretation",
             "00280004",
             "CS",
             DESIGNATE,
             0,
-            ["00280004", maestro_octa],
+            ["00280004", cirrus_octa],
         ),
-        Element("Columns", "00280011", "US", DESIGNATE, 0, ["00280011", maestro_octa]),
+        Element("Columns", "00280011", "US", DESIGNATE, 0, ["00280011", cirrus_octa]),
         Element("BitsAllocated", "00280100", "US", HARMONIZE, 32),
+        # Element("BitsStored", "00280101", "US", HARMONIZE, 8),
         # Element("FloatPixelPaddingValue", "00280122", "FL"),
         # Element("FloatPixelPaddingRangeLimit", "00280124", "FL",),
         Element("ImageType", "00080008", "CS", HARMONIZE, "DERIVED PRIMARY"),
@@ -714,7 +733,7 @@ def extract_dicom_dict(file, tags):
             "vr": "UI",
             "Value": [dataset.file_meta.MediaStorageSOPInstanceUID],
         },
-        "00020010": {"vr": "UI", "Value": [dataset.file_meta.TransferSyntaxUID]},
+        "00020010": {"vr": "UI", "Value": [pydicom.uid.ExplicitVRLittleEndian]},
         "00020012": {"vr": "UI", "Value": [dataset.file_meta.ImplementationClassUID]},
         "00020013": {
             "vr": "SH",
@@ -806,8 +825,17 @@ def write_dicom(protocol, seg_dic, oct_dic, op_dic, seg_file, oct_file, file_pat
         )
         setattr(dataset, element_name, value)
 
+    pixel_array = get_heightmap_array(seg_file)
+    dataset.Rows = pixel_array.shape[1]
+    dataset.Columns = pixel_array.shape[2]
+    dataset.NumberOfFrames = pixel_array.shape[0]
+    dataset.FloatPixelData = pixel_array.tobytes()
+    dataset.SamplesPerPixel = 1
+    dataset.BitsAllocated = 32
+    dataset.PhotometricInterpretation = "MONOCHROME2"
     dataset.is_little_endian = seg_dic[1][0]
     dataset.is_implicit_VR = seg_dic[1][1]
+
     dataset.FloatPixelData = get_heightmap_float_pixel_data(seg_file)
 
     shared_functional_group_sequence(dataset, seg_dic, oct_dic, op_dic)

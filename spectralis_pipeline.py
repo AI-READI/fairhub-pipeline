@@ -423,8 +423,11 @@ def pipeline(
                         file_processor.append_errors(error_exception, path)
 
                         continue
-            # Add the new output files to the file map
 
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
+
+            # Add the new output files to the file map
             file_processor.confirm_output_files(
                 path, workflow_output_files, input_last_modified
             )

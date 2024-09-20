@@ -1,7 +1,6 @@
 import os
 import cirrus.cirrus_retinal_photography_converter as cirrus_retinal_photography_converter
 import cirrus.cirrus_enface_converter as cirrus_enface_converter
-import cirrus.cirrus_enface_structural_converter as cirrus_enface_structural_converter
 import cirrus.cirrus_oct_converter as cirrus_oct_converter
 import cirrus.cirrus_heightmap_converter as cirrus_heightmap_converter
 import cirrus.cirrus_volume_converter as cirrus_volume_converter
@@ -31,7 +30,7 @@ def convert_dicom(folder, output):
 
     x = imaging_utils.get_filtered_file_names(folder)
 
-    if len(x) == 15:
+    if len(x) == 11:
 
         struc = imaging_utils.find_string_in_files(x, "Struc.")
         ir = imaging_utils.find_string_in_files(x, "LSO")
@@ -85,20 +84,6 @@ def convert_dicom(folder, output):
                     print(f"An error occurred: {e}")
                 conversion_num += 1
 
-            elif "StructuralEnface" in file:
-                try:
-                    cirrus_enface_structural_converter.convert_dicom(
-                        file,
-                        seg,
-                        struc,
-                        ir,
-                        output,
-                    )
-                except Exception as e:
-
-                    print(f"An error occurred: {e}")
-                conversion_num += 1
-
             else:
                 print("No converter found for the file: ", file)
 
@@ -111,11 +96,10 @@ def convert_dicom(folder, output):
             "Correct number of conversion ": boolean,
         }
 
-    if len(x) == 7:
+    if len(x) == 2:
 
         struc = imaging_utils.find_string_in_files(x, "Struc.")
         ir = imaging_utils.find_string_in_files(x, "LSO")
-        seg = imaging_utils.find_string_in_files(x, "Seg")
 
         conversion_num = 0
         for file in x:
@@ -131,34 +115,6 @@ def convert_dicom(folder, output):
                     cirrus_retinal_photography_converter.convert_dicom(file, output)
                 except Exception as e:
                     print(f"An error occurred: {e}")
-                conversion_num += 1
-
-            elif "Flow" in file:
-                try:
-                    cirrus_volume_converter.convert_dicom(file, output)
-                except Exception as e:
-                    print(f"An error occurred: {e}")
-                conversion_num += 1
-
-            elif "Seg" in file:
-                try:
-                    cirrus_heightmap_converter.convert_dicom(file, struc, ir, output)
-                except Exception as e:
-                    print(f"An error occurred: {e}")
-                conversion_num += 1
-
-            elif "StructuralEnface" in file:
-                try:
-                    cirrus_enface_structural_converter.convert_dicom(
-                        file,
-                        seg,
-                        struc,
-                        ir,
-                        output,
-                    )
-                except Exception as e:
-                    print(f"An error occurred: {e}")
-
                 conversion_num += 1
 
             else:

@@ -382,13 +382,13 @@ def meta_data_save(filename, output_folder):
 
         if dataset.SOPClassUID == "1.2.840.10008.5.1.4.xxxxx.1":
 
-            start_index = filename.find("/retinal_oct")
+            start_index = filename.find("/retinal_octa")
             file = filename[start_index:]
 
             # Extracting metadata
             patient_id = dataset.get("PatientID", "")
 
-            modality = "oct" if "oct/" in file else "unknown_modality"
+            modality = "octa" if "segmentation" in file else "unknown_modality"
 
             sub_modality = next(
                 (
@@ -454,9 +454,11 @@ def meta_data_save(filename, output_folder):
 
             json_data = {filename: dic}
 
-            os.makedirs(f"{output_folder}/retinal_oct", exist_ok=True)
+            os.makedirs(f"{output_folder}/retinal_octa", exist_ok=True)
 
-            with open(f"{output_folder}/retinal_oct/{filename}.json", "w") as json_file:
+            with open(
+                f"{output_folder}/retinal_octa/{filename}.json", "w"
+            ) as json_file:
                 json.dump(json_data, json_file)
 
             return dic

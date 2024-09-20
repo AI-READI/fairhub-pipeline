@@ -454,6 +454,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                         continue
 
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
+
             logger.info(f"Uploaded metadata for {file_name}")
 
             file_processor.confirm_output_files(
