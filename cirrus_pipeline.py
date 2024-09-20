@@ -274,12 +274,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 logger.time(time_estimator.step())
                 continue
 
-            for root, dirs, files in os.walk(step3_folder):
-                for file in files:
-                    full_file_path = os.path.join(root, file)
-
-                    print(full_file_path)
-
             logger.info(f"Organized {file_name}")
 
             file_item["organize_error"] = False
@@ -300,15 +294,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 for protocol in protocols:
                     output_folder_path = os.path.join(step4_folder, device, protocol)
 
-                if not os.path.exists(output_folder_path):
-                    os.makedirs(output_folder_path)
+                    if not os.path.exists(output_folder_path):
+                        os.makedirs(output_folder_path)
 
-                folders = imaging_utils.list_subfolders(
-                    os.path.join(step3_folder, device, protocol)
-                )
+                    folders = imaging_utils.list_subfolders(
+                        os.path.join(step3_folder, device, protocol)
+                    )
 
-                for folder in folders:
-                    cirrus_instance.convert(folder, output_folder_path)
+                    for folder in folders:
+                        cirrus_instance.convert(folder, output_folder_path)
 
             except Exception:
                 logger.error(f"Failed to convert {file_name}")
