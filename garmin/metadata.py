@@ -180,7 +180,7 @@ class GarminManifest:
         """
         Processes sleep JSON files, calculates total and average sleep duration.
         """
-        date_format = "%Y-%m-%dT%H:%M:%SZ"
+        # date_format = "%Y-%m-%dT%H:%M:%SZ"
         for root, dirs, files in sorted(os.walk(directory)):
             dirs.sort()
             for file in sorted(files):

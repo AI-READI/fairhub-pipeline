@@ -153,7 +153,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         patient_id = cleaned_file_name.split("-")[1]
 
         if patient_id not in dev_keep_only_list:
-            print(f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}")
+            print(
+                f"dev- Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+            )
+            continue
 
         # if str(patient_id) not in participant_filter_list:
         #     print(
@@ -797,7 +800,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         raise Exception(throw_exception)
 
                     with open(f_path, "rb") as data:
-                        output_file_client.upload_data(data, overwrite=True)
+                        # output_file_client.upload_data(data, overwrite=True)
 
                         logger.info(
                             f"Uploaded {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
