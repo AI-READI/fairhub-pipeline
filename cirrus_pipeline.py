@@ -335,11 +335,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     filelist = imaging_utils.get_filtered_file_names(device_folder)
 
                     for file in filelist:
-                        full_file_path = imaging_utils.format_file(
+                        if full_file_path := imaging_utils.format_file(
                             file, destination_folder
-                        )
-
-                        if full_file_path:
+                        ):
                             cirrus_instance.metadata(full_file_path, metadata_folder)
 
             except Exception:
