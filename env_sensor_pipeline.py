@@ -271,7 +271,8 @@ def pipeline(
         print("conversion_dict", conversion_dict)
 
         output_file = conversion_dict["output_file"]
-        pid = conversion_dict["r"]["pppp"]
+        # pid = conversion_dict["r"]["pppp"]
+        pid = conversion_dict["participantID"]
 
         if conversion_dict["conversion_success"]:
             meta_dict = env_sensor.metadata(conversion_dict["output_file"])
