@@ -268,6 +268,8 @@ def pipeline(
         data_plot_folder = os.path.join(temp_folder_path, "data_plot")
         os.makedirs(data_plot_folder, exist_ok=True)
 
+        print("conversion_dict", conversion_dict)
+
         output_file = conversion_dict["output_file"]
         pid = conversion_dict["r"]["pppp"]
 
