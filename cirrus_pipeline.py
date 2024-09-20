@@ -38,6 +38,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     ignore_file = f"{study_id}/ignore/cirrus.ignore"
     participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
+    dev_allowed_list = [
+        "UAB_Cirrus_20231201-20231231_1.fda.zip",
+        "UAB_Cirrus_20231201-20231231_2.fda.zip",
+        "UAB_Cirrus_20231201-20231231_3.fda.zip",
+        "UAB_Cirrus_20231201-20231231_4.fda.zip",
+    ]
+
     logger = logging.Logwatch("cirrus", print=True)
 
     # Get the list of blobs in the input folder
@@ -122,6 +129,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         t = str(path.name)
 
         file_name = t.split("/")[-1]
+
+        if file_name not in dev_allowed_list:
+            continue
 
         # Check if the item is an .fda.zip file
         if not file_name.endswith(".fda.zip"):
@@ -329,7 +339,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             file, destination_folder
                         )
 
-                        cirrus_instance.metadata(full_file_path, metadata_folder)
+                        if full_file_path:
+                            cirrus_instance.metadata(full_file_path, metadata_folder)
 
             except Exception:
                 logger.error(f"Failed to format {file_name}")
@@ -382,12 +393,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             file_path=output_file_path
                         )
 
-                        # Check if the file already exists. If it does, throw an exception
-                        if output_file_client.exists():
-                            raise Exception(
-                                f"File {output_file_path} already exists. Throwing exception"
-                            )
-
                         with open(full_file_path, "rb") as f:
                             output_file_client.upload_data(f, overwrite=True)
 
@@ -430,12 +435,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         output_file_client = file_system_client.get_file_client(
                             file_path=output_file_path
                         )
-
-                        # Check if the file already exists in the output folder
-                        if output_file_client.exists():
-                            raise Exception(
-                                f"File {output_file_path} already exists. Throwing exception"
-                            )
 
                         with open(full_file_path, "rb") as f:
                             output_file_client.upload_data(f, overwrite=True)
