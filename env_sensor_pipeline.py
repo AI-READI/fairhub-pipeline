@@ -172,9 +172,7 @@ def pipeline(
         # get the file name from the path
         file_name = path.split("/")[-1]
 
-        should_file_be_ignored = file_processor.is_file_ignored(file_name, path)
-
-        if should_file_be_ignored:
+        if file_processor.is_file_ignored(file_name, path):
             logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
             continue
 

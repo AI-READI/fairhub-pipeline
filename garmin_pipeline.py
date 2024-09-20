@@ -79,6 +79,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     )
     participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
+    dev_keep_only_list = ["1090", "1112", "1118", "1163"]
+
     logger = logging.Logwatch("fitness_tracker", print=True)
 
     # Get the list of blobs in the input folder
@@ -150,11 +152,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         patient_id = cleaned_file_name.split("-")[1]
 
-        if str(patient_id) not in participant_filter_list:
-            print(
-                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
-            )
-            continue
+        if patient_id not in dev_keep_only_list:
+            print(f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}")
+
+        # if str(patient_id) not in participant_filter_list:
+        #     print(
+        #         f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+        #     )
+        #     continue
 
         file_paths.append(
             {
