@@ -4,6 +4,9 @@ import imaging.imaging_maestro2_triton_organize as maestro2_triton_organize
 import imaging.imaging_maestro2_triton_metadata as maestro2_triton_meta
 
 
+# import imaging.maestro2_triton_metadata as maestro2_triton_meta
+
+
 class Maestro2_Triton(DataDomain):
     """
     A class to handle the organization and conversion of Maestro2 Triton DICOM files.

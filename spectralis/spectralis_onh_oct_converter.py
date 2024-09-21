@@ -11,7 +11,6 @@ from spectralis.spectralis_onh_oct_converter_functional_groups import (
     dimension_organization_sequence,
 )
 
-
 KEEP = 0
 BLANK = 1
 HARMONIZE = 2

@@ -3,6 +3,8 @@ import imaging.imaging_flio_converter as flio_conv
 import imaging.imaging_flio_organize as flio_organize
 import imaging.imaging_flio_metadata as flio_meta
 
+# import imaging.flio_retinal_photography_metadata as flio_meta
+
 
 class Flio(DataDomain):
     """

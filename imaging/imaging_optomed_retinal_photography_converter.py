@@ -2,6 +2,7 @@ import os
 import pydicom
 import imaging.imaging_classifying_rules as imaging_classifying_rules
 
+
 KEEP = 0
 BLANK = 1
 HARMONIZE = 2

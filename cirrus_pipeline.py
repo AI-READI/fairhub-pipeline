@@ -175,7 +175,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     time_estimator = TimeEstimator(total_files)
 
     for file_item in file_paths:
-
         path = file_item["file_path"]
 
         workflow_input_files = [path]
