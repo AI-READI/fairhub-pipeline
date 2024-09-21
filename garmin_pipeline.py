@@ -79,7 +79,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     )
     participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
-    dev_keep_only_list = ["1090", "1112", "1118", "1163"]
+    # dev_keep_only_list = ["1090", "1112", "1118", "1163"]
+    dev_keep_only_list = ["1090", "1091"]
 
     logger = logging.Logwatch("fitness_tracker", print=True)
 
@@ -350,7 +351,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     except Exception:
                         logger.error(
-                            f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files})"
+                            f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
                         )
                         error_exception = format_exc()
                         error_exception = "".join(error_exception.splitlines())
@@ -800,7 +801,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         raise Exception(throw_exception)
 
                     with open(f_path, "rb") as data:
-                        # output_file_client.upload_data(data, overwrite=True)
+                        # if sleep in f_path upload
+                        if "sleep" in f_path:
+                            output_file_client.upload_data(data, overwrite=True)
 
                         logger.info(
                             f"Uploaded {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
@@ -815,7 +818,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     logger.error(error_exception)
 
                     file_processor.append_errors(error_exception, patient_folder_path)
-
                     continue
 
                 patient_folder["output_files"].append(output_file_path)

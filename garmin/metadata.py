@@ -198,6 +198,8 @@ class GarminManifest:
                                         "time_interval"
                                     ]["start_date_time"],
                                 )
+                                print("sleep sorted length is", len(sleep_sorted))
+
                                 total_sleep_duration = 0
                                 for item in sleep_sorted:
                                     start_time = datetime.strptime(
