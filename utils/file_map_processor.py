@@ -53,8 +53,18 @@ class FileMapProcessor:
                 # Read the ignore file
                 with open(ignore_file_download_path, "r") as f:
                     self.ignore_files = f.readlines()
+
             # Save trimmed file names
             self.ignore_files = [x.strip() for x in self.ignore_files]
+
+            # Remove empty lines
+            self.ignore_files = [x for x in self.ignore_files if x]
+
+            # Remove duplicates
+            self.ignore_files = list(set(self.ignore_files))
+
+            # Remove any that start with a '#'
+            self.ignore_files = [x for x in self.ignore_files if not x.startswith("#")]
 
         shutil.rmtree(self.meta_temp_folder_path)
 
