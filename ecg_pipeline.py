@@ -172,181 +172,181 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Processing {path}")
 
-        download_path = os.path.join(temp_folder_path, original_file_name)
+        with tempfile.TemporaryDirectory(prefix="ecg_pipeline_") as temp_folder_path:
+            raw_data_folder = os.path.join(temp_folder_path, "raw_data")
+            os.makedirs(raw_data_folder, exist_ok=True)
 
-        with open(file=download_path, mode="wb") as f:
-            f.write(file_client.download_file().readall())
+            download_path = os.path.join(raw_data_folder, original_file_name)
 
-        logger.info(f"Downloaded {original_file_name} to {download_path}")
+            with open(file=download_path, mode="wb") as f:
+                f.write(file_client.download_file().readall())
 
-        ecg_path = download_path
+            logger.info(f"Downloaded {original_file_name} to {download_path}")
 
-        ecg_temp_folder_path = tempfile.mkdtemp()
-        wfdb_temp_folder_path = tempfile.mkdtemp()
+            ecg_path = download_path
 
-        xecg = ecg.ECG()
+            ecg_temp_folder_path = os.path.join(temp_folder_path, "ecg_temp")
+            wfdb_temp_folder_path = os.path.join(temp_folder_path, "wfdb_temp")
 
-        logger.debug(f"Converting {original_file_name}")
+            xecg = ecg.ECG()
 
-        try:
-            conv_retval_dict = xecg.convert(
-                ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
-            )
+            logger.debug(f"Converting {original_file_name}")
 
-            participant_id = conv_retval_dict["participantID"]
-
-            if participant_id not in participant_filter_list:
-                logger.warn(
-                    f"Participant ID {participant_id} not in the allowed list. Skipping {original_file_name}"
+            try:
+                conv_retval_dict = xecg.convert(
+                    ecg_path, ecg_temp_folder_path, wfdb_temp_folder_path
                 )
 
-                file_processor.append_errors(
-                    f"Participant ID {participant_id} not in the allowed list",
-                    path,
-                )
+                participant_id = conv_retval_dict["participantID"]
+
+                if participant_id not in participant_filter_list:
+                    logger.warn(
+                        f"Participant ID {participant_id} not in the allowed list. Skipping {original_file_name}"
+                    )
+
+                    file_processor.append_errors(
+                        f"Participant ID {participant_id} not in the allowed list",
+                        path,
+                    )
+
+                    logger.time(time_estimator.step())
+                    continue
+
+                logger.info(f"Converted {original_file_name}")
+            except Exception:
+                logger.error(f"Failed to convert {original_file_name}")
+                error_exception = format_exc()
+                e = "".join(error_exception.splitlines())
+
+                logger.error(e)
+
+                file_processor.append_errors(e, path)
 
                 logger.time(time_estimator.step())
                 continue
 
-            logger.info(f"Converted {original_file_name}")
-        except Exception:
-            logger.error(f"Failed to convert {original_file_name}")
-            error_exception = format_exc()
-            e = "".join(error_exception.splitlines())
+            file_item["convert_error"] = False
+            file_item["processed"] = True
 
-            logger.error(e)
+            logger.debug(f"Converted {original_file_name}")
 
-            file_processor.append_errors(e, path)
+            output_files = conv_retval_dict["output_files"]
+            participant_id = conv_retval_dict["participantID"]
 
-            logger.time(time_estimator.step())
-            continue
+            logger.debug(
+                f"Uploading outputs of {original_file_name} to {processed_data_output_folder}"
+            )
 
-        file_item["convert_error"] = False
-        file_item["processed"] = True
+            # file is in the format 1001_ecg_25aafb4b.dat
 
-        logger.debug(f"Converted {original_file_name}")
+            workflow_output_files = []
 
-        output_files = conv_retval_dict["output_files"]
-        participant_id = conv_retval_dict["participantID"]
+            outputs_uploaded = True
+            upload_exception = ""
 
-        logger.debug(
-            f"Uploading outputs of {original_file_name} to {processed_data_output_folder}"
-        )
+            file_processor.delete_preexisting_output_files(path)
 
-        # file is in the format 1001_ecg_25aafb4b.dat
+            for file in output_files:
+                with open(f"{file}", "rb") as data:
+                    file_name2 = file.split("/")[-1]
 
-        workflow_output_files = []
+                    output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name2}"
 
-        outputs_uploaded = True
-        upload_exception = ""
+                    try:
+                        output_file_client = file_system_client.get_file_client(
+                            file_path=output_file_path
+                        )
 
-        file_processor.delete_preexisting_output_files(path)
+                        # Check if the file already exists. If it does, throw an exception
+                        if output_file_client.exists():
+                            raise Exception(
+                                f"File {output_file_path} already exists. Throwing exception"
+                            )
 
-        for file in output_files:
-            with open(f"{file}", "rb") as data:
-                file_name2 = file.split("/")[-1]
+                        output_file_client.upload_data(data, overwrite=True)
+                    except Exception:
+                        logger.error(f"Failed to upload {file}")
+                        error_exception = format_exc()
+                        e = "".join(error_exception.splitlines())
 
-                output_file_path = f"{processed_data_output_folder}/ecg_12lead/philips_tc30/{participant_id}/{file_name2}"
+                        logger.error(e)
 
-                try:
+                        outputs_uploaded = False
+
+                        file_processor.append_errors(e, path)
+
+                        continue
+
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
+
+            # Add the new output files to the file map
+            file_processor.confirm_output_files(
+                path, workflow_output_files, input_last_modified
+            )
+
+            if outputs_uploaded:
+                file_item["output_uploaded"] = True
+                file_item["status"] = "success"
+                logger.info(
+                    f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
+                )
+            else:
+                file_item["output_uploaded"] = upload_exception
+                logger.error(
+                    f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
+                )
+
+            workflow_file_dependencies.add_dependency(
+                workflow_input_files, workflow_output_files
+            )
+
+            # Do the data plot
+            logger.debug(f"Data plotting {original_file_name}")
+
+            dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
+
+            logger.debug(f"Data plotted {original_file_name}")
+
+            dataplot_pngs = dataplot_retval_dict["output_files"]
+
+            logger.debug(f"Uploading {original_file_name} to {data_plot_output_folder}")
+
+            for file in dataplot_pngs:
+                with open(f"{file}", "rb") as data:
+                    original_file_name = file.split("/")[-1]
+
+                    output_file_path = f"{data_plot_output_folder}/{original_file_name}"
+
                     output_file_client = file_system_client.get_file_client(
                         file_path=output_file_path
                     )
 
-                    # Check if the file already exists. If it does, throw an exception
-                    if output_file_client.exists():
-                        raise Exception(
-                            f"File {output_file_path} already exists. Throwing exception"
-                        )
-
                     output_file_client.upload_data(data, overwrite=True)
-                except Exception:
-                    logger.error(f"Failed to upload {file}")
-                    error_exception = format_exc()
-                    e = "".join(error_exception.splitlines())
 
-                    logger.error(e)
+            logger.debug(f"Uploaded {original_file_name} to {data_plot_output_folder}")
 
-                    outputs_uploaded = False
+            # Create the file metadata
 
-                    file_processor.append_errors(e, path)
+            logger.debug(f"Creating metadata for {original_file_name}")
 
-                    continue
+            # Generate the metadata
 
-                file_item["output_files"].append(output_file_path)
-                workflow_output_files.append(output_file_path)
+            output_hea_file = conv_retval_dict["output_hea_file"]
+            output_dat_file = conv_retval_dict["output_dat_file"]
 
-        # Add the new output files to the file map
-        file_processor.confirm_output_files(
-            path, workflow_output_files, input_last_modified
-        )
+            # Check if the file already exists.
+            if os.path.exists(output_hea_file) and os.path.exists(output_dat_file):
+                hea_metadata = xecg.metadata(output_hea_file)
 
-        if outputs_uploaded:
-            file_item["output_uploaded"] = True
-            file_item["status"] = "success"
-            logger.info(
-                f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
-            )
-        else:
-            file_item["output_uploaded"] = upload_exception
-            logger.error(
-                f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
-            )
+                output_hea_file = f"/cardiac_ecg/ecg_12lead/philips_tc30/{participant_id}/{output_hea_file.split('/')[-1]}"
+                output_dat_file = f"/cardiac_ecg/ecg_12lead/philips_tc30/{participant_id}/{output_dat_file.split('/')[-1]}"
 
-        workflow_file_dependencies.add_dependency(
-            workflow_input_files, workflow_output_files
-        )
+                manifest.add_metadata(hea_metadata, output_hea_file, output_dat_file)
 
-        # Do the data plot
-        logger.debug(f"Data plotting {original_file_name}")
+            logger.debug(f"Metadata created for {original_file_name}")
 
-        dataplot_retval_dict = xecg.dataplot(conv_retval_dict, ecg_temp_folder_path)
-
-        logger.debug(f"Data plotted {original_file_name}")
-
-        dataplot_pngs = dataplot_retval_dict["output_files"]
-
-        logger.debug(f"Uploading {original_file_name} to {data_plot_output_folder}")
-
-        for file in dataplot_pngs:
-            with open(f"{file}", "rb") as data:
-                original_file_name = file.split("/")[-1]
-
-                output_file_path = f"{data_plot_output_folder}/{original_file_name}"
-
-                output_file_client = file_system_client.get_file_client(
-                    file_path=output_file_path
-                )
-
-                output_file_client.upload_data(data, overwrite=True)
-
-        logger.debug(f"Uploaded {original_file_name} to {data_plot_output_folder}")
-
-        # Create the file metadata
-
-        logger.debug(f"Creating metadata for {original_file_name}")
-
-        # Generate the metadata
-
-        output_hea_file = conv_retval_dict["output_hea_file"]
-        output_dat_file = conv_retval_dict["output_dat_file"]
-
-        # Check if the file already exists.
-        if os.path.exists(output_hea_file) and os.path.exists(output_dat_file):
-            hea_metadata = xecg.metadata(output_hea_file)
-
-            output_hea_file = f"/cardiac_ecg/ecg_12lead/philips_tc30/{participant_id}/{output_hea_file.split('/')[-1]}"
-            output_dat_file = f"/cardiac_ecg/ecg_12lead/philips_tc30/{participant_id}/{output_dat_file.split('/')[-1]}"
-
-            manifest.add_metadata(hea_metadata, output_hea_file, output_dat_file)
-
-        logger.debug(f"Metadata created for {original_file_name}")
-
-        logger.time(time_estimator.step())
-
-        shutil.rmtree(ecg_temp_folder_path)
-        shutil.rmtree(wfdb_temp_folder_path)
-        os.remove(download_path)
+            logger.time(time_estimator.step())
 
     file_processor.delete_out_of_date_output_files()
 
