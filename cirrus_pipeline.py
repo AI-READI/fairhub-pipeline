@@ -9,6 +9,7 @@ import json
 
 import imaging.imaging_cirrus_root as Cirrus
 import imaging.imaging_utils as imaging_utils
+import cirrus.cirrus_utils as cirrus_utils
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
@@ -118,10 +119,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     paths = file_system_client.get_paths(path=input_folder, recursive=False)
 
+    dev_allowed_list = [
+        "UAB_Cirrus_20231201-20231231_1.fda.zip",
+        "UAB_Cirrus_20231201-20231231_2.fda.zip",
+        "UAB_Cirrus_20231201-20231231_3.fda.zip",
+        "UAB_Cirrus_20231201-20231231_4.fda.zip",
+    ]
+
     for path in paths:
         t = str(path.name)
 
         file_name = t.split("/")[-1]
+
+        if file_name not in dev_allowed_list:
+            continue
 
         # Check if the item is an .fda.zip file
         if not file_name.endswith(".fda.zip"):
@@ -324,7 +335,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     filelist = imaging_utils.get_filtered_file_names(device_folder)
 
                     for file in filelist:
-                        if full_file_path := imaging_utils.format_file(
+                        if full_file_path := cirrus_utils.format_cirrus_file(
                             file, destination_folder
                         ):
                             cirrus_instance.metadata(full_file_path, metadata_folder)
