@@ -797,9 +797,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         raise Exception(throw_exception)
 
                     with open(f_path, "rb") as data:
-                        # if sleep in f_path upload
-                        if "sleep" in f_path:
-                            output_file_client.upload_data(data, overwrite=True)
+                        output_file_client.upload_data(data, overwrite=True)
 
                         logger.info(
                             f"Uploaded {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
