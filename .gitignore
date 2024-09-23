@@ -49,3 +49,5 @@ __azurite_db*__.json
 ecg.log
 .env.swp
 es.log
+
+tcof/

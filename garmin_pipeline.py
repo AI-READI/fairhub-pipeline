@@ -368,6 +368,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
                     continue
 
+            # copy the converted_output_folder to the current directory
+            cwd = os.getcwd()
+            cwdp = os.path.join(cwd, "tcof")
+
+            if not os.path.exists(cwdp):
+                os.makedirs(cwdp)
+
+            shutil.copytree(
+                temp_conversion_output_folder_path, cwdp, dirs_exist_ok=True
+            )
+
             output_files = []
 
             try:
