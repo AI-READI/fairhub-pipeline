@@ -79,9 +79,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     )
     participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
-    # dev_keep_only_list = ["1090", "1112", "1118", "1163"]
-    dev_keep_only_list = ["1090", "1091"]
-
     logger = logging.Logwatch("fitness_tracker", print=True)
 
     # Get the list of blobs in the input folder
@@ -153,17 +150,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         patient_id = cleaned_file_name.split("-")[1]
 
-        if patient_id not in dev_keep_only_list:
+        if str(patient_id) not in participant_filter_list:
             print(
-                f"dev- Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
             )
             continue
-
-        # if str(patient_id) not in participant_filter_list:
-        #     print(
-        #         f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
-        #     )
-        #     continue
 
         file_paths.append(
             {
@@ -273,21 +264,26 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     full_file_path = os.path.join(root, file)
 
                     if "activity" in full_file_path.lower():
-                        total_patient_files += 1
-                        patient_files.append(
-                            {"file_path": full_file_path, "modality": "Activity"}
-                        )
+                        file_extension = full_file_path.split(".")[-1]
+                        if file_extension == "fit":
+                            total_patient_files += 1
+                            patient_files.append(
+                                {"file_path": full_file_path, "modality": "Activity"}
+                            )
                     elif "monitor" in full_file_path.lower():
-                        total_patient_files += 1
-                        patient_files.append(
-                            {"file_path": full_file_path, "modality": "Monitor"}
-                        )
-
+                        file_extension = full_file_path.split(".")[-1]
+                        if file_extension == "FIT":
+                            total_patient_files += 1
+                            patient_files.append(
+                                {"file_path": full_file_path, "modality": "Monitor"}
+                            )
                     elif "sleep" in full_file_path.lower():
-                        total_patient_files += 1
-                        patient_files.append(
-                            {"file_path": full_file_path, "modality": "Sleep"}
-                        )
+                        file_extension = full_file_path.split(".")[-1]
+                        if file_extension == "fit":
+                            total_patient_files += 1
+                            patient_files.append(
+                                {"file_path": full_file_path, "modality": "Sleep"}
+                            )
 
             logger.debug(
                 f"Number of valid files in {temp_input_folder}: {total_patient_files}"
@@ -367,17 +363,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         f"Skipping {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
                     )
                     continue
-
-            # copy the converted_output_folder to the current directory
-            cwd = os.getcwd()
-            cwdp = os.path.join(cwd, "tcof")
-
-            if not os.path.exists(cwdp):
-                os.makedirs(cwdp)
-
-            shutil.copytree(
-                temp_conversion_output_folder_path, cwdp, dirs_exist_ok=True
-            )
 
             output_files = []
 
