@@ -186,7 +186,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             ecg_path = download_path
 
             ecg_temp_folder_path = os.path.join(temp_folder_path, "ecg_temp")
+            os.makedirs(ecg_temp_folder_path, exist_ok=True)
+
             wfdb_temp_folder_path = os.path.join(temp_folder_path, "wfdb_temp")
+            os.makedirs(wfdb_temp_folder_path, exist_ok=True)
 
             xecg = ecg.ECG()
 
