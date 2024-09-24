@@ -155,15 +155,7 @@ def pipeline(
 
     time_estimator = TimeEstimator(total_files)
 
-    for idx, file_item in enumerate(file_paths):
-        log_idx = idx + 1
-
-        # if log_idx == 5:
-        #     break
-
-        # Create a temporary folder on the local machine
-        temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_")
-
+    for file_item in file_paths:
         path = file_item["file_path"]
         patient_folder_name = file_item["patient_folder"]
 
@@ -173,7 +165,7 @@ def pipeline(
         file_name = path.split("/")[-1]
 
         if file_processor.is_file_ignored(file_name, path):
-            logger.info(f"Ignoring {file_name} - ({log_idx}/{total_files})")
+            logger.info(f"Ignoring {file_name}")
             continue
 
         # download the file to the temp folder
@@ -187,174 +179,66 @@ def pipeline(
             logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
-            logger.debug(
-                f"Skipping {path} - ({log_idx}/{total_files}) - File has not been modified"
-            )
+            logger.debug(f"Skipping {path} - File has not been modified")
 
             logger.time(time_estimator.step())
             continue
 
         file_processor.add_entry(path, time.time())
-
         file_processor.clear_errors(path)
 
-        temp_input_folder = os.path.join(temp_folder_path, patient_folder_name)
-        os.makedirs(temp_input_folder, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix="env_sensor_pipeline_"
+        ) as temp_folder_path:
 
-        download_path = os.path.join(temp_folder_path, "raw_data.zip")
+            temp_input_folder = os.path.join(temp_folder_path, patient_folder_name)
+            os.makedirs(temp_input_folder, exist_ok=True)
 
-        logger.debug(
-            f"Downloading {file_name} to {download_path} - ({log_idx}/{total_files})"
-        )
+            download_path = os.path.join(temp_folder_path, "raw_data.zip")
 
-        with open(file=download_path, mode="wb") as f:
-            f.write(input_file_client.download_file().readall())
+            logger.debug(f"Downloading {file_name} to {download_path}")
 
-        logger.info(
-            f"Downloaded {file_name} to {download_path} - ({log_idx}/{total_files})"
-        )
+            with open(file=download_path, mode="wb") as f:
+                f.write(input_file_client.download_file().readall())
 
-        logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
+            logger.info(f"Downloaded {file_name} to {download_path}")
 
-        # unzip the file into the temp folder
-        with zipfile.ZipFile(download_path, "r") as zip_ref:
-            zip_ref.extractall(temp_input_folder)
+            logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
 
-        logger.info(f"Unzipped {download_path} to {temp_input_folder}")
+            # unzip the file into the temp folder
+            with zipfile.ZipFile(download_path, "r") as zip_ref:
+                zip_ref.extractall(temp_input_folder)
 
-        # Count the number of files in the temp_input_folder recursively
-        # One liner form https://stackoverflow.com/questions/16910330/return-total-number-of-files-in-directory-and-subdirectories
-        num_files = sum([len(files) for r, d, files in os.walk(temp_input_folder)])
-        logger.debug(f"Number of files in {temp_input_folder}: {num_files}")
+            logger.info(f"Unzipped {download_path} to {temp_input_folder}")
 
-        files_to_ignore = file_processor.files_to_ignore(temp_folder_path)
+            # Count the number of files in the temp_input_folder recursively
+            # One liner form https://stackoverflow.com/questions/16910330/return-total-number-of-files-in-directory-and-subdirectories
+            num_files = sum([len(files) for r, d, files in os.walk(temp_input_folder)])
+            logger.debug(f"Number of files in {temp_input_folder}: {num_files}")
 
-        # Delete the files that match the ignore pattern
-        for file_to_ignore in files_to_ignore:
-            os.remove(file_to_ignore)
-            logger.debug(f"Deleted {file_to_ignore} due to ignore pattern")
+            files_to_ignore = file_processor.files_to_ignore(temp_folder_path)
 
-        output_folder = os.path.join(temp_folder_path, "output")
-        os.makedirs(output_folder, exist_ok=True)
+            # Delete the files that match the ignore pattern
+            for file_to_ignore in files_to_ignore:
+                os.remove(file_to_ignore)
+                logger.debug(f"Deleted {file_to_ignore} due to ignore pattern")
 
-        env_sensor = es.EnvironmentalSensor()
+            output_folder = os.path.join(temp_folder_path, "output")
+            os.makedirs(output_folder, exist_ok=True)
 
-        logger.debug(f"Converting {patient_folder_name} - ({log_idx}/{total_files})")
+            env_sensor = es.EnvironmentalSensor()
 
-        try:
-            conversion_dict = env_sensor.convert(
-                temp_input_folder,
-                output_folder,
-                visit_file=red_cap_export_file_path,
-            )
-
-        except Exception:
-            logger.error(
-                f"Failed to convert {patient_folder_name} - ({log_idx}/{total_files})"
-            )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, path)
-
-            logger.time(time_estimator.step())
-
-            continue
-
-        logger.info(f"Converted {patient_folder_name} - ({log_idx}/{total_files})")
-
-        data_plot_folder = os.path.join(temp_folder_path, "data_plot")
-        os.makedirs(data_plot_folder, exist_ok=True)
-
-        output_file = conversion_dict["output_file"]
-        # pid = conversion_dict["r"]["pppp"]
-        pid = conversion_dict["participantID"]
-
-        if conversion_dict["conversion_success"]:
-            meta_dict = env_sensor.metadata(conversion_dict["output_file"])
-
-            output_file_path = f"{data_plot_output_folder}/environmental_sensor/leelab_anura/{pid}/{output_file.split('/')[-1]}"
-
-            manifest.add_metadata(meta_dict, output_file_path)
-
-            dataplot_dict = env_sensor.dataplot(conversion_dict, data_plot_folder)
-
-            dataplot_output_file = dataplot_dict["output_file"]
-
-            uploaded_dataplot_output_file = (
-                f"{data_plot_output_folder}/{dataplot_output_file.split('/')[-1]}"
-            )
-
-            dataplot_file_client = file_system_client.get_file_client(
-                file_path=uploaded_dataplot_output_file
-            )
-
-            logger.debug(
-                f"Uploading {dataplot_output_file} to {uploaded_dataplot_output_file}"
-            )
-
-            with open(dataplot_output_file, "rb") as data:
-                dataplot_file_client.upload_data(data, overwrite=True)
-
-            logger.info(
-                f"Uploaded {dataplot_output_file} to {uploaded_dataplot_output_file}"
-            )
-
-        else:
-            logger.error(
-                f"Failed to convert {patient_folder_name} - ({log_idx}/{total_files})"
-            )
-            error_exception = format_exc()
-            error_exception = "".join(error_exception.splitlines())
-
-            logger.error(error_exception)
-
-            file_processor.append_errors(error_exception, path)
-
-            logger.time(time_estimator.step())
-
-            continue
-
-        logger.debug(
-            f"Uploading outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
-        )
-
-        workflow_output_files = []
-
-        outputs_uploaded = True
-
-        file_processor.delete_preexisting_output_files(path)
-
-        with open(f"{output_file}", "rb") as data:
-            f2 = output_file.split("/")[-1]
-
-            output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{pid}/{f2}"
-
-            logger.debug(
-                f"Uploading {output_file} to {output_file_path} - ({log_idx}/{total_files})"
-            )
+            logger.debug(f"Converting {patient_folder_name}")
 
             try:
-                output_file_client = file_system_client.get_file_client(
-                    file_path=output_file_path
+                conversion_dict = env_sensor.convert(
+                    temp_input_folder,
+                    output_folder,
+                    visit_file=red_cap_export_file_path,
                 )
 
-                # Check if the file already exists. If it does, throw an exception
-                if output_file_client.exists():
-                    raise Exception(
-                        f"File {output_file_path} already exists. Throwing exception"
-                    )
-
-                output_file_client.upload_data(data, overwrite=True)
-
-                logger.info(f"Uploaded {output_file_path} - ({log_idx}/{total_files})")
             except Exception:
-                outputs_uploaded = False
-                logger.error(
-                    f"Failed to upload {output_file_path} - ({log_idx}/{total_files})"
-                )
+                logger.error(f"Failed to convert {patient_folder_name}")
                 error_exception = format_exc()
                 error_exception = "".join(error_exception.splitlines())
 
@@ -366,33 +250,122 @@ def pipeline(
 
                 continue
 
-            file_item["output_files"].append(output_file_path)
-            workflow_output_files.append(output_file_path)
+            logger.info(f"Converted {patient_folder_name}")
 
-        file_processor.confirm_output_files(path, workflow_output_files, "")
+            data_plot_folder = os.path.join(temp_folder_path, "data_plot")
+            os.makedirs(data_plot_folder, exist_ok=True)
 
-        if outputs_uploaded:
-            file_item["output_uploaded"] = True
-            file_item["status"] = "success"
-            logger.info(
-                f"Uploaded outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+            output_file = conversion_dict["output_file"]
+            # pid = conversion_dict["r"]["pppp"]
+            pid = conversion_dict["participantID"]
+
+            if conversion_dict["conversion_success"]:
+                meta_dict = env_sensor.metadata(conversion_dict["output_file"])
+
+                output_file_path = f"{data_plot_output_folder}/environmental_sensor/leelab_anura/{pid}/{output_file.split('/')[-1]}"
+
+                manifest.add_metadata(meta_dict, output_file_path)
+
+                dataplot_dict = env_sensor.dataplot(conversion_dict, data_plot_folder)
+
+                dataplot_output_file = dataplot_dict["output_file"]
+
+                uploaded_dataplot_output_file = (
+                    f"{data_plot_output_folder}/{dataplot_output_file.split('/')[-1]}"
+                )
+
+                dataplot_file_client = file_system_client.get_file_client(
+                    file_path=uploaded_dataplot_output_file
+                )
+
+                logger.debug(
+                    f"Uploading {dataplot_output_file} to {uploaded_dataplot_output_file}"
+                )
+
+                with open(dataplot_output_file, "rb") as data:
+                    dataplot_file_client.upload_data(data, overwrite=True)
+
+                logger.info(
+                    f"Uploaded {dataplot_output_file} to {uploaded_dataplot_output_file}"
+                )
+
+            else:
+                logger.error(f"Failed to convert {patient_folder_name}")
+                error_exception = format_exc()
+                error_exception = "".join(error_exception.splitlines())
+
+                logger.error(error_exception)
+
+                file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+
+                continue
+
+            logger.debug(
+                f"Uploading outputs of {patient_folder_name} to {processed_data_output_folder}"
             )
-        else:
-            logger.error(
-                f"Failed to upload outputs of {patient_folder_name} to {processed_data_output_folder} - ({log_idx}/{total_files})"
+
+            workflow_output_files = []
+
+            outputs_uploaded = True
+
+            file_processor.delete_preexisting_output_files(path)
+
+            with open(f"{output_file}", "rb") as data:
+                f2 = output_file.split("/")[-1]
+
+                output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{pid}/{f2}"
+
+                logger.debug(f"Uploading {output_file} to {output_file_path}")
+
+                try:
+                    output_file_client = file_system_client.get_file_client(
+                        file_path=output_file_path
+                    )
+
+                    # Check if the file already exists. If it does, throw an exception
+                    if output_file_client.exists():
+                        raise Exception(
+                            f"File {output_file_path} already exists. Throwing exception"
+                        )
+
+                    output_file_client.upload_data(data, overwrite=True)
+
+                    logger.info(f"Uploaded {output_file_path}")
+                except Exception:
+                    outputs_uploaded = False
+                    logger.error(f"Failed to upload {output_file_path}")
+
+                    error_exception = "".join(format_exc().splitlines())
+
+                    logger.error(error_exception)
+                    file_processor.append_errors(error_exception, path)
+
+                    logger.time(time_estimator.step())
+                    continue
+
+                file_item["output_files"].append(output_file_path)
+                workflow_output_files.append(output_file_path)
+
+            file_processor.confirm_output_files(path, workflow_output_files, "")
+
+            if outputs_uploaded:
+                file_item["output_uploaded"] = True
+                file_item["status"] = "success"
+                logger.info(
+                    f"Uploaded outputs of {patient_folder_name} to {processed_data_output_folder}"
+                )
+            else:
+                logger.error(
+                    f"Failed to upload outputs of {patient_folder_name} to {processed_data_output_folder}"
+                )
+
+            workflow_file_dependencies.add_dependency(
+                workflow_input_files, workflow_output_files
             )
 
-        workflow_file_dependencies.add_dependency(
-            workflow_input_files, workflow_output_files
-        )
-
-        logger.time(time_estimator.step())
-
-        print(f"Cleaning up temp folders - ({log_idx}/{total_files})")
-        shutil.rmtree(data_plot_folder)
-        shutil.rmtree(output_folder)
-        shutil.rmtree(temp_input_folder)
-        shutil.rmtree(temp_folder_path)
+            logger.time(time_estimator.step())
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
@@ -423,57 +396,63 @@ def pipeline(
         path=manual_input_folder, recursive=True
     )
 
-    manual_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_manual_")
+    with tempfile.TemporaryDirectory(
+        prefix="env_sensor_manual_"
+    ) as manual_temp_folder_path:
+        for item in manual_input_folder_contents:
+            item_path = str(item.name)
 
-    for item in manual_input_folder_contents:
-        item_path = str(item.name)
+            file_name = item_path.split("/")[-1]
 
-        file_name = item_path.split("/")[-1]
+            clipped_path = item_path.split(f"{manual_input_folder}/")[-1]
 
-        clipped_path = item_path.split(f"{manual_input_folder}/")[-1]
+            manual_input_file_client = file_system_client.get_file_client(
+                file_path=item_path
+            )
 
-        manual_input_file_client = file_system_client.get_file_client(
-            file_path=item_path
-        )
+            file_properties = manual_input_file_client.get_file_properties().metadata
 
-        file_properties = manual_input_file_client.get_file_properties().metadata
+            # Check if the file is a directory
+            if file_properties.get("hdi_isfolder"):
+                continue
 
-        # Check if the file is a directory
-        if file_properties.get("hdi_isfolder"):
-            continue
+            logger.debug(f"Moving {item_path} to {processed_data_output_folder}")
 
-        logger.debug(f"Moving {item_path} to {processed_data_output_folder}")
+            # Download the file to the temp folder
+            download_path = os.path.join(manual_temp_folder_path, file_name)
 
-        # Download the file to the temp folder
-        download_path = os.path.join(manual_temp_folder_path, file_name)
+            logger.debug(f"Downloading {item_path} to {download_path}")
 
-        logger.debug(f"Downloading {item_path} to {download_path}")
+            with open(file=download_path, mode="wb") as f:
+                f.write(manual_input_file_client.download_file().readall())
 
-        with open(file=download_path, mode="wb") as f:
-            f.write(manual_input_file_client.download_file().readall())
+            # Upload the file to the processed data output folder
+            upload_path = f"{processed_data_output_folder}/{clipped_path}"
 
-        # Upload the file to the processed data output folder
-        upload_path = f"{processed_data_output_folder}/{clipped_path}"
+            logger.debug(f"Uploading {item_path} to {upload_path}")
 
-        logger.debug(f"Uploading {item_path} to {upload_path}")
+            try:
+                output_file_client = file_system_client.get_file_client(
+                    file_path=upload_path,
+                )
 
-        output_file_client = file_system_client.get_file_client(
-            file_path=upload_path,
-        )
+                # Check if the file already exists. If it does, throw an exception
+                if output_file_client.exists():
+                    raise Exception(
+                        f"File {upload_path} already exists. Throwing exception"
+                    )
 
-        # Check if the file already exists. If it does, throw an exception
-        if output_file_client.exists():
-            raise Exception(f"File {upload_path} already exists. Throwing exception")
+                with open(file=download_path, mode="rb") as f:
+                    output_file_client.upload_data(f, overwrite=True)
 
-        with open(file=download_path, mode="rb") as f:
+                    logger.info(f"Copied {item_path} to {upload_path}")
+            except Exception:
+                logger.error(f"Failed to upload {item_path}")
 
-            output_file_client.upload_data(f, overwrite=True)
+                error_exception = "".join(format_exc().splitlines())
+                logger.error(error_exception)
 
-            logger.info(f"Copied {item_path} to {upload_path}")
-
-        os.remove(download_path)
-
-    shutil.rmtree(manual_temp_folder_path)
+            os.remove(download_path)
 
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
     try:

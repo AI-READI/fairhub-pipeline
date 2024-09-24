@@ -356,7 +356,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     file_processor.remove_seen_flag_from_map()
 
     # Write the manifest to a file
-    manifest_file_path = os.path.join(temp_folder_path, "manifest.tsv")
+    manifest_file_path = os.path.join(meta_temp_folder_path, "manifest.tsv")
 
     manifest.write_tsv(manifest_file_path)
 
@@ -384,7 +384,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
     file_name = f"status_report_{timestr}.csv"
-    workflow_log_file_path = os.path.join(temp_folder_path, file_name)
+    workflow_log_file_path = os.path.join(meta_temp_folder_path, file_name)
 
     with open(workflow_log_file_path, "w", newline="") as csvfile:
         fieldnames = [
