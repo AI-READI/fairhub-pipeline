@@ -185,6 +185,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         if file_processor.is_file_ignored(file_name, path):
             logger.info(f"Ignoring {file_name}")
+
+            logger.time(time_estimator.step())
             continue
 
         input_file_client = file_system_client.get_file_client(file_path=path)
