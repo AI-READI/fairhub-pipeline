@@ -354,8 +354,8 @@ def pipeline_filter_visit_dates(s):
 
                 if (nline < max_rm_lines):  # only if chop is < max number of removal lines
                     msg1 = 'meets requirement of not removing too much; begin trimming'
-                    msg2 = f' data_list before: {len(s['t']['data_list'])}'
-                    msg3 = f'   first row is {s['t']['data_list'][0]}'
+                    msg2 = f" data_list before: {len(s['t']['data_list'])}"
+                    msg3 = f"   first row is {s['t']['data_list'][0]}"
                     utils_logger.debug(msg1)
                     utils_logger.debug(msg2)
                     utils_logger.debug(msg3)
@@ -363,8 +363,8 @@ def pipeline_filter_visit_dates(s):
                     new_data_list = s['t']['data_list'][nline:]
                     s['t']['data_list'] = new_data_list
 
-                    msg1 = f' data_list after: {len(s['t']['data_list'])}'
-                    msg2 = f'   first row is {s['t']['data_list'][0]}'
+                    msg1 = f' data_list after: {len(s["t"]["data_list"])}'
+                    msg2 = f"   first row is {s['t']['data_list'][0]}"
                     utils_logger.debug(msg1 + msg2)
                 else:  # removal would be too large
                     done_finding_gaps = True  # only finding ones that are too much removal
@@ -377,7 +377,7 @@ def pipeline_filter_visit_dates(s):
     if 'r' not in list(s.keys()):
         s['r']['num_rows'] = 0  # ToDo: what was this trying to accomplish?
 
-    msg = f' replacing former row count of {s['r']['num_rows']} with new count of {len(s['t']['data_list'])}'
+    msg = f" replacing former row count of {s['r']['num_rows']} with new count of {len(s['t']['data_list'])}"
     utils_logger.debug(msg)
 
     s['r']['num_rows'] = len(s['t']['data_list'])
@@ -1295,7 +1295,7 @@ def pipeline_qa_csv_fname_to_p_visit(s):
 
     # record number of files tossed out
     if (count_out_of_window_files > 0):
-        wndw = f'{s["t"]['p_visit']['visit_date']} - {s["t"]['p_visit']['return_date']}'
+        wndw = f"{s['t']['p_visit']['visit_date']} - {s['t']['p_visit']['return_date']}"
         wndw = f'{visit_datetime} - {return_datetime}'
         exc_short = [x.split('/')[-1] for x in exclude_list]
         estr = ','.join(exc_short)
@@ -1345,11 +1345,11 @@ def pipeline_qa_csv_drop_short_files_from_list(s):
 
     s['t']['file_drops'] = drop_list
     keep_list = [x for x in s['t']['file_list'] if x not in drop_list]
-    msg = f'drop_short_files: orig list was {len(s['t']['file_list'])} and drop_list is {len(drop_list)}'
+    msg = f"drop_short_files: orig list was {len(s['t']['file_list'])} and drop_list is {len(drop_list)}"
     utils_logger.debug(msg)
 
     s['t']['file_list'] = keep_list
-    msg = f'...final list is {len(s['t']['file_list'])}'
+    msg = f"...final list is {len(s['t']['file_list'])}"
     utils_logger.debug(msg)
 
     return s

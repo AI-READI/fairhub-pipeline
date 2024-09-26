@@ -53,3 +53,32 @@ def metadata_env_sensor(input_csv_file):
         return meta_dict
 
     return meta_dict
+
+
+class ESManifest:
+    def __init__(self):
+        self.manifest = []
+
+    def add_metadata(self, entry, output_filepath):
+
+        entry["env_sensor_filepath"] = output_filepath
+
+        self.manifest.append(entry)
+
+    def write_tsv(
+        self,
+        file_path: str,
+    ):
+        # Sort the manifest by participant_id
+        self.manifest = sorted(self.manifest, key=lambda x: x["participant_id"])
+
+        # Write the data to a TSV file
+        with open(file_path, "w") as f:
+            f.write(
+                "participant_id\tmodality\tenv_sensor_filepath\tsensor_location\tnumber_of_observations\tsensor_sampling_extent_in_days\tsensor_id\tmanufacturer\tmanufacturers_model_name\n"
+            )
+
+            for entry in self.manifest:
+                f.write(
+                    f"{entry['participant_id']}\t{entry['modality']}\t{entry['env_sensor_filepath']}\t{entry['sensor_location']}\t{entry['number_of_observations']}\t{entry['sensor_sampling_extent_in_days']}\t{entry['sensor_id']}\t{entry['manufacturer']}\t{entry['device']}\n"
+                )
