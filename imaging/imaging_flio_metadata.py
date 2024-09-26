@@ -1,6 +1,5 @@
 import os
 import pydicom
-import imaging.imaging_utils as imaging_utils
 import json
 
 
@@ -68,11 +67,23 @@ def meta_data_save(filename, output_folder):
 
     json_data = {filename: dic}
 
-    print(json_data)
+    # Attempt to create the directory and handle any errors
+    try:
+        os.makedirs(f"{output_folder}/retinal_flio", exist_ok=True)
+    except Exception as e:
+        print(f"Error creating directory {output_folder}/retinal_flio: {e}")
+        return
 
-    os.makedirs(f"{output_folder}/retinal_flio", exist_ok=True)
+    # Attempt to save the JSON file and handle any errors
+    try:
+        with open(f"{output_folder}/retinal_flio/{filename}.json", "w") as json_file:
+            json.dump(json_data, json_file)
+    except Exception as e:
+        print(f"Error saving file {filename}.json: {e}")
 
-    with open(f"{output_folder}/retinal_flio/{filename}.json", "w") as json_file:
-        json.dump(json_data, json_file)
+    # os.makedirs(f"{output_folder}/retinal_flio", exist_ok=True)
+
+    # with open(f"{output_folder}/retinal_flio/{filename}.json", "w") as json_file:
+    #     json.dump(json_data, json_file)
 
     return dic

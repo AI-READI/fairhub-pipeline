@@ -118,6 +118,25 @@ class OCTASeg:
             Image.fromarray(bscan).save(outfn)
 
 
+def get_heightmap_float_pixel_array(octfile, segfile):
+    """
+    Get heightmap float pixel data from OCT and segmentation files.
+
+    Parameters:
+    octfile : str
+        Filepath for the OCT DICOM file.
+    segfile : str
+        Filepath for the segmentation DICOM file.
+
+    Returns:
+    bytes
+        Float pixel data as bytes.
+    """
+    topcon_octa_instance = OCTASeg(structdcm=octfile, octadcm=segfile)
+    pixel_array = topcon_octa_instance.allz
+    return pixel_array
+
+
 def get_heightmap_float_pixel_data(octfile, segfile):
     """
     Get heightmap float pixel data from OCT and segmentation files.

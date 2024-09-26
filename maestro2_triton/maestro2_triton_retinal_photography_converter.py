@@ -39,7 +39,10 @@ class ConversionRule:
 
         :return: List of unique header element tags.
         """
-        headertags = {header_element.tag for header_element in self.header_elements}
+        headertags = set()
+        for header_element in self.header_elements:
+            headertags.add(header_element.tag)
+
         return list(headertags)
 
     def tags(self):
@@ -48,7 +51,10 @@ class ConversionRule:
 
         :return: List of unique element tags.
         """
-        tags = {element.tag for element in self.elements}
+        tags = set()
+        for element in self.elements:
+            tags.add(element.tag)
+
         return list(tags)
 
     def sequence_tags(self):
@@ -243,7 +249,7 @@ def process_tags(tags, dicom):
         dict: Dictionary where keys are DICOM tags and values are DicomEntry instances.
     """
 
-    output = {}
+    output = dict()
     for tag in tags:
         if tag in dicom:
             element_name = pydicom.tag.Tag(tag)
@@ -320,18 +326,18 @@ def extract_dicom_dict(file, tags):
     if not os.path.exists(file):
         raise FileNotFoundError(f"File {file} not found.")
 
-    output = {"filepath": file}
+    output = dict()
+    output["filepath"] = file
+
     dataset = pydicom.dcmread(file)
 
-    if "maestro2_mac_6x6_octa" in file:
-        dataset.ImageType = ["ORIGINAL", "PRIMARY", "", "INFRARED"]
-
-        dataset.PixelSpacing = [0.006868132, 0.006868132]
+    if "PixelSpacing" in dataset:
+        dataset.ImageType = ["ORIGINAL", "PRIMARY", "", "COLOR"]
+        dataset.PixelSpacing = dataset.PixelSpacing
 
     else:
-        dataset.ImageType = ["ORIGINAL", "PRIMARY", "", "COLOR"]
-
-        dataset.PixelSpacing = dataset.PixelSpacing
+        dataset.ImageType = ["ORIGINAL", "PRIMARY", "", "INFRARED"]
+        dataset.PixelSpacing = [0.006868132, 0.006868132]
 
     dataset.PatientOrientation = ["L", "F"]
 
@@ -363,7 +369,8 @@ def extract_dicom_dict(file, tags):
         },
     }
 
-    json_dict = dict(header_elements)
+    json_dict = {}
+    json_dict.update(header_elements)
     info = dataset.to_json_dict()
 
     patient_name = dataset.PatientName
@@ -371,7 +378,7 @@ def extract_dicom_dict(file, tags):
     physician_name = dataset.ReferringPhysicianName
     info["00080090"]["Value"] = [physician_name]
 
-    json_dict |= info
+    json_dict.update(info)
 
     dicom = json_dict
 

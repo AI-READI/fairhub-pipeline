@@ -91,6 +91,9 @@ def shared_functional_group_sequence(dataset, x, y, z):
     a = y[0]["52009229"].value[0]["00289110"].value[0]["00180050"].value[0]
     b = y[0]["52009229"].value[0]["00289110"].value[0]["00280030"].value[1]
     pixel_measures_item.PixelSpacing = [a, b]
+    pixel_measures_item.SliceThickness = (
+        y[0]["52009229"].value[0]["00289110"].value[0]["00280030"].value[0]
+    )
     pixel_measures_seq.append(pixel_measures_item)
 
     measurement_units_code_seq = pydicom.Sequence()
@@ -105,13 +108,13 @@ def shared_functional_group_sequence(dataset, x, y, z):
     real_world_value_mapping_item.LUTExplanation = "pixel height in mm"
     real_world_value_mapping_item.LUTLabel = "pixel in mm"
     real_world_value_mapping_item.DoubleFloatRealWorldValueLastValueMapped = y[0][
-        "00280010"
+        "00280011"
     ].value
     real_world_value_mapping_item.DoubleFloatRealWorldValueFirstValueMapped = 0
     real_world_value_mapping_item.RealWorldValueIntercept = 0.0
 
     real_world_value_mapping_item.RealWorldValueSlope = (
-        y[0]["52009229"].value[0]["00289110"].value[0]["00280030"].value[0]
+        y[0]["52009229"].value[0]["00289110"].value[0]["00280030"].value[1]
     )
 
     real_world_value_mapping_item.MeasurementUnitsCodeSequence = (

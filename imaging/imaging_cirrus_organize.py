@@ -29,100 +29,258 @@ def filter_cirrus_files(folder, output):
     all_dicom = all(
         imaging_classifying_rules.is_dicom_file(file) for file in filtered_list
     )
-    if all_dicom:
 
-        check = imaging_utils.check_critical_info_from_files_in_folder(folder)
+    if filtered_list:
+        if all_dicom:
 
-        if check == "pass":
+            check = imaging_utils.check_critical_info_from_files_in_folder(folder)
 
-            expected_status = imaging_utils.cirrus_check_files_expected(folder)
+            if check == "pass":
 
-            if expected_status == "Unknown":
+                expected_status = imaging_utils.cirrus_check_files_expected(folder)
 
-                protocol = "unknown_protocol"
-                for root, dirs, files in os.walk(folder):
-                    for file in files:
-                        if file[0].isalpha():
-                            file_path = os.path.join(root, file)
-                            original_folder_basename = os.path.basename(
-                                os.path.dirname(file_path)
-                            )
-                            data = pydicom.dcmread(file_path)
-                            laterality = data.ImageLaterality
-                            patientid = data.PatientID
+                if expected_status == "Unknown":
 
-                            outputpath = f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{file}"
-                            os.makedirs(
-                                f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{original_folder_basename}",
-                                exist_ok=True,
-                            )
-                            shutil.copytree(
-                                folder,
-                                f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{original_folder_basename}",
-                                dirs_exist_ok=True,
-                            )
+                    protocol = "unknown_protocol"
+                    for root, dirs, files in os.walk(folder):
+                        for file in files:
+                            if file[0].isalpha():
+                                file_path = os.path.join(root, file)
+                                original_folder_basename = os.path.basename(
+                                    os.path.dirname(file_path)
+                                )
+                                data = pydicom.dcmread(file_path)
+                                laterality = data.ImageLaterality
+                                patientid = data.PatientID
 
-            elif expected_status == "Expected":
+                                outputfolder = f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{file}"
+                                os.makedirs(
+                                    f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{original_folder_basename}",
+                                    exist_ok=True,
+                                )
+                                shutil.copytree(
+                                    folder,
+                                    f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{original_folder_basename}",
+                                    dirs_exist_ok=True,
+                                )
 
-                for root, dirs, files in os.walk(folder):
-                    for file in files:
-                        if file[0].isalpha():
-                            file_path = os.path.join(root, file)
-                            original_folder_basename = os.path.basename(
-                                os.path.dirname(file_path)
-                            )
-                            data = pydicom.dcmread(file_path)
-                            laterality = data.ImageLaterality
-                            patientid = data.PatientID
-                            protocol = (
-                                "cirrus"
-                                + "_"
-                                + str(data.ProtocolName)
-                                .lower()[:-7]
-                                .replace("-", "_")
-                                .replace(" ", "_")
-                                .removesuffix("_")
-                            )
+                elif expected_status == "Expected":
 
-                            # Define the output folder
-                            outputfolder = f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{original_folder_basename}"
+                    for root, dirs, files in os.walk(folder):
+                        first_file = files[0]
+                        if "350x350" in first_file:
+                            angio_files = [f for f in files if "Angio" in f]
+                            if angio_files:
+                                for root, dirs, files in os.walk(folder):
+                                    for file in files:
+                                        if file[0].isalpha():
+                                            file_path = os.path.join(root, file)
+                                            original_folder_basename = os.path.basename(
+                                                os.path.dirname(file_path)
+                                            )
+                                            data = pydicom.dcmread(file_path)
+                                            laterality = data.ImageLaterality
+                                            patientid = data.PatientID
+                                            protocol = (
+                                                "cirrus"
+                                                + "_"
+                                                + str(data.ProtocolName)
+                                                .lower()[:-7]
+                                                .replace("-", "_")
+                                                .replace(" ", "_")
+                                                .removesuffix("_")
+                                            )
 
-                            # Ensure the output folder exists
-                            os.makedirs(outputfolder, exist_ok=True)
+                                            # Define the output folder
+                                            outputfolder = f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{original_folder_basename}"
 
-                            # Create the destination path with just the filename, not the full path again
-                            new_filename = f"{protocol}_{patientid}_{laterality}_{file}"
-                            destination = os.path.join(outputfolder, new_filename)
+                                            # Ensure the output folder exists
+                                            os.makedirs(outputfolder, exist_ok=True)
 
-                            # Copy the file
-                            shutil.copy2(file_path, destination)
+                                            # Create the destination path with just the filename, not the full path again
+                                            new_filename = f"{protocol}_{patientid}_{laterality}_{file}"
+                                            if (
+                                                "StructuralEnface" in new_filename
+                                                or (
+                                                    "512x128" in new_filename
+                                                    and "Seg.dcm" in new_filename
+                                                )
+                                                or (
+                                                    "200x200" in new_filename
+                                                    and "Seg.dcm" in new_filename
+                                                )
+                                            ):
+                                                continue  # Skip this file and move to the next one
+
+                                            destination = os.path.join(
+                                                outputfolder, new_filename
+                                            )
+
+                                            # Copy the file
+                                            shutil.copy2(file_path, destination)
+
+                            else:
+                                for root, dirs, files in os.walk(folder):
+                                    for file in files:
+                                        if file[0].isalpha():
+                                            file_path = os.path.join(root, file)
+                                            original_folder_basename = os.path.basename(
+                                                os.path.dirname(file_path)
+                                            )
+                                            data = pydicom.dcmread(file_path)
+                                            laterality = data.ImageLaterality
+                                            patientid = data.PatientID
+                                            protocol = "wrong_angio_protocol"
+
+                                            # Define the output folder
+                                            outputfolder = f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{original_folder_basename}"
+
+                                            # Ensure the output folder exists
+                                            os.makedirs(outputfolder, exist_ok=True)
+
+                                            # Create the destination path with just the filename, not the full path again
+                                            new_filename = f"{protocol}_{patientid}_{laterality}_{file}"
+                                            if (
+                                                "StructuralEnface" in new_filename
+                                                or (
+                                                    "512x128" in new_filename
+                                                    and "Seg.dcm" in new_filename
+                                                )
+                                                or (
+                                                    "200x200" in new_filename
+                                                    and "Seg.dcm" in new_filename
+                                                )
+                                            ):
+                                                continue
+                                            destination = os.path.join(
+                                                outputfolder, new_filename
+                                            )
+
+                                            # Copy the file
+                                            shutil.copy2(file_path, destination)
+                        else:
+                            for root, dirs, files in os.walk(folder):
+                                for file in files:
+                                    if file[0].isalpha():
+                                        file_path = os.path.join(root, file)
+                                        original_folder_basename = os.path.basename(
+                                            os.path.dirname(file_path)
+                                        )
+                                        data = pydicom.dcmread(file_path)
+                                        laterality = data.ImageLaterality
+                                        patientid = data.PatientID
+                                        protocol = (
+                                            "cirrus"
+                                            + "_"
+                                            + str(data.ProtocolName)
+                                            .lower()[:-7]
+                                            .replace("-", "_")
+                                            .replace(" ", "_")
+                                            .removesuffix("_")
+                                        )
+
+                                        # Define the output folder
+                                        outputfolder = f"{output}/{protocol}/{protocol}_{patientid}_{laterality}_{original_folder_basename}"
+
+                                        # Ensure the output folder exists
+                                        os.makedirs(outputfolder, exist_ok=True)
+
+                                        # Create the destination path with just the filename, not the full path again
+                                        new_filename = f"{protocol}_{patientid}_{laterality}_{file}"
+                                        if (
+                                            "StructuralEnface" in new_filename
+                                            or (
+                                                "512x128" in new_filename
+                                                and "Seg.dcm" in new_filename
+                                            )
+                                            or (
+                                                "200x200" in new_filename
+                                                and "Seg.dcm" in new_filename
+                                            )
+                                        ):
+                                            continue
+                                        destination = os.path.join(
+                                            outputfolder, new_filename
+                                        )
+
+                                        # Copy the file
+                                        shutil.copy2(file_path, destination)
+
+            else:
+
+                protocol = f"{check}"
+
+                outputfolder = f"{output}/{protocol}"
+
+                a = pydicom.dcmread(filtered_list[0])
+                patientid = a.PatientID if hasattr(a, "PatientID") else "N/A"
+                laterality = (
+                    a.ImageLaterality if hasattr(a, "ImageLaterality") else "N/A"
+                )
+
+                # Ensure the output folder exists
+                os.makedirs(outputfolder, exist_ok=True)
+
+                # Construct the source folder path
+                source_folder = f"{outputfolder}/{protocol}_{folder.split('/')[-1]}"
+                os.makedirs(source_folder, exist_ok=True)
+
+                # Copy the entire folder to the output directory
+                shutil.copytree(source_folder, outputfolder, dirs_exist_ok=True)
+
+            dic = {
+                "Rule": protocol,
+                "Patient ID": patientid,
+                "Laterality": laterality,
+                "Input": folder,
+                "Output": outputfolder,
+            }
 
         else:
 
-            protocol = f"{check}"
+            protocol = "invalid_dicom"
 
-            imaging_utils.cirrus_process_folder(folder, output, protocol)
+            outputfolder = f"{output}/{protocol}"
 
-        dic = {
-            "Rule": protocol,
-            "Patient ID": patientid,
-            "Laterality": laterality,
-            "Input": folder,
-            "Output": output,
-        }
-        print(dic)
+            # Ensure the output folder exists
+            os.makedirs(outputfolder, exist_ok=True)
+
+            # Construct the source folder path
+            source_folder = f"{outputfolder}/{protocol}_{folder.split('/')[-1]}"
+            os.makedirs(source_folder, exist_ok=True)
+
+            # Copy the entire folder to the output directory
+            shutil.copytree(source_folder, outputfolder, dirs_exist_ok=True)
+
+            dic = {
+                "Rule": protocol,
+                "Patient ID": "N/A",
+                "Laterality": "N/A",
+                "Input": folder,
+                "Output": outputfolder,
+            }
 
     else:
 
-        protocol = "invalid_dicom"
-        imaging_utils.cirrus_process_folder(folder, output, protocol)
+        protocol = "no_files"
+        outputfolder = f"{output}/{protocol}"
+
+        # Ensure the output folder exists
+        os.makedirs(outputfolder, exist_ok=True)
+
+        # Construct the source folder path
+        source_folder = f"{outputfolder}/{protocol}_{folder.split('/')[-1]}"
+        os.makedirs(source_folder, exist_ok=True)
+
+        # Copy the entire folder to the output directory
+        shutil.copytree(source_folder, outputfolder, dirs_exist_ok=True)
+
         dic = {
             "Rule": protocol,
             "Patient ID": "N/A",
             "Laterality": "N/A",
             "Input": folder,
-            "Output": output,
+            "Output": outputfolder,
         }
-        print(dic)
 
-    return None
+    return dic

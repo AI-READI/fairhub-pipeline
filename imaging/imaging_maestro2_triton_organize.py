@@ -1,6 +1,8 @@
 import os
 import imaging.imaging_utils as imaging_utils
 import imaging.imaging_classifying_rules as imaging_classifying_rules
+import pydicom
+import shutil
 
 
 def filter_maestro2_triton_files(folder, output):
@@ -27,42 +29,92 @@ def filter_maestro2_triton_files(folder, output):
     all_dicom = all(
         imaging_classifying_rules.is_dicom_file(file) for file in filtered_list
     )
+    if filtered_list:
 
-    if all_dicom:
+        if all_dicom:
 
-        check = imaging_utils.check_critical_info_from_files_in_folder(folder)
+            check = imaging_utils.check_critical_info_from_files_in_folder(folder)
 
-        if check == "pass":
+            if check == "pass":
 
-            expected_status = imaging_utils.topcon_check_files_expected(folder)
+                expected_status = imaging_utils.topcon_check_files_expected(folder)
 
-            if expected_status == "Unknown":
-                protocol = "unknown_protocol"
-                imaging_utils.topcon_process_folder(folder, output, protocol)
+                if expected_status == "Unknown":
+                    for root, dirs, files in os.walk(folder):
+                        for file in files:
+                            if file.endswith("1.1.dcm") and file.startswith("2"):
+                                file_path = os.path.join(root, file)
+                                protocol = "unknown_protocol"
+                                a = pydicom.dcmread(file_path)
+                                patient_id = a.PatientID
+                                laterality = a.ImageLaterality
+                                outputtt = imaging_utils.topcon_process_folder(
+                                    folder, output, protocol
+                                )
 
-            elif expected_status == "Expected":
+                elif expected_status == "Expected":
 
+                    for root, dirs, files in os.walk(folder):
+                        for file in files:
+                            if file.endswith("1.1.dcm") and file.startswith("2"):
+                                # print(f"{root}, {file}")
+                                file_path = os.path.join(root, file)
+                                protocol = imaging_classifying_rules.find_rule(
+                                    file_path
+                                )
+                                a = pydicom.dcmread(file_path)
+                                patient_id = a.PatientID
+                                laterality = a.ImageLaterality
+                                outputtt = imaging_utils.topcon_process_folder(
+                                    folder, output, protocol
+                                )
+
+            else:
+                protocol = f"{check}"
                 for root, dirs, files in os.walk(folder):
                     for file in files:
                         if file.endswith("1.1.dcm") and file.startswith("2"):
                             file_path = os.path.join(root, file)
-                            protocol = imaging_classifying_rules.find_rule(file_path)
-                            imaging_utils.topcon_process_folder(
+                            protocol = f"{check}"
+                            a = pydicom.dcmread(file_path)
+                            patient_id = a.PatientID
+                            laterality = a.ImageLaterality
+                            outputtt = imaging_utils.topcon_process_folder(
                                 folder, output, protocol
                             )
 
+                imaging_utils.topcon_process_folder(folder, output, protocol)
+
+            dic = {
+                "Rule": protocol,
+                "Patient ID": patient_id,
+                "Laterality": laterality,
+                "Input": folder,
+                "Output": outputtt,
+            }
+
         else:
-            protocol = f"{check}"
-
-            imaging_utils.topcon_process_folder(folder, output, protocol)
-
-        dic = {"Protocol": protocol, "Foldername": folder}
-        print(dic)
-
+            protocol = "invalid_dicom"
+            outputtt = imaging_utils.topcon_process_folder(folder, output, protocol)
+            dic = {
+                "Rule": protocol,
+                "Patient ID": "N/A",
+                "Laterality": "N/A",
+                "Input": folder,
+                "Output": outputtt,
+            }
     else:
-        protocol = "invalid_dicom"
-        imaging_utils.topcon_process_folder(folder, output, protocol)
-        dic = {"Protocol": protocol, "Foldername": folder}
-        print(dic)
+
+        protocol = "no_files"
+        outputtt = f"{output}/{protocol}/{protocol}_{folder.split('/')[-1]}"
+        shutil.copytree(folder, outputtt, dirs_exist_ok=True)
+
+        dic = {
+            "Rule": "no_files",
+            "Patient ID": "N/A",
+            "Laterality": "N/A",
+            "Input": folder,
+            "Output": outputtt,
+        }
 
     return dic

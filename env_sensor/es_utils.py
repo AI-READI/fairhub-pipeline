@@ -1355,6 +1355,58 @@ def pipeline_qa_csv_drop_short_files_from_list(s):
     return s
 
 
+def pipeline_qa_csv_drop_short_files_from_list(s):
+    """Opens each file and confirms that it is readable and has at least 1 row of data.
+    Files that do not meet these criteria are removed from the list and reported
+    in the processing history as information. First few lines are expected to contain
+
+    ; Version: 1.2.4                        # expect 17 chars
+    ; SEN55 77.. serial number              # expect 25 chars
+    ts, ... the list of column names        # expect 109 chars
+    2024-08-08 00:00:00, ... values         # expect > 0 chars
+
+    Args:
+        s (dict): structure containing list of files to check
+    Returns:
+        s (dict): updated csv list and add to 'qa' section reflecting the result of this check
+    """
+    drop_list = list()
+    for f in s["t"]["file_list"]:
+        # failure only if < 4 lines
+        try:
+            with open(f, "r") as this_f:
+                for n in range(4):
+                    r = this_f.readline()  # can print during debugging
+                    msg = f"  line {n}: {len(r)} chars, {r}"
+                    utils_logger.debug(msg)
+            if len(r) < 21:  # expect closer to 140, but 21 will cover the timestamp
+                msg = f"File is < 4 lines, drop it. {f}"
+                utils_logger.debug(msg)
+                drop_list.append(f)
+        except UnicodeDecodeError as e:
+            emsg = f"File contains an invalid byte in the first 4 lines and should be dropped...{f}"
+            emsg += f" e is {e.reason}"
+            utils_logger.warning(emsg)
+            drop_list.append(f)
+
+        except Exception as e:
+            emsg = f"File contains a read error in the first 4 lines and should be dropped...{f}"
+            emsg += f" e is {e}"
+            drop_list.append(f)
+            utils_logger.warning(emsg)
+
+    s["t"]["file_drops"] = drop_list
+    keep_list = [x for x in s["t"]["file_list"] if x not in drop_list]
+    msg = f"drop_short_files: orig list was {len(s['t']['file_list'])} and drop_list is {len(drop_list)}"
+    utils_logger.debug(msg)
+
+    s["t"]["file_list"] = keep_list
+    msg = f"...final list is {len(s['t']['file_list'])}"
+    utils_logger.debug(msg)
+
+    return s
+
+
 def pipeline_qa_csv_namedelta_to_timestamp1(s):
     """Opens each file and compares the filename (which is basically a timestamp) with
     the timestamp of the first row of data. This timedelta should be within the specified

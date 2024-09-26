@@ -315,3 +315,98 @@ def ophthalmic_image_type_code_sequence(dataset, x):
         )
         ophthalmic_image_type_code_seq.append(ophthalmic_image_type_code_item)
         dataset.OphthalmicImageTypeCodeSequence = ophthalmic_image_type_code_seq
+
+
+def get_reference_coordinates(oct_file):
+    """
+    Extracts reference coordinates from an OCT (Optical Coherence Tomography) DICOM file.
+
+    This function reads the DICOM file, retrieves coordinate data from the 'Ophthalmic Volumetric Properties'
+    (tag '52009230') sequence, and calculates the minimum and maximum values for each coordinate component (x, y).
+    It then determines the bounding box coordinates in a 2D plane.
+
+    Args:
+        oct_file (str): The file path to the OCT DICOM file.
+
+    Returns:
+        list: A list of 4 values representing the bounding box coordinates:
+              [x_min, y_max, x_max, y_min].
+
+    The returned values are:
+        - x_min: The minimum value of the x-coordinates.
+        - y_max: The maximum value of the y-coordinates.
+        - x_max: The maximum value of the x-coordinates.
+        - y_min: The minimum value of the y-coordinates.
+
+    The function identifies these coordinates based on the volumetric data contained in the DICOM file.
+
+    Raises:
+        FileNotFoundError: If the specified DICOM file does not exist.
+        KeyError: If the required DICOM tags are missing or improperly formatted.
+    """
+
+    list_coordinates = []
+    a = pydicom.dcmread(oct_file)
+
+    for i in range(len(a["52009230"].value)):
+        x = a["52009230"].value[i]["00220031"].value[0]["00220032"].value
+        list_coordinates.append(x)
+
+    min_max_per_component = []
+    num_components = len(list_coordinates[0])
+
+    for n in range(num_components):
+        # Extract the nth component from each sublist
+        nth_components = [coords[n] for coords in list_coordinates]
+
+        # Get the min and max of the nth components
+        min_value = min(nth_components)
+        max_value = max(nth_components)
+
+        # Store the min and max for the nth component
+        min_max_per_component.append((min_value, max_value))
+
+    x_min = min(
+        min_max_per_component[0][0],
+        min_max_per_component[0][1],
+        min_max_per_component[2][0],
+        min_max_per_component[2][1],
+    )
+    y_max = max(
+        min_max_per_component[1][0],
+        min_max_per_component[1][1],
+        min_max_per_component[3][0],
+        min_max_per_component[3][1],
+    )
+    x_max = max(
+        min_max_per_component[0][0],
+        min_max_per_component[0][1],
+        min_max_per_component[2][0],
+        min_max_per_component[2][1],
+    )
+    y_min = min(
+        min_max_per_component[1][0],
+        min_max_per_component[1][1],
+        min_max_per_component[3][0],
+        min_max_per_component[3][1],
+    )
+    final_coordinates = [x_min, y_max, x_max, y_min]
+    return final_coordinates
+
+
+def ophthalmic_frame_location_sequence(dataset, x, opt, op):
+    """ """
+    b = pydicom.dcmread(op)
+    a = pydicom.dcmread(opt)
+
+    ophthalmic_image_type_code_seq = pydicom.Sequence()
+    ophthalmic_image_type_code_item = pydicom.Dataset()
+
+    ophthalmic_image_type_code_item.ReferencedSOPClassUID = b.SOPClassUID
+    ophthalmic_image_type_code_item.ReferencedSOPInstanceUID = b.SOPInstanceUID
+    ophthalmic_image_type_code_item.ReferenceCoordinates = get_reference_coordinates(
+        opt
+    )
+
+    ophthalmic_image_type_code_seq.append(ophthalmic_image_type_code_item)
+    dataset.OphthalmicFrameLocationSequence = ophthalmic_image_type_code_seq

@@ -1,13 +1,12 @@
 import os
 import pydicom
 from bs4 import BeautifulSoup
-import flio.flio_reader as flio_reader
+import flio_reader
 from pydicom.dataset import Dataset, FileMetaDataset
-from flio.flio_reader import get_array
+from pydicom.uid import ImplicitVRLittleEndian
+from flio_reader import get_array
 import numpy as np
 import json
-import re
-import imaging.imaging_utils as imaging_utils
 
 
 def get_all_file_names(folder_path):
@@ -38,51 +37,6 @@ def print_list(file_names):
     """
     for file_name in file_names:
         print(file_name, end="\n")
-
-
-def find_html_sdt_files(folder_path):
-    """
-    Finds and returns the paths of the HTML and SDT files within a specified folder.
-
-    This function searches through all files in the given folder, identifying one HTML file and one SDT file.
-    If multiple HTML or SDT files are found, or if either file type is missing, the function raises a ValueError.
-
-    Args:
-        folder_path (str): The full path to the folder to search for HTML and SDT files.
-
-    Returns:
-        tuple: A tuple containing two elements:
-            - sdt_file (str): The full path to the found SDT file.
-            - html_file (str): The full path to the found HTML file.
-
-    Raises:
-        ValueError: If multiple HTML files or multiple SDT files are found.
-        ValueError: If either the HTML file or the SDT file is not found in the folder.
-
-    """
-    html_file = None
-    sdt_file = None
-
-    # List all files in the folder
-    files = imaging_utils.get_filtered_all_file_names(folder_path)
-
-    # Check for HTML and SDT files
-    for file in files:
-        if file.endswith(".html"):
-            if html_file is not None:
-                raise ValueError("Multiple HTML files found")
-            html_file = os.path.join(folder_path, file)
-        elif file.endswith(".sdt"):
-            if sdt_file is not None:
-                raise ValueError("Multiple SDT files found")
-            sdt_file = os.path.join(folder_path, file)
-
-    # Ensure both HTML and SDT files are found
-    if html_file is None or sdt_file is None:
-        html_file = ""
-        sdt_file = ""
-
-    return sdt_file, html_file
 
 
 def extract_html_and_sdt(folder_path):
@@ -122,15 +76,6 @@ def extract_html_and_sdt(folder_path):
     return result
 
 
-def find_consecutive_integers(s):
-    # Regular expression to find 4 consecutive digits
-    match = re.search(r"\d{4}", s)
-    if match:
-        return match.group(0)
-    else:
-        return "9999"
-
-
 def extract_dicom_info_from_html(html_file):
     """
     Extract DICOM metadata from an HTML file.
@@ -168,7 +113,7 @@ def extract_dicom_info_from_html(html_file):
                 line_parts = bullet_point.split(":")
                 lines.extend(line_parts)
 
-        laterality = str(lines[7])
+        laterality = lines[7]
         if "OD" in laterality:
             laterality = "R"
         elif "OS" in laterality:
@@ -186,7 +131,7 @@ def extract_dicom_info_from_html(html_file):
         pws_sn = lines[5].replace(" ", "")
 
         # Extracting patient info
-        patient_name = find_consecutive_integers(
+        patient_name = (
             all_table_data[0][2][1].replace("-", "").replace(",", "-").replace(" ", "")
         )
         patient_ID = patient_name
@@ -534,7 +479,7 @@ def long_add_html_sdt_info(dataset, sdt, dicom_info, output):
     return dicom.save_as(output, write_like_original=False)
 
 
-def make_flio_dicom(folder_path, output, json_path):
+def make_flio_dicom(inputsdt, inputhtml, output, json_path):
     """
     Create FLIO DICOM files from SDT and HTML files.
 
@@ -547,90 +492,72 @@ def make_flio_dicom(folder_path, output, json_path):
     Returns:
         dict: A dictionary with the status of the short and long wavelength DICOM file conversions.
     """
+
+    a, b = make_min_info_dicom_from_sdt(inputsdt)
+    dicom_info = extract_dicom_info_from_html(inputhtml)
+
+    with open(json_path, "r") as file:
+        data = json.load(file)
+
+    patientid = dicom_info["PatientID"][-4:]
+    content_time = str(dicom_info["ContentTime"])[0:5]
+    laterality = dicom_info["Laterality"]
+
+    uid_short = data[patientid][laterality]["short_uid"]
+    uid_short = uid_short[:-5] + content_time
+
+    uid_long = data[patientid][laterality]["long_uid"]
+    uid_long = uid_long[:-5] + content_time
+
+    a.file_meta.MediaStorageSOPInstanceUID = uid_short
+
+    a.SOPInstanceUID = uid_short
+    a.StudyInstanceUID = uid_short
+    a.SeriesInstanceUID = uid_short
+    a.SynchronizationFrameOfReferenceUID = uid_short
+
+    b.file_meta.MediaStorageSOPInstanceUID = uid_long
+
+    b.SOPInstanceUID = uid_long
+    b.StudyInstanceUID = uid_long
+    b.SeriesInstanceUID = uid_long
+    b.SynchronizationFrameOfReferenceUID = uid_long
+
+    patientid = dicom_info["PatientID"][-4:]
+    laterality = dicom_info["Laterality"].lower()
+
+    # Define output file paths
+    short_output_path = (
+        f"{output}/{patientid}_flio_short_wavelength_{laterality}_{uid_short}.dcm"
+    )
+    long_output_path = (
+        f"{output}/{patientid}_flio_long_wavelength_{laterality}_{uid_long}.dcm"
+    )
+
+    # Process short wavelength
     try:
-        inputsdt, inputhtml = find_html_sdt_files(folder_path)
-
-        if inputsdt == "" or inputhtml == "":
-            dic = {
-                "Input SDT": "no sdt ot html file found",
-                "Input HTML": "no sdt ot html file found",
-                "Short wavelength conversion": "failed",
-                "Long wavelength conversion": "failed",
-            }
-
-        else:
-            a, b = make_min_info_dicom_from_sdt(inputsdt)
-            dicom_info = extract_dicom_info_from_html(inputhtml)
-
-            with open(json_path, "r") as file:
-                data = json.load(file)
-
-            patientid = dicom_info["PatientID"][-4:]
-            content_time = str(dicom_info["ContentTime"])[0:5]
-            laterality = dicom_info["Laterality"]
-
-            uid_short = data[patientid][laterality]["short_uid"]
-            uid_short = uid_short[:-5] + content_time
-
-            uid_long = data[patientid][laterality]["long_uid"]
-            uid_long = uid_long[:-5] + content_time
-
-            a.file_meta.MediaStorageSOPInstanceUID = uid_short
-
-            a.SOPInstanceUID = uid_short
-            a.StudyInstanceUID = uid_short
-            a.SeriesInstanceUID = uid_short
-            a.SynchronizationFrameOfReferenceUID = uid_short
-
-            b.file_meta.MediaStorageSOPInstanceUID = uid_long
-
-            b.SOPInstanceUID = uid_long
-            b.StudyInstanceUID = uid_long
-            b.SeriesInstanceUID = uid_long
-            b.SynchronizationFrameOfReferenceUID = uid_long
-
-            patientid = dicom_info["PatientID"][-4:]
-            laterality = dicom_info["Laterality"].lower()
-
-            # Define output file paths
-            short_output_path = f"{output}/{patientid}_flio_short_wavelength_{laterality}_{uid_short}.dcm"
-            long_output_path = (
-                f"{output}/{patientid}_flio_long_wavelength_{laterality}_{uid_long}.dcm"
-            )
-
-            # Process short wavelength
-            try:
-                short_add_html_sdt_info(a, inputsdt, dicom_info, short_output_path)
-                short_status = "complete", short_output_path.split("/")[-1]
-            except Exception as e:
-                short_status = f"error: {e}"
-
-            # Process long wavelength
-            try:
-                long_add_html_sdt_info(b, inputsdt, dicom_info, long_output_path)
-                long_status = "complete", long_output_path.split("/")[-1]
-            except Exception as e:
-                long_status = f"error: {e}"
-
-            # Create and print the dictionary with completion status
-            dic = {
-                "Input SDT": inputsdt.split("/")[-2:],
-                "Input HTML": inputhtml.split("/")[-2:],
-                "Short wavelength conversion": short_status,
-                "Long wavelength conversion": long_status,
-            }
-
-        return dic
-
+        short_add_html_sdt_info(a, inputsdt, dicom_info, short_output_path)
+        short_status = "complete", short_output_path.split("/")[-1]
     except Exception as e:
-        dic = {
-            "Input SDT": "not enough information from sdt or html to make dicom",
-            "Input HTML": "not enough information from sdt or html to make dicom",
-            "Short wavelength conversion": "failed",
-            "Long wavelength conversion": "failed",
-        }
+        short_status = f"error: {e}"
 
-        return dic
+    # Process long wavelength
+    try:
+        long_add_html_sdt_info(b, inputsdt, dicom_info, long_output_path)
+        long_status = "complete", long_output_path.split("/")[-1]
+    except Exception as e:
+        long_status = f"error: {e}"
+
+    # Create and print the dictionary with completion status
+    dic = {
+        "Input SDT": inputsdt.split("/")[-2:],
+        "Input HTML": inputhtml.split("/")[-2:],
+        "Short wavelength conversion": short_status,
+        "Long wavelength conversion": long_status,
+    }
+
+    print(dic)
+    return dic
 
 
 KEEP = 0
@@ -866,78 +793,6 @@ flio = ConversionRule(
 )
 
 
-def anatomic_region_sequence(dataset, x):
-    """
-    Create the anatomic region sequence in the dataset.
-
-    This function constructs the anatomic region sequence for a DICOM dataset,
-    populating it with the anatomic region data
-
-    Args:
-        dataset (pydicom.Dataset): The DICOM dataset to which the anatomic region is added.
-        x (list): List containing data for constructing the anatomic region.
-    """
-
-    anatomic_region_seq = pydicom.Sequence()
-    anatomic_region_item = pydicom.Dataset()
-
-    anatomic_region_item.CodeValue = "5665001"
-    anatomic_region_item.CodingSchemeDesignator = "SCT"
-    anatomic_region_item.CodeMeaning = "Retina"
-
-    anatomic_region_seq.append(anatomic_region_item)
-
-    dataset.AnatomicRegionSequence = anatomic_region_seq
-
-
-def illumination_type_code_sequence(dataset, x):
-    """
-    Create the illumination type code sequence in the dataset.
-
-    This function constructs the illumination type code sequence for a DICOM dataset,
-    populating it with the illumination type code data.
-
-    Args:
-        dataset (pydicom.Dataset): The DICOM dataset to which the illumination type code is added.
-        x (list): List containing data for constructing the illumination type code.
-    """
-
-    illumination_type_code_seq = pydicom.Sequence()
-    illumination_type_code_item = pydicom.Dataset()
-
-    illumination_type_code_item.CodeValue = "xxxx2"
-    illumination_type_code_item.CodingSchemeDesignator = "DCM"
-    illumination_type_code_item.CodeMeaning = "Shortpulselaser"
-
-    illumination_type_code_seq.append(illumination_type_code_item)
-
-    dataset.IlluminationTypeCodeSequence = illumination_type_code_seq
-
-
-def acquisition_device_type_code_sequence(dataset, x):
-    """
-    Create the acquisition device type code in the dataset.
-
-    This function constructs the acquisition device type code for a DICOM dataset,
-    populating it with the acquisition device type code data.
-
-    Args:
-        dataset (pydicom.Dataset): The DICOM dataset to which the acquisition device type code is added.
-        x (list): List containing data for constructing the acquisition device type code.
-    """
-
-    acquisition_device_type_code_seq = pydicom.Sequence()
-    acquisition_device_type_code_item = pydicom.Dataset()
-
-    acquisition_device_type_code_item.CodeValue = "xxxx1"
-    acquisition_device_type_code_item.CodingSchemeDesignator = "DCM"
-    acquisition_device_type_code_item.CodeMeaning = "FLIO"
-
-    acquisition_device_type_code_seq.append(acquisition_device_type_code_item)
-
-    dataset.AcquisitionDeviceTypeCodeSequence = acquisition_device_type_code_seq
-
-
 def process_tags(tags, dicom):
     """
     Process DICOM tags and create a dictionary of DicomEntry instances.
@@ -1045,10 +900,10 @@ def extract_dicom_dict(file, tags):
     dataset.AcquisitionDateTime = str(dataset.ContentDate) + str(dataset.ContentTime)
 
     if "short" in file:
-        dataset.ImagePathFilterPassBand = [498, 560]
+        dataset.ImagePathFilterPassBand = 498, 560
 
     else:
-        dataset.ImagePathFilterPassBand = [560, 720]
+        dataset.ImagePathFilterPassBand = 560, 720
 
     header_elements = {
         "00020000": {
@@ -1246,10 +1101,6 @@ def write_dicom(protocol, dicom_dict_list, file_path, input):
             element_name = pydicom.datadict.keyword_for_tag(key)
             setattr(dataset, element_name, value)
 
-        acquisition_device_type_code_sequence(dataset, dicom_dict_list)
-        anatomic_region_sequence(dataset, dicom_dict_list)
-        illumination_type_code_sequence(dataset, dicom_dict_list)
-
     ##########
     source_ds = pydicom.dcmread(input)
     extracted_tags = []
@@ -1298,6 +1149,8 @@ def convert_dicom(input, output):
             "Error": "None",
         }
 
+        print(dic)
+
         return dic
 
     except Exception as e:
@@ -1307,4 +1160,5 @@ def convert_dicom(input, output):
             "Error": f"error: {e}",
         }
 
+        print(dic)
         return dic

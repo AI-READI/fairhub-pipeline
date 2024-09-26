@@ -47,7 +47,9 @@ class ConversionRule:
 
         :return: List of unique header element tags.
         """
-        headertags = {header_element.tag for header_element in self.header_elements}
+        headertags = set()
+        for header_element in self.header_elements:
+            headertags.add(header_element.tag)
         return list(headertags)
 
     def tags(self):
@@ -56,7 +58,10 @@ class ConversionRule:
 
         :return: List of unique element tags.
         """
-        tags = {element.tag for element in self.elements}
+        tags = set()
+        for element in self.elements:
+            tags.add(element.tag)
+
         return list(tags)
 
     def sequence_tags(self):
@@ -137,7 +142,7 @@ class Sequence:
         self.name = name
         self.tag = tag
         self.vr = vr
-        self.element_lists = element_lists or []
+        self.element_lists = element_lists if element_lists else []
         self.sequences = sequences if sequences is not None else []
 
 

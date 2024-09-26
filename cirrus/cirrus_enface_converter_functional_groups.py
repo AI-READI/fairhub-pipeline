@@ -119,36 +119,36 @@ def enface_volume_descriptor_sequence(dataset, x):
 
     enface_volume_descriptor_seq = pydicom.Sequence()
 
-    segmented_property_type_code_seq = pydicom.Sequence()
-    segmented_property_type_code_item = pydicom.Dataset()
-    segmented_property_type_code_item.CodeValue = ""
-    segmented_property_type_code_item.CodingSchemeDesignator = ""
-    segmented_property_type_code_item.CodeMeaning = ""
-    segmented_property_type_code_seq.append(segmented_property_type_code_item)
+    # segmented_property_type_code_seq = pydicom.Sequence()
+    # segmented_property_type_code_item = pydicom.Dataset()
+    # segmented_property_type_code_item.CodeValue = ""
+    # segmented_property_type_code_item.CodingSchemeDesignator = ""
+    # segmented_property_type_code_item.CodeMeaning = ""
+    # segmented_property_type_code_seq.append(segmented_property_type_code_item)
 
-    referenced_segmentation_seq = pydicom.Sequence()
-    referenced_segmentation_item = pydicom.Dataset()
-    referenced_segmentation_item.ReferencedSOPClassUID = ""
-    referenced_segmentation_item.ReferencedSOPInstanceUID = ""
-    referenced_segmentation_item.ReferencedSegmentNumber = ""
-    referenced_segmentation_item.SegmentedPropertyTypeCodeSequence = (
-        segmented_property_type_code_seq
-    )
-    referenced_segmentation_seq.append(referenced_segmentation_item)
+    # referenced_segmentation_seq = pydicom.Sequence()
+    # referenced_segmentation_item = pydicom.Dataset()
+    # referenced_segmentation_item.ReferencedSOPClassUID = ""
+    # referenced_segmentation_item.ReferencedSOPInstanceUID = ""
+    # referenced_segmentation_item.ReferencedSegmentNumber = ""
+    # referenced_segmentation_item.SegmentedPropertyTypeCodeSequence = (
+    #     segmented_property_type_code_seq
+    # )
+    # referenced_segmentation_seq.append(referenced_segmentation_item)
 
-    enface_volume_descriptor_item = pydicom.Dataset()
-    enface_volume_descriptor_item.EnFaceVolumeDescriptorScope = ""
-    enface_volume_descriptor_item.ReferencedSegmentationSequence = (
-        referenced_segmentation_seq
-    )
-    enface_volume_descriptor_item.SurfaceOffset = ""
+    # enface_volume_descriptor_item = pydicom.Dataset()
+    # enface_volume_descriptor_item.EnFaceVolumeDescriptorScope = ""
+    # enface_volume_descriptor_item.ReferencedSegmentationSequence = (
+    #     referenced_segmentation_seq
+    # )
+    # enface_volume_descriptor_item.SurfaceOffset = ""
 
-    enface_volume_descriptor_seq.append(enface_volume_descriptor_item)
+    # enface_volume_descriptor_seq.append(enface_volume_descriptor_item)
 
     dataset.EnFaceVolumeDescriptorSequence = enface_volume_descriptor_seq
 
 
-def referenced_series_sequence(dataset, enface, vol, opt, op):
+def referenced_series_sequence(dataset, enface, seg, vol, opt, op):
     """
     Add a Referenced Series Sequence to a DICOM dataset.
 
@@ -165,10 +165,10 @@ def referenced_series_sequence(dataset, enface, vol, opt, op):
     If the ReferencedSOPClassUID is "1.2.840.10008.5.1.4.1.1.66.5", it is replaced with "1.2.840.10008.5.1.4.xxxxx.1".
 
     Returns:
-        None
+        Nones
     """
 
-    list = [op, opt, vol]
+    list = [op, opt, vol, seg]
 
     referenced_series_seq = pydicom.Sequence()
 
@@ -179,10 +179,7 @@ def referenced_series_sequence(dataset, enface, vol, opt, op):
         referenced_instance_item.ReferencedSOPClassUID = i[0]["00080016"].value
         referenced_instance_item.ReferencedSOPInstanceUID = i[0]["00080018"].value
 
-        if (
-            referenced_instance_item.ReferencedSOPClassUID
-            == "1.2.840.10008.5.1.4.1.1.66.5"
-        ):
+        if i is seg:
             referenced_instance_item.ReferencedSOPClassUID = (
                 "1.2.840.10008.5.1.4.xxxxx.1"
             )
@@ -198,7 +195,7 @@ def referenced_series_sequence(dataset, enface, vol, opt, op):
     dataset.ReferencedSeriesSequence = referenced_series_seq
 
 
-def referenced_series_sequence_structural(dataset, enface, opt, op):
+def referenced_series_sequence_structural(dataset, enface, seg, opt, op):
     """
     Add a Referenced Series Sequence to a DICOM dataset.
 
@@ -217,7 +214,7 @@ def referenced_series_sequence_structural(dataset, enface, opt, op):
         None
     """
 
-    list = [op, opt]
+    list = [op, opt, seg]
 
     referenced_series_seq = pydicom.Sequence()
 
@@ -228,10 +225,7 @@ def referenced_series_sequence_structural(dataset, enface, opt, op):
         referenced_instance_item.ReferencedSOPClassUID = i[0]["00080016"].value
         referenced_instance_item.ReferencedSOPInstanceUID = i[0]["00080018"].value
 
-        if (
-            referenced_instance_item.ReferencedSOPClassUID
-            == "1.2.840.10008.5.1.4.1.1.66.5"
-        ):
+        if i is seg:
             referenced_instance_item.ReferencedSOPClassUID = (
                 "1.2.840.10008.5.1.4.xxxxx.1"
             )
@@ -360,7 +354,7 @@ def get_reference_coordinates(oct_file):
     return final_coordinates
 
 
-def ophthalmic_frame_location_sequence(dataset, x, opt):
+def ophthalmic_frame_location_sequence(dataset, x, opt, op):
     """
     Add an Ophthalmic Frame Location Sequence to a DICOM dataset.
 
@@ -389,11 +383,12 @@ def ophthalmic_frame_location_sequence(dataset, x, opt):
     """
     coordinates = get_reference_coordinates(opt)
     a = pydicom.dcmread(opt)
+    b = pydicom.dcmread(op)
     ophthalmic_image_type_code_seq = pydicom.Sequence()
     ophthalmic_image_type_code_item = pydicom.Dataset()
 
-    ophthalmic_image_type_code_item.ReferencedSOPClassUID = a.SOPClassUID
-    ophthalmic_image_type_code_item.ReferencedSOPInstanceUID = a.SOPInstanceUID
+    ophthalmic_image_type_code_item.ReferencedSOPClassUID = b.SOPClassUID
+    ophthalmic_image_type_code_item.ReferencedSOPInstanceUID = b.SOPInstanceUID
     ophthalmic_image_type_code_item.ReferenceCoordinates = coordinates
     ophthalmic_image_type_code_seq.append(ophthalmic_image_type_code_item)
     dataset.OphthalmicFrameLocationSequence = ophthalmic_image_type_code_seq

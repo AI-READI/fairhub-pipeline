@@ -72,8 +72,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/FitnessTracker"
     dependency_folder = f"{study_id}/dependency/FitnessTracker"
     ignore_file = f"{study_id}/ignore/fitnessTracker.ignore"
+    manual_input_folder = f"{study_id}/pooled-data/FitnessTracker-manual"
     manifest_folder = f"{study_id}/pooled-data/FitnessTracker-manifest"
-    red_cap_export_file = f"{study_id}/pooled-data/REDCap/AIREADI-Garmin.tsv"
+    red_cap_export_file = (
+        f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep13_EnviroPhysSensorInfo.csv"
+    )
     participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("fitness_tracker", print=True)
@@ -148,7 +151,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         patient_id = cleaned_file_name.split("-")[1]
 
         if str(patient_id) not in participant_filter_list:
-            logger.debug(
+            print(
                 f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
             )
             continue
@@ -261,21 +264,26 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     full_file_path = os.path.join(root, file)
 
                     if "activity" in full_file_path.lower():
-                        total_patient_files += 1
-                        patient_files.append(
-                            {"file_path": full_file_path, "modality": "Activity"}
-                        )
+                        file_extension = full_file_path.split(".")[-1]
+                        if file_extension == "fit":
+                            total_patient_files += 1
+                            patient_files.append(
+                                {"file_path": full_file_path, "modality": "Activity"}
+                            )
                     elif "monitor" in full_file_path.lower():
-                        total_patient_files += 1
-                        patient_files.append(
-                            {"file_path": full_file_path, "modality": "Monitor"}
-                        )
-
+                        file_extension = full_file_path.split(".")[-1]
+                        if file_extension == "FIT":
+                            total_patient_files += 1
+                            patient_files.append(
+                                {"file_path": full_file_path, "modality": "Monitor"}
+                            )
                     elif "sleep" in full_file_path.lower():
-                        total_patient_files += 1
-                        patient_files.append(
-                            {"file_path": full_file_path, "modality": "Sleep"}
-                        )
+                        file_extension = full_file_path.split(".")[-1]
+                        if file_extension == "fit":
+                            total_patient_files += 1
+                            patient_files.append(
+                                {"file_path": full_file_path, "modality": "Sleep"}
+                            )
 
             logger.debug(
                 f"Number of valid files in {temp_input_folder}: {total_patient_files}"
@@ -339,7 +347,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                     except Exception:
                         logger.error(
-                            f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_files})"
+                            f"Failed to convert {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
                         )
                         error_exception = format_exc()
                         error_exception = "".join(error_exception.splitlines())
@@ -804,7 +812,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     logger.error(error_exception)
 
                     file_processor.append_errors(error_exception, patient_folder_path)
-
                     continue
 
                 patient_folder["output_files"].append(output_file_path)
@@ -831,17 +838,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 workflow_input_files, workflow_output_files
             )
 
-            logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
-
-            try:
-                file_processor.upload_json()
-                logger.info(f"Uploaded file map to {dependency_folder}/file_map.json")
-            except Exception as e:
-                logger.error(
-                    f"Failed to upload file map to {dependency_folder}/file_map.json"
-                )
-                raise e
-
             logger.time(time_estimator.step())
 
     file_processor.delete_out_of_date_output_files()
@@ -867,6 +863,66 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     logger.info(
         f"Uploaded manifest file to {processed_data_output_folder}/manifest.tsv"
     )
+
+    # Move any manual files to the destination folder
+    logger.debug(f"Getting manual file paths in {manual_input_folder}")
+
+    manual_input_folder_contents = file_system_client.get_paths(
+        path=manual_input_folder, recursive=True
+    )
+
+    with tempfile.TemporaryDirectory(
+        prefix="FitnessTracker_pipeline_manual_"
+    ) as manual_temp_folder_path:
+        for item in manual_input_folder_contents:
+            item_path = str(item.name)
+
+            file_name = item_path.split("/")[-1]
+
+            clipped_path = item_path.split(f"{manual_input_folder}/")[-1]
+
+            manual_input_file_client = file_system_client.get_file_client(
+                file_path=item_path
+            )
+
+            file_properties = manual_input_file_client.get_file_properties().metadata
+
+            # Check if the file is a directory
+            if file_properties.get("hdi_isfolder"):
+                continue
+
+            logger.debug(f"Moving {item_path} to {processed_data_output_folder}")
+
+            # Download the file to the temp folder
+            download_path = os.path.join(manual_temp_folder_path, file_name)
+
+            logger.debug(f"Downloading {item_path} to {download_path}")
+
+            with open(file=download_path, mode="wb") as f:
+                f.write(manual_input_file_client.download_file().readall())
+
+            # Upload the file to the processed data output folder
+            upload_path = f"{processed_data_output_folder}/{clipped_path}"
+
+            logger.debug(f"Uploading {item_path} to {upload_path}")
+
+            output_file_client = file_system_client.get_file_client(
+                file_path=upload_path,
+            )
+
+            # Check if the file already exists. If it does, throw an exception
+            if output_file_client.exists():
+                raise Exception(
+                    f"File {upload_path} already exists. Throwing exception"
+                )
+
+            with open(file=download_path, mode="rb") as f:
+
+                output_file_client.upload_data(f, overwrite=True)
+
+                logger.info(f"Copied {item_path} to {upload_path}")
+
+            os.remove(download_path)
 
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 

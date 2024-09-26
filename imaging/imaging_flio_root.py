@@ -2,7 +2,6 @@ from imaging.imaging_standards import DataDomain
 import imaging.imaging_flio_converter as flio_conv
 import imaging.imaging_flio_organize as flio_organize
 import imaging.imaging_flio_metadata as flio_meta
-import imaging.imaging_utils as imaging_utils
 
 # import imaging.flio_retinal_photography_metadata as flio_meta
 
@@ -43,8 +42,8 @@ class Flio(DataDomain):
         Returns:
             dict: Information on conversion issues and output files.
         """
-        sdt, html = imaging_utils.find_html_sdt_files(input_folder)
-        conv_dict = flio_conv.make_flio_dicom(sdt, html, output, jsonpath)
+
+        conv_dict = flio_conv.make_flio_dicom(input_folder, output, jsonpath)
 
         return conv_dict
 

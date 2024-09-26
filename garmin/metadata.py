@@ -18,15 +18,29 @@ class GarminManifest:
         """
         Reads the REDCap.tsv file and stores wrist_worn_on and dominant_hand for each participant.
         """
+        # Mapping of numerical codes to textual descriptions
+        value_mapping = {
+            "1": "Right",
+            "2": "Left",
+            "3": "Not provided",
+            "4": "Neither (ambidextrous)",
+        }
+
         with open(file_path, mode="r") as file:
-            reader = csv.DictReader(file, delimiter="\t")
+            reader = csv.DictReader(file)
+
             for row in reader:
-                participant_id = row["participant_id"]
-                wrist_worn_on = row["wrist_worn_on"]
-                dominant_hand = row["dominant_hand"]
+                participant_id = row["studyid"]
+                dominant_hand_code = row["dvamwenhand"]
+                wrist_worn_on_code = row["dvamwendhand"]
+
+                # Map numerical codes to textual descriptions
+                dominant_hand = value_mapping.get(dominant_hand_code, "None")
+                wrist_worn_on = value_mapping.get(wrist_worn_on_code, "None")
+
                 self.redcap_data[participant_id] = {
-                    "wrist_worn_on": wrist_worn_on or None,  # Assign None if missing
-                    "dominant_hand": dominant_hand or None,  # Assign None if missing
+                    "wrist_worn_on": wrist_worn_on,
+                    "dominant_hand": dominant_hand,
                 }
 
     def add_to_participant_data(
@@ -54,6 +68,7 @@ class GarminManifest:
         is_nan_check=False,
     ):
         date_format = "%Y-%m-%dT%H:%M:%SZ"
+
         for root, dirs, files in sorted(os.walk(directory)):
             dirs.sort()
             for file in sorted(files):
@@ -79,7 +94,10 @@ class GarminManifest:
                                         and "value" in record[value_key]
                                     ):
                                         record_value = record[value_key]["value"]
-                                        if is_nan_check and math.isnan(record_value):
+                                        if is_nan_check and (
+                                            record_value is None
+                                            or math.isnan(record_value)
+                                        ):
                                             continue
                                         total_value += record_value
                                         num_records += 1
@@ -88,7 +106,7 @@ class GarminManifest:
                                 )
                                 participant_id = os.path.basename(root)
 
-                                output_file_path = f"{self.processed_data_output_folder}/{key_prefix}/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = f"{key_prefix}/garmin_vivosmart5/{participant_id}/{file}"
 
                                 self.add_to_participant_data(
                                     participant_id,
@@ -114,7 +132,6 @@ class GarminManifest:
         """
         Processes calorie-related JSON files, calculates total and average calories burned.
         """
-        # date_format = "%Y-%m-%dT%H:%M:%SZ"
         for root, dirs, files in sorted(os.walk(directory)):
             dirs.sort()
             for file in sorted(files):
@@ -147,7 +164,7 @@ class GarminManifest:
                                     else 0
                                 )
 
-                                output_file_path = f"{self.processed_data_output_folder}/physical_activity_calorie/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = f"physical_activity_calorie/garmin_vivosmart5/{participant_id}/{file}"
 
                                 self.add_to_participant_data(
                                     participant_id,
@@ -175,7 +192,6 @@ class GarminManifest:
                             data = json.load(json_file)
                             if "body" in data and "sleep" in data["body"]:
                                 sleep_data = data["body"]["sleep"]
-
                                 sleep_sorted = sorted(
                                     sleep_data,
                                     key=lambda x: x["sleep_stage_time_frame"][
@@ -206,7 +222,9 @@ class GarminManifest:
                                     else 0
                                 )
 
-                                output_file_path = f"{self.processed_data_output_folder}/sleep/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = (
+                                    f"sleep/garmin_vivosmart5/{participant_id}/{file}"
+                                )
 
                                 self.add_to_participant_data(
                                     participant_id,
@@ -280,17 +298,19 @@ class GarminManifest:
                                     else 0
                                 )
 
-                                output_file_path = f"{self.processed_data_output_folder}/physical_activity/garmin_vivosmart5/{participant_id}/{file}"
-
                                 # Store the average and other details in the participant's data dictionary
-                                # print ("num_unique_days:" + str(num_unique_days))
-                                self.add_to_participant_data(
-                                    participant_id,
-                                    "physical_activity",
-                                    output_file_path,
-                                    num_unique_days,
-                                    average_steps_per_day,
-                                )
+                                output_file_path = f"physical_activity/garmin_vivosmart5/{participant_id}/{file}"
+
+                                self.participants_data[participant_id][
+                                    "physical_activity_filepath"
+                                ] = output_file_path
+                                self.participants_data[participant_id][
+                                    "physical_activity_num_days"
+                                ] = num_unique_days
+                                self.participants_data[participant_id][
+                                    "average_physical_activity"
+                                ] = f"{average_steps_per_day:.2f}"
+
                     except Exception as e:
                         print(f"Error processing file {file_path}: {e}")
 
@@ -349,6 +369,7 @@ class GarminManifest:
                                 self.participants_data[participant_id][
                                     "sensor_sampling_duration_days"
                                 ] = len(unique_days)
+
                     except Exception as e:
                         print(
                             f"Error calculating sensor sampling duration for {file_path}: {e}"
@@ -368,8 +389,8 @@ class GarminManifest:
             "oxygen_saturation_filepath",
             "oxygen_saturation_record_count",
             "average_oxygen_saturation",
-            "stress_level_filepath",
-            "stress_level_record_count",
+            "stress_filepath",
+            "stress_record_count",
             "average_stress",
             "sleep_filepath",
             "sleep_record_count",
@@ -418,7 +439,7 @@ class GarminManifest:
                     data[participant_id].get("respiratory_rate_record_count", "None"),
                     data[participant_id].get("average_respiratory_rate", "None"),
                     data[participant_id].get("physical_activity_filepath", "None"),
-                    data[participant_id].get("physical_activity_record_count", "None"),
+                    data[participant_id].get("physical_activity_num_days", "None"),
                     data[participant_id].get("average_physical_activity", "None"),
                     data[participant_id].get("active_calories_filepath", "None"),
                     data[participant_id].get("active_calories_record_count", "None"),
@@ -430,30 +451,30 @@ class GarminManifest:
                 writer.writerow(row)
 
 
-def main():
-    directories = {
-        "heart_rate": "wearable_activity_monitor/heart_rate/garmin_vivosmart5",
-        "oxygen_saturation": "wearable_activity_monitor/oxygen_saturation/garmin_vivosmart5",
-        "stress": "wearable_activity_monitor/stress/garmin_vivosmart5",
-        "sleep": "wearable_activity_monitor/sleep/garmin_vivosmart5",
-        "respiratory_rate": "wearable_activity_monitor/respiratory_rate/garmin_vivosmart5",
-        "activity": "wearable_activity_monitor/physical_activity/garmin_vivosmart5",
-        "calories": "wearable_activity_monitor/physical_activity_calorie/garmin_vivosmart5",
-    }
+# def main():
+#     directories = {
+#         "heart_rate": "wearable_activity_monitor/heart_rate/garmin_vivosmart5",
+#         "oxygen_saturation": "wearable_activity_monitor/oxygen_saturation/garmin_vivosmart5",
+#         "stress": "wearable_activity_monitor/stress/garmin_vivosmart5",
+#         "sleep": "wearable_activity_monitor/sleep/garmin_vivosmart5",
+#         "respiratory_rate": "wearable_activity_monitor/respiratory_rate/garmin_vivosmart5",
+#         "activity": "wearable_activity_monitor/physical_activity/garmin_vivosmart5",
+#         "calories": "wearable_activity_monitor/physical_activity_calorie/garmin_vivosmart5",
+#     }
 
-    # Read wrist_worn_on and dominant_hand data from REDCap.tsv
-    # read_redcap_file("REDCap.tsv")
+#     # Read wrist_worn_on and dominant_hand data from REDCap.tsv
+#     read_redcap_file("REDCap.tsv")
 
-    for data_type, directory in directories.items():
-        globals()[f"process_{data_type}"](directory)
+#     for data_type, directory in directories.items():
+#         globals()[f"process_{data_type}"](directory)
 
-    # Calculate sensor sampling duration based on heart rate data
-    # calculate_sensor_sampling_duration(directories["heart_rate"])
+#     # Calculate sensor sampling duration based on heart rate data
+#     calculate_sensor_sampling_duration(directories["heart_rate"])
 
-    # Write out the participants data as a TSV file
-    # output_file = "manifest.tsv"
-    # write_tsv(output_file, participants_data)
+#     # Write out the participants data as a TSV file
+#     output_file = "manifest.tsv"
+#     write_tsv(output_file, participants_data)
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

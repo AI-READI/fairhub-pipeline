@@ -9,6 +9,7 @@ from maestro2_triton.maestro2_triton_volume_converter_functional_groups import (
     dimension_index_sequence,
 )
 
+
 KEEP = 0
 BLANK = 1
 HARMONIZE = 2

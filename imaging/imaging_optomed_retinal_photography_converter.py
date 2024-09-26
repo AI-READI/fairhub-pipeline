@@ -2,6 +2,7 @@ import os
 import pydicom
 import imaging.imaging_classifying_rules as imaging_classifying_rules
 
+
 KEEP = 0
 BLANK = 1
 HARMONIZE = 2
@@ -117,14 +118,12 @@ optomed = ConversionRule(
         Element("PatientID", "00100020", "LO"),
         Element("PatientBirthDate", "00100030", "DA"),
         Element("PatientSex", "00100040", "CS"),
-
         Element("StudyInstanceUID", "0020000D", "UI"),
         Element("StudyDate", "00080020", "DM"),
         Element("StudyTime", "00080030", "TM"),
         Element("ReferringPhysicianName", "00080090", "PN", BLANK),
         Element("StudyID", "00200010", "SH", BLANK),
         Element("AccessionNumber", "00080050", "SH", BLANK),
-
         Element("Modality", "00080060", "CS"),
         Element("SeriesInstanceUID", "0020000E", "UI"),
         Element("SeriesNumber", "00200011", "IS"),
@@ -135,11 +134,9 @@ optomed = ConversionRule(
         Element("ManufacturerModelName", "00081090", "LO"),
         Element("DeviceSerialNumber", "00181000", "LO"),
         Element("SoftwareVersions", "00181020", "LO"),
-
         Element("InstanceNumber", "00200013", "IS", HARMONIZE, "1"),
         Element("PatientOrientation", "00200020", "CS"),
         Element("BurnedInAnnotation", "00280301", "CS"),
-
         Element("SamplePerPixel", "00280002", "US"),
         Element("PhotometricInterpretation", "00280004", "CS"),
         Element("Rows", "00280010", "US"),
@@ -153,38 +150,29 @@ optomed = ConversionRule(
         Element("FrameIncrementPointer", "00280009", "AT"),
         Element("FrameTime", "00181063", "DS", HARMONIZE, "0.0"),
         Element("ImageType", "00080008", "CS"),
-
         Element("PixelSpacing", "00280030", "DS"),
         Element("ContentTime", "00080033", "TM"),
         Element("ContentDate", "00080023", "DA"),
         Element("AcquisitionDateTime", "0008002A", "DT"),
-
         Element("LossyImageCompression", "00282110", "CS"),
         Element("LossyImageCompressionRatio", "00282112", "DS"),
         Element("LossyImageCompressionMethod", "00282114", "CS"),
-
         Element("ImageLaterality", "00200062", "CS"),
-
         Element("PatientEyeMovementCommanded", "00220005", "CS"),
-
         Element("EmmetropicMagnification", "0022000A", "FL"),
         Element("IntraOcularPressure", "0022000B", "FL"),
         Element("HorizontalFieldOfView", "0022000C", "FL"),
         Element("PupilDilated", "0022000D", "CS", HARMONIZE, "NO"),
-
         Element("DetectorType", "00187004", "CS"),
-
         Element("SOPClassUID", "00080016", "UI"),
         Element("SOPInstanceUID", "00080018", "UI"),
         Element("SpecificCharacterSet", "00080005", "CS"),
-
     ],
     # DICOM sequences
     sequences=[
         ElementList("LightPathFilterTypeStackCodeSequence", "00220017", "SQ"),
         ElementList("ImagePathFilterTypeStackCodeSequence", "00220018", "SQ"),
         ElementList("RefractiveStateSequence", "0022001B", "SQ"),
-
         ElementList(
             "LensesCodeSequence",
             "00220019",
@@ -205,7 +193,6 @@ optomed = ConversionRule(
                 Element("CodeMeaning", "00080104", "LO"),
             ],
         ),
-
         ElementList(
             "AnatomicRegionSequence",
             "00082218",
@@ -322,8 +309,8 @@ def extract_dicom_dict(file, tags):
 
     dataset = pydicom.dcmread(file)
 
-    dataset.PatientOrientation = ['L', "F"]
-    dataset.ImageType = ['ORIGINAL', 'PRIMARY', '', 'COLOR']
+    dataset.PatientOrientation = ["L", "F"]
+    dataset.ImageType = ["ORIGINAL", "PRIMARY", "", "COLOR"]
 
     header_elements = {
         "00020000": {
@@ -455,7 +442,7 @@ def write_dicom(protocol, dicom_dict_list, file_path):
                     if elementkey in key_list and desired_element.decision == BLANK:
                         value = []
                     elif (
-                            elementkey in key_list and desired_element.decision == HARMONIZE
+                        elementkey in key_list and desired_element.decision == HARMONIZE
                     ):
                         value = desired_element.harmonized_value
                     elif elementkey in key_list:
@@ -501,23 +488,25 @@ def convert_dicom(input, output):
     """
     conversion_rule = optomed
     tags = (
-            conversion_rule.header_tags()
-            + conversion_rule.tags()
-            + list(conversion_rule.sequence_tags().keys())
+        conversion_rule.header_tags()
+        + conversion_rule.tags()
+        + list(conversion_rule.sequence_tags().keys())
     )
     x = extract_dicom_dict(input, tags)
-    filename = input.split('/')[-1]
-
-    write_dicom(conversion_rule, x, f'{output}/converted_{filename}')
+    filename = input.split("/")[-1]
 
     b = imaging_classifying_rules.extract_dicom_entry(input)
     rule = imaging_classifying_rules.find_rule(input)
+
+    convert = "no"
+    write_dicom(conversion_rule, x, f"{output}/converted_{filename}")
+    convert = "yes"
+
     dic = {
         "Rule": rule,
-        "PatientID": b.patientid,
-        "Laterality": b.laterality,
-        "Rows": b.rows,
-        "Columns": b.columns,
+        "Converted": convert,
+        "Input": input,
+        "Output": f"{output}/converted_{filename}",
     }
-    print(dic)
+
     return dic
