@@ -33,6 +33,8 @@ def main():  # sourcery skip: low-code-quality
 
     destination_directory = f"{project_name}/pooled-data/{device}"
 
+    count = 0
+
     for site_name in site_names:
         print(f"Processing {device} data for {site_name}")
 
@@ -131,6 +133,9 @@ def main():  # sourcery skip: low-code-quality
                 json.dump(completed_folders, f, indent=4)
 
             print(f"Folder {batch_folder_name} processed successfully")
+
+            count += 1
+            print(f"Processed {count} folders")
 
 
 if __name__ == "__main__":
