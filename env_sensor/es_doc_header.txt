@@ -1,8 +1,8 @@
 # header_lines: 45
-# header_version: 1.0
+# header_version: 2.0
 # dataset_information: see docs.aireadi.org and fairhub.io
 # dataset_usage_and_license: see docs.aireadi.org
-# data_processing: manually formatted pilot data; also see docs.aireadi.org
+# data_processing: automated concatenation and filtering of raw files; see docs.aireadi.org
 # sensor_component_documentation: see docs.aireadi.org
 # reserved_for_future_use_1: no_value_at_present
 # reserved_for_future_use_2: no_value_at_present

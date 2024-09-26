@@ -14,11 +14,11 @@ import pandas as pd
 import zipfile
 from datetime import datetime, timedelta, date
 
-utils_logger = logging.getLogger("es.utils")
+utils_logger = logging.getLogger('es.utils')
 
 # To provide a working start date and a sanity check date with 24 hr margin
-CONST_STUDY_START = "2023-07-01"
-CONST_DEFAULT_VISIT = "2023-07-02"
+CONST_STUDY_START = '2023-07-01'
+CONST_DEFAULT_VISIT = '2023-07-02'
 # Thresholds for QA, filtering
 CONST_NUMCOLS_RAWCSV = 22  # 22 data fields in each row
 CONST_MIN_DATA_LINES = 12 * 2  # 12 rows per min, so about 2 minutes
@@ -46,12 +46,12 @@ def get_csv_list(input_path):
     if os.path.isdir(input_path):  # is a folder, so search inside for *.csv
         csv_file_list = sorted(glob.glob(input_path + "/*.csv"))
     elif os.path.isfile(input_path):  # single file that is a .csv
-        if input_path[-4:] == ".csv":
+        if (input_path[-4:] == ".csv"):
             csv_file_list = [input_path]
         else:  # single file that is not *.csv
-            utils_logger.info(f"Single file but not a csv: {input_path}")
+            utils_logger.info(f'Single file but not a csv: {input_path}')
     else:
-        utils_logger.info(f"Neither a single file nor a folder: {input_path}")
+        utils_logger.info(f'Neither a single file nor a folder: {input_path}')
 
     return csv_file_list
 
@@ -66,14 +66,14 @@ def get_elapsed_time(date_string1, date_string2):
         datetime.timedelta between the two dates, e.g. datetime.timedelta(days=8, seconds=1331)
     """
 
-    date_1 = datetime.strptime(date_string1, "%Y-%m-%d %H:%M:%S")
-    date_2 = datetime.strptime(date_string2, "%Y-%m-%d %H:%M:%S")
+    date_1 = datetime.strptime(date_string1, '%Y-%m-%d %H:%M:%S')
+    date_2 = datetime.strptime(date_string2, '%Y-%m-%d %H:%M:%S')
     elapsed_time = date_2 - date_1
 
     return elapsed_time
 
 
-def pipeline_get_pppp_nnn_from_foldername(s, sep="-"):
+def pipeline_get_pppp_nnn_from_foldername(s, sep='-'):
     """Extract elements pppp and nnn from folder name ENV-pppp-nnn
 
     Args:
@@ -85,7 +85,7 @@ def pipeline_get_pppp_nnn_from_foldername(s, sep="-"):
             nnn:(esID, str)
             name of routine that set each of these
     """
-    folder_name = s["t"]["input_path"]
+    folder_name = s['t']['input_path']
     basefile = os.path.basename(folder_name)
     items = basefile.split(sep)
 
@@ -98,35 +98,33 @@ def pipeline_get_pppp_nnn_from_foldername(s, sep="-"):
     if len(items) < 3:
         emsg = f"Insufficient components in folder name {folder_name}. Expected ENV-pppp-nnn."
         s = eh(s, emsg)
-        s["t"]["pppp_fname"] = "NPID"
-        s["t"]["nnn_fname"] = "999"
+        s['t']['pppp_fname'] = "NPID"
+        s['t']['nnn_fname'] = "999"
         pppp_ok = False
         nnn_ok = False
     else:
-        s["t"]["pppp_fname"] = items[1]
-        s["t"]["nnn_fname"] = items[
-            2
-        ]  # [:3]  # first 3 chars only; permits other elements after nnn
+        s['t']['pppp_fname'] = items[1]
+        s['t']['nnn_fname'] = items[2]  # [:3]  # first 3 chars only; permits other elements after nnn
 
-    if not isValid_pID(s["t"]["pppp_fname"]):
+    if (not isValid_pID(s['t']['pppp_fname'])):
         emsg = f"Invalid participant ID {s['t']['pppp_fname']}; using NPID placeholder."
         s = eh(s, emsg)
-        s["t"]["pppp_fname"] = "NPID"
+        s['t']['pppp_fname'] = 'NPID'
         pppp_ok = False
 
-    if not isValid_esID(s["t"]["nnn_fname"]):
+    if (not isValid_esID(s['t']['nnn_fname'])):
         emsg = f"Invalid sensor ID {s['t']['nnn_fname']}; using 999 placeholder."
         s = eh(s, emsg)
-        s["t"]["nnn_fname"] = "999"
+        s['t']['nnn_fname'] = '999'
         nnn_ok = False
 
     # use the function name on the stack to record which function set the value
     # 1,3 -- convert_env_sensor
     # 0,3 -- pipeline_* (correct one)
-    s["qa"]["pppp_fname_well_formatted"]["ok"] = pppp_ok
-    s["qa"]["pppp_fname_well_formatted"]["set_by"] = inspect.stack()[0][3]
-    s["qa"]["nnn_fname_well_formatted"]["ok"] = nnn_ok
-    s["qa"]["nnn_fname_well_formatted"]["set_by"] = inspect.stack()[0][3]
+    s['qa']['pppp_fname_well_formatted']['ok'] = pppp_ok
+    s['qa']['pppp_fname_well_formatted']['set_by'] = inspect.stack()[0][3]
+    s['qa']['nnn_fname_well_formatted']['ok'] = nnn_ok
+    s['qa']['nnn_fname_well_formatted']['set_by'] = inspect.stack()[0][3]
 
     return s
 
@@ -138,13 +136,13 @@ def pipeline_get_csv_list(s):
     Returns:
         s (dict): updated with the file list
     """
-    file_list = sorted(get_csv_list(s["t"]["input_path"]))
+    file_list = sorted(get_csv_list(s['t']['input_path']))
     if len(file_list) < 1:
         err_msg = f'No *.csv files found for input_path {s["t"]["input_path"]}'
         s = eh(s, err_msg)
 
-    s["t"]["file_list"] = file_list
-    s["t"]["num_orig_files"] = len(file_list)
+    s['t']['file_list'] = file_list
+    s['t']['num_orig_files'] = len(file_list)
     return s
 
 
@@ -165,18 +163,18 @@ def split_header_list(header_list):
         hdict (dict): keys, values parsed from header elements
     """
     hdict = dict()
-    hdict["fw_version_list"] = list()  # empty list as default
-    hdict["sen55_list"] = list()
+    hdict['fw_version_list'] = list()  # empty list as default
+    hdict['sen55_list'] = list()
 
     for h in header_list:
-        _, p, v = h.strip().split(" ")
+        _, p, v = h.strip().split(' ')
 
-        if p == "Version:":
-            hdict["fw_version_list"].append(v)
-        elif p == "SEN55":
-            hdict["sen55_list"].append(v)
+        if p == 'Version:':
+            hdict['fw_version_list'].append(v)
+        elif p == 'SEN55':
+            hdict['sen55_list'].append(v)
         else:  # unknown or unexpected element, possibly a corrupted byte
-            msg = f"Header line unexpected: {h}"
+            msg = f'Header line unexpected: {h}'
             utils_logger.warning(msg)
 
     return hdict
@@ -190,68 +188,66 @@ def pipeline_get_merged_file_contents(s):
     Returns:
         s (dict) updated
     """
-    filter_level = s["r"]["filter_level"]
+    filter_level = s['r']['filter_level']
 
-    header_list, column_dict, data_list, err_dict, nd, nf = read_files(
-        s["t"]["file_list"], filter_level=filter_level
-    )
+    header_list, column_dict, data_list, \
+        err_dict, nd, nf = read_files(s['t']['file_list'], filter_level=filter_level)
     hdict = split_header_list(header_list)
-    s["t"]["num_orig_data_lines"] = nd
-    s["t"]["num_final_files"] = nf
+    s['t']['num_orig_data_lines'] = nd
+    s['t']['num_final_files'] = nf
 
-    msg = f"hdict for debug:\n\n**** hdict\n {hdict}"
+    msg = f'hdict for debug:\n\n**** hdict\n {hdict}'
     utils_logger.debug(msg)
 
     # expecting fw_version_list, sen55_list in hdict keys
     for k, v in hdict.items():
-        s["t"][k] = v
+        s['t'][k] = v
 
     # qa_header will check that the column headers from the files all match
-    s["t"]["column_dict"] = column_dict
-    s["t"]["col_name_list"] = list(column_dict.values())
+    s['t']['column_dict'] = column_dict
+    s['t']['col_name_list'] = list(column_dict.values())
 
     m = f'col_name_list has {len(s["t"]["col_name_list"])} items:  {s["t"]["col_name_list"]}'
     utils_logger.debug(m)
 
-    s["t"]["data_list"] = data_list
-    s["t"]["err_dict_from_read_files"] = err_dict
+    s['t']['data_list'] = data_list
+    s['t']['err_dict_from_read_files'] = err_dict
 
     return s
 
 
 def pipeline_get_outfile_name(s):
     """Assemble the outfile name
-    CAUTION: does not currently check that output_folder exists
+        CAUTION: does not currently check that output_folder exists
     """
-    s["t"]["outfile_posixpath"] = Path(
-        f'{s["t"]["output_folder"]}/{s["t"]["pppp_fname"]}_ENV.csv'
-    )
+    s['t']['outfile_posixpath'] = Path(f'{s["t"]["output_folder"]}/{s["t"]["pppp_fname"]}_ENV.csv')
     return s
 
 
 def pipeline_get_p_visit(s, visit_dict):
-    """Use the pppp to get the visit info, otherwise get default info and flag the issue."""
-    if s["t"]["pppp_fname"] in visit_dict.keys():
-        p_visit = visit_dict[s["t"]["pppp_fname"]]
+    """Use the pppp to get the visit info, otherwise get default info and flag the issue.
+    """
+    if s['t']['pppp_fname'] in visit_dict.keys():
+        p_visit = visit_dict[s['t']['pppp_fname']]
 
         # pppp is presumed correct since it exists in visit_dict
-        s["r"]["pppp"] = s["t"]["pppp_fname"]
-        s["r"]["location"] = p_visit["location"]
-        if "export_group" in p_visit.keys():
-            s["r"]["export_group"] = p_visit["export_group"]
+        s['r']['pppp'] = s['t']['pppp_fname']
+        s['r']['location'] = p_visit['location']
+        if 'export_group' in p_visit.keys():
+            s['r']['export_group'] = p_visit['export_group']
         else:
-            s["r"]["export_group"] = "TBD"
-        s["qa"]["pppp_in_visit_dict"]["ok"] = True
-        s["qa"]["pppp_in_visit_dict"]["set_by"] = inspect.stack()[0][3]
+            s['r']['export_group'] = 'TBD'
+        s['qa']['pppp_in_visit_dict']['ok'] = True
+        s['qa']['pppp_in_visit_dict']['set_by'] = inspect.stack()[0][3]
 
     else:
-        p_visit = visit_dict["0000"]
+        p_visit = visit_dict['0000']
         err_msg = f'Participant ID {s["t"]["pppp_fname"]} is not in visit table; using default to enable checks.'
         s = eh(s, err_msg)
-        s["qa"]["pppp_in_visit_dict"]["ok"] = False
-        s["qa"]["pppp_in_visit_dict"]["set_by"] = inspect.stack()[0][3]
+        s['qa']['pppp_in_visit_dict']['ok'] = False
+        s['qa']['pppp_in_visit_dict']['set_by'] = inspect.stack()[0][3]
 
-    s["t"]["p_visit"] = p_visit  # save all items in the visit dict
+    s['t']['p_visit'] = p_visit  # save all items in the visit dict
 
     return s
 
@@ -275,9 +271,9 @@ def find_short_run(data_list, min_gap_delta, max_lines=240):
         trim_nlines (int): number of lines to chop
     """
     found_chop = False
-    if len(data_list) < 2:
+    if (len(data_list) < 2):
         return False, 0  # found_chop cannot be found, trim_nlines is 0
-    tstr0 = data_list[0].split(",")[0]  # string
+    tstr0 = data_list[0].split(',')[0]  # string
     timestamp0 = get_datetime_from_timestr(tstr0)  # datetime
 
     done_finding_gaps = False
@@ -287,7 +283,7 @@ def find_short_run(data_list, min_gap_delta, max_lines=240):
 
     while (not done_finding_gaps) and (n < (len_data_list - 1)):
         n += 1
-        this_tstr = data_list[n].split(",")[0]
+        this_tstr = data_list[n].split(',')[0]
         this_timestamp = get_datetime_from_timestr(this_tstr)
 
         t_delta = this_timestamp - last_timestamp  # can use time string
@@ -295,9 +291,9 @@ def find_short_run(data_list, min_gap_delta, max_lines=240):
         if (t_delta) > min_gap_delta:
             done_finding_gaps = True
             found_chop = True
-            m = f"...reached max_t_delta at line {n}"
+            m = f'...reached max_t_delta at line {n}'
             utils_logger.debug(m)
-        elif n > max_lines:
+        elif (n > max_lines):
             done_finding_gaps = True
 
         last_timestamp = this_timestamp
@@ -320,13 +316,13 @@ def pipeline_filter_visit_dates(s):
     Returns:
         s (dict): updated
     """
-    if ("data_list" not in list(s["t"].keys())) or (len(s["t"]["data_list"]) < 1):
+    if ('data_list' not in list(s['t'].keys())) or (len(s['t']['data_list']) < 1):
         # no filter needed... there is no data
         return s
-    filter_level = s["r"]["filter_level"]
-    if filter_level < 2:  # this routine only does filtering level 2 and up
+    filter_level = s['r']['filter_level']
+    if (filter_level < 2):  # this routine only does filtering level 2 and up
         # lvl 2 gets num_rows updated; do this here
-        s["r"]["num_rows"] = len(s["t"]["data_list"])
+        s['r']['num_rows'] = len(s['t']['data_list'])
         return s
 
     # create tdelta constants
@@ -338,62 +334,53 @@ def pipeline_filter_visit_dates(s):
     #  only remove files within 1 hour of first saved data
     #  only remove files shorter than 30 minutes
     done_finding_gaps = False
-    first_tstr = s["t"]["data_list"][0].split(",")[
-        0
-    ]  # string; 1st timestr in collected data
+    first_tstr = s['t']['data_list'][0].split(',')[0]  # string; 1st timestr in collected data
 
-    while not done_finding_gaps:
+    while (not done_finding_gaps):
         # only look for another chop if we aren't already 1 hr past first data
-        new_first_tstr_would_be = s["t"]["data_list"][0].split(",")[0]
+        new_first_tstr_would_be = s['t']['data_list'][0].split(',')[0]
         tdelta_from_orig = get_elapsed_time(first_tstr, new_first_tstr_would_be)
-        n_datalines = len(
-            s["t"]["data_list"]
-        )  # if very few left, not point in looking for more to remove
+        n_datalines = len(s['t']['data_list'])  # if very few left, not point in looking for more to remove
         if (tdelta_from_orig < max_removal_span) and (n_datalines > 0):
             # haven't already removed an hour, OK to keep looking as long as there a lines to consider
-            found_chop, nline = find_short_run(
-                s["t"]["data_list"], min_gap_delta=min_gap_for_rm
-            )
+            found_chop, nline = find_short_run(s['t']['data_list'],
+                                               min_gap_delta=min_gap_for_rm)
             # evaluate the findings
-            msg = f"found_chop; nline is {nline}; evaluating impact..."
+            msg = f'found_chop; nline is {nline}; evaluating impact...'
             utils_logger.debug(msg)
-            if found_chop:
+            if (found_chop):
                 # new_first_tstr_would_be = s['t']['data_list'][nline].split(',')[0]
                 # tdelta_from_orig = get_elapsed_time(first_tstr, new_first_tstr_would_be)
 
-                if (
-                    nline < max_rm_lines
-                ):  # only if chop is < max number of removal lines
-                    msg1 = "meets requirement of not removing too much; begin trimming"
-                    msg2 = f" data_list before: {len(s['t']['data_list'])}"
-                    msg3 = f"   first row is {s['t']['data_list'][0]}"
+                if (nline < max_rm_lines):  # only if chop is < max number of removal lines
+                    msg1 = 'meets requirement of not removing too much; begin trimming'
+                    msg2 = f' data_list before: {len(s['t']['data_list'])}'
+                    msg3 = f'   first row is {s['t']['data_list'][0]}'
                     utils_logger.debug(msg1)
                     utils_logger.debug(msg2)
                     utils_logger.debug(msg3)
 
-                    new_data_list = s["t"]["data_list"][nline:]
-                    s["t"]["data_list"] = new_data_list
+                    new_data_list = s['t']['data_list'][nline:]
+                    s['t']['data_list'] = new_data_list
 
-                    msg1 = f" data_list after: {len(s['t']['data_list'])}"
-                    msg2 = f"   first row is {s['t']['data_list'][0]}"
+                    msg1 = f' data_list after: {len(s['t']['data_list'])}'
+                    msg2 = f'   first row is {s['t']['data_list'][0]}'
                     utils_logger.debug(msg1 + msg2)
                 else:  # removal would be too large
-                    done_finding_gaps = (
-                        True  # only finding ones that are too much removal
-                    )
+                    done_finding_gaps = True  # only finding ones that are too much removal
             else:  # did not find a chop
                 done_finding_gaps = True
         else:  # met or exceed max time span chop
             done_finding_gaps = True
 
     # update number of observations
-    if "r" not in list(s.keys()):
-        s["r"]["num_rows"] = 0  # ToDo: what was this trying to accomplish?
+    if 'r' not in list(s.keys()):
+        s['r']['num_rows'] = 0  # ToDo: what was this trying to accomplish?
 
-    msg = f" replacing former row count of {s['r']['num_rows']} with new count of {len(s['t']['data_list'])}"
+    msg = f' replacing former row count of {s['r']['num_rows']} with new count of {len(s['t']['data_list'])}'
     utils_logger.debug(msg)
 
-    s["r"]["num_rows"] = len(s["t"]["data_list"])
+    s['r']['num_rows'] = len(s['t']['data_list'])
 
     return s
 
@@ -414,75 +401,61 @@ def pipeline_qa_p_visit(s):
 
     """
 
-    if not s["t"]["p_visit"]["esID"] == s["t"]["nnn_fname"]:
-        s = eh(
-            s,
-            f'EnvSensor ID in folder name {s["t"]["nnn_fname"]}'
-            + f' does not match esID in visit table {s["t"]["p_visit"]["esID"]}.',
-        )
+    if (not s['t']['p_visit']['esID'] == s['t']['nnn_fname']):
+        s = eh(s, f'EnvSensor ID in folder name {s["t"]["nnn_fname"]}'
+               + f' does not match esID in visit table {s["t"]["p_visit"]["esID"]}.')
 
-    if not s["t"]["p_visit"]["es_data_ok"].lower() in ["yes", "ok"]:
-        s = eh(
-            s,
-            f'Sensor data marked invalid ({s["t"]["p_visit"]["es_data_ok"]}) in visit table.',
-        )
-        s["qa"]["es_data_ok"]["ok"] = False
+    if (not s["t"]['p_visit']['es_data_ok'].lower() in ['yes', 'ok']):
+        s = eh(s, f'Sensor data marked invalid ({s["t"]["p_visit"]["es_data_ok"]}) in visit table.')
+        s['qa']['es_data_ok']['ok'] = False
     else:
-        s["qa"]["es_data_ok"]["ok"] = True
+        s['qa']['es_data_ok']['ok'] = True
 
     # date checks
-    visit_dt = get_datetime_from_visit_date(s["t"]["p_visit"]["visit_date"])
-    return_dt = get_datetime_from_visit_date(s["t"]["p_visit"]["return_date"])
+    visit_dt = get_datetime_from_visit_date(s["t"]['p_visit']['visit_date'])
+    return_dt = get_datetime_from_visit_date(s["t"]['p_visit']['return_date'])
 
     # unknown, TBD, etc. will be replaced to allow QA to proceed, but no export will occur
-    if not type(visit_dt) is datetime:
-        s = eh(
-            s,
-            f"Visit date {visit_dt} not usable. Default to {CONST_DEFAULT_VISIT} to continue QA.",
-        )
-        s["t"]["p_visit"]["visit_date"] = CONST_DEFAULT_VISIT
+    if (not type(visit_dt) is datetime):
+        s = eh(s, f'Visit date {visit_dt} not usable. Default to {CONST_DEFAULT_VISIT} to continue QA.')
+        s["t"]['p_visit']['visit_date'] = CONST_DEFAULT_VISIT
         visit_dt = get_datetime_from_visit_date(CONST_DEFAULT_VISIT)
-    if not type(return_dt) is datetime:
-        s = eh(
-            s,
-            f"Return date {return_dt} not usable. Default to today {str(date.today())} to continue QA.",
-        )
-        s["t"]["p_visit"]["return_date"] = str(date.today())
+    if (not type(return_dt) is datetime):
+        s = eh(s, f'Return date {return_dt} not usable. Default to today {str(date.today())} to continue QA.')
+        s["t"]['p_visit']['return_date'] = str(date.today())
         # offset_hours=0 to avoid being flagged as future date in the tests below
-        return_dt = get_datetime_from_visit_date(
-            s["t"]["p_visit"]["return_date"], offset_hours=0
-        )  # avoids future warning
+        return_dt = get_datetime_from_visit_date(s["t"]['p_visit']['return_date'], offset_hours=0)  # avoids future warning
 
-    if return_dt < visit_dt:
-        s = eh(s, f"Return {return_dt} is before visit {visit_dt} in visit table.")
-        s["qa"]["visit_date_before_return_date"]["ok"] = False
+    if (return_dt < visit_dt):
+        s = eh(s, f'Return {return_dt} is before visit {visit_dt} in visit table.')
+        s['qa']['visit_date_before_return_date']['ok'] = False
     else:
-        s["qa"]["visit_date_before_return_date"]["ok"] = True
+        s['qa']['visit_date_before_return_date']['ok'] = True
 
-    if return_dt > datetime.now():
-        s = eh(s, f"Visit table has sensor return {return_dt} in the future.")
-        s["qa"]["return_date_not_in_future"]["ok"] = False
+    if (return_dt > datetime.now()):
+        s = eh(s, f'Visit table has sensor return {return_dt} in the future.')
+        s['qa']['return_date_not_in_future']['ok'] = False
     else:
-        s["qa"]["return_date_not_in_future"]["ok"] = True
+        s['qa']['return_date_not_in_future']['ok'] = True
 
-    if visit_dt < get_datetime_from_visit_date(CONST_STUDY_START):
-        s = eh(s, f"Visit table has visit date {visit_dt} before study start.")
-        s["qa"]["visit_date_in_study_range"]["ok"] = False
+    if (visit_dt < get_datetime_from_visit_date(CONST_STUDY_START)):
+        s = eh(s, f'Visit table has visit date {visit_dt} before study start.')
+        s['qa']['visit_date_in_study_range']['ok'] = False
     else:
-        s["qa"]["visit_date_in_study_range"]["ok"] = True
+        s['qa']['visit_date_in_study_range']['ok'] = True
 
     # data and reported dates may be correct, but env sensor start cannot be inferred
     # if appt and visit dates do not match
-    if s["t"]["p_visit"]["av_dates_match"] is False:
-        s["qa"]["appt_and_visit_dates_match"]["ok"] = False
+    if (s["t"]['p_visit']['av_dates_match'] is False):
+        s['qa']['appt_and_visit_dates_match']['ok'] = False
     else:
-        s["qa"]["appt_and_visit_dates_match"]["ok"] = True
+        s['qa']['appt_and_visit_dates_match']['ok'] = True
 
-    s["qa"]["es_data_ok"]["set_by"] = inspect.stack()[0][3]
-    s["qa"]["visit_date_in_study_range"]["set_by"] = inspect.stack()[0][3]
-    s["qa"]["return_date_not_in_future"]["set_by"] = inspect.stack()[0][3]
-    s["qa"]["visit_date_before_return_date"]["set_by"] = inspect.stack()[0][3]
-    s["qa"]["appt_and_visit_dates_match"]["set_by"] = inspect.stack()[0][3]
+    s['qa']['es_data_ok']['set_by'] = inspect.stack()[0][3]
+    s['qa']['visit_date_in_study_range']['set_by'] = inspect.stack()[0][3]
+    s['qa']['return_date_not_in_future']['set_by'] = inspect.stack()[0][3]
+    s['qa']['visit_date_before_return_date']['set_by'] = inspect.stack()[0][3]
+    s['qa']['appt_and_visit_dates_match']['set_by'] = inspect.stack()[0][3]
 
     return s
 
@@ -497,35 +470,32 @@ def pipeline_get_sen55_from_nnn(s, esID_dict):
         s (struct): updated
     """
 
-    if s["t"]["nnn_fname"] in esID_dict.keys():
-        sen55 = esID_dict[s["t"]["nnn_fname"]]["sen55"]
-        s["r"]["SEN55"] = sen55
-        s["qa"]["nnn_in_sensor_dict"]["ok"] = True
-        s["qa"]["nnn_in_sensor_dict"]["set_by"] = inspect.stack()[0][3]
+    if (s['t']['nnn_fname'] in esID_dict.keys()):
+        sen55 = esID_dict[s['t']['nnn_fname']]['sen55']
+        s['r']['SEN55'] = sen55
+        s['qa']['nnn_in_sensor_dict']['ok'] = True
+        s['qa']['nnn_in_sensor_dict']['set_by'] = inspect.stack()[0][3]
 
     else:
-        s = eh(
-            s,
-            f'esID {s["t"]["nnn_fname"]} not found in sensor dict; no SEN55 retrieved.',
-        )
-        s["r"]["SEN55"] = "NO_SEN55_IN_DICT"
-        s["qa"]["nnn_in_sensor_dict"]["ok"] = False
-        s["qa"]["nnn_in_sensor_dict"]["set_by"] = inspect.stack()[0][3]
+        s = eh(s, f'esID {s["t"]["nnn_fname"]} not found in sensor dict; no SEN55 retrieved.')
+        s['r']['SEN55'] = 'NO_SEN55_IN_DICT'
+        s['qa']['nnn_in_sensor_dict']['ok'] = False
+        s['qa']['nnn_in_sensor_dict']['set_by'] = inspect.stack()[0][3]
 
     return s
 
 
 def eh(s, emsg):
     """Error helper - combines msg creation, logging, and incrementing errorCount.
-    Args:
-         s (struct): see es_converter.convert_env_sensor for definition
-         emsg (string): error message
-    Returns:
-         s - updated
+       Args:
+            s (struct): see es_converter.convert_env_sensor for definition
+            emsg (string): error message
+       Returns:
+            s - updated
     """
     utils_logger.error(emsg)
-    s["t"]["conversion_issues"].append(emsg)
-    s["t"]["errorCount"] += 1
+    s["t"]['conversion_issues'].append(emsg)
+    s["t"]['errorCount'] += 1
     return s
 
 
@@ -565,42 +535,39 @@ def read_files(file_list, filter_level=1):
 
         keep_file_data = True  # True until we find a reason not to keep it
         fname_short = os.path.basename(fname)
-        sen55_id, header_list, column_dict, data_list, f_err_dict = read_single_csv(
-            fname, return_errs=True
-        )
+        sen55_id, header_list, column_dict, \
+            data_list, f_err_dict = read_single_csv(fname, return_errs=True)
 
         nlines = len(data_list)
         # add all readable lines to the count of original lines prior to any filtering
         num_orig_data_lines += nlines
 
         # F0 - files with no data are always removed
-        if nlines == 0:  # oops... this was 2, should have been == 0
-            msg = f"file {idx} is too short; remove. fname is {fname}"
+        if (nlines == 0):  # oops... this was 2, should have been == 0
+            msg = f'file {idx} is too short; remove. fname is {fname}'
             utils_logger.info(msg)
-            f_err_dict["short file"] = f"{nlines} lines"
+            f_err_dict['short file'] = f'{nlines} lines'
             keep_file_data = False
 
         # F1 - files shorter than the CONST_MIN_DATA_LINES are removed (~ 2 mins)
-        if filter_level > 0:
-            if nlines < CONST_MIN_DATA_LINES:
+        if (filter_level > 0):
+            if (nlines < CONST_MIN_DATA_LINES):
                 msg = f"data_list < 2 for {fname}; may be an empty file"
                 utils_logger.info(msg)
                 keep_file_data = False
 
         # check date span if we're keeping the file
-        if keep_file_data:
-            date_first = data_list[0].split(",")[0]
-            date_last = data_list[-1].split(",")[0]
-            msg = f"file #{idx} has {nlines} rows {date_first} to {date_last} fname is {fname}"
+        if (keep_file_data):
+            date_first = data_list[0].split(',')[0]
+            date_last = data_list[-1].split(',')[0]
+            msg = f'file #{idx} has {nlines} rows {date_first} to {date_last} fname is {fname}'
             utils_logger.info(msg)
 
             if date_prev is None:
                 date_prev = date_last
             else:
                 # explores time gap between files
-                time_gap = get_elapsed_time(
-                    date_prev, date_first
-                )  # need to do as timestamp
+                time_gap = get_elapsed_time(date_prev, date_first)  # need to do as timestamp
                 # reminders on how to pull the time_gap apart
                 # print(f'  {idx} time_gap is {type(time_gap)} {time_gap}')
                 # print(f'  {idx} or in days {time_gap.days}')
@@ -612,26 +579,19 @@ def read_files(file_list, filter_level=1):
         err_dict[fname_short] = f_err_dict
 
         # need to append them if we want to keep them...
-        if keep_file_data:
+        if (keep_file_data):
             num_final_files += 1
             header_list_all.extend(header_list)
             data_list_all.extend(data_list)
             column_dict_all[fname_short] = column_dict
 
-    return (
-        header_list_all,
-        column_dict_all,
-        data_list_all,
-        err_dict,
-        num_orig_data_lines,
-        num_final_files,
-    )
+    return header_list_all, column_dict_all, data_list_all, err_dict, num_orig_data_lines, num_final_files
 
 
 def isValidTimestring(time_string):
     """T/F check whether string is YYYY-MM-DD HH:mm:ss"""
     dto = get_datetime_from_timestr(time_string)
-    if dto is False:
+    if (dto is False):
         return False
     else:  # is a datetime object, but not planning to use it; just need yes/no
         return True
@@ -657,35 +617,33 @@ def parse_data_row(myline, last_timestr, ngood_rows, fname, err_dict):
             updated last_timestr should be
     """
     CONST_TDELTA_0 = timedelta(seconds=0)
-    return_dict = {"ok_to_append": False, "last_timestr": last_timestr}  # defaults
+    return_dict = {'ok_to_append': False, 'last_timestr': last_timestr}  # defaults
 
-    fields = [str(x) for x in myline.split(",")]
+    fields = [str(x) for x in myline.split(',')]
     tstr = fields[0]
-    if not isValidTimestring(tstr):
+    if (not isValidTimestring(tstr)):
         return return_dict
 
-    if last_timestr != "TBD":
+    if (last_timestr != 'TBD'):
         t_delta = get_elapsed_time(last_timestr, tstr)
         emsg = f"TimestampRetro {last_timestr} then {tstr} in {fname} at line {ngood_rows + 1}"
-        assert t_delta > CONST_TDELTA_0, emsg
+        assert (t_delta > CONST_TDELTA_0), emsg
         # if t_delta < 0:  # going backwards in time!
         #     # break out of the for loop and throw away from this line to the end of the file
         #     err_msg = f'TimestampRetro {tstr} in {fname} at line {ngood_rows + 1}, omitting bad line and remainder of file.'
         #     utils_logger.info(err_msg)
         #     err_dict['TimestampRetro'] = f'{tstr}  at line {ngood_rows + 1}'
         #     break  # skip the data_list.append()
-    if len(fields) != CONST_NUMCOLS_RAWCSV:
-        err_msg = f"IncorrectFieldCount in {fname} at line {ngood_rows + 1}, omitting bad line."
+    if (len(fields) != CONST_NUMCOLS_RAWCSV):
+        err_msg = f'IncorrectFieldCount in {fname} at line {ngood_rows + 1}, omitting bad line.'
         utils_logger.info(err_msg)
-        err_dict["IncorrectFieldCount"] = (
-            f"line {ngood_rows + 1}"  # ToDo: decide if this needs to be returned or removed
-        )
+        err_dict['IncorrectFieldCount'] = f'line {ngood_rows + 1}'  # ToDo: decide if this needs to be returned or removed
     else:  # count of fields is ok, line wasn't extremely long, line not corrupted
         # data_list.append(myline)
-        return_dict["ok_to_append"] = True
+        return_dict['ok_to_append'] = True
         # note the timestamp; any subsequent line in this file that is earlier signals an error
         last_timestr = tstr  # update this after reading and adjusting
-        return_dict["last_timestr"] = tstr
+        return_dict['last_timestr'] = tstr
     return return_dict
 
 
@@ -708,114 +666,102 @@ def read_single_csv(fname, return_errs=True):
         data_list (list): CSV data as a list of strings, each string has comma-separated values
         err_dict (dict): dict of error type, line where found
     """
-    sen55_id = "unknown"
+    sen55_id = 'unknown'
     count_header_rows = 0
     ngood_rows = 0
 
     header_list = list()
     column_dict = dict()  # may not want this to be dict; error in later calls
-    column_string = "no_cols_yet"
+    column_string = 'no_cols_yet'
     data_list = list()
     err_dict = dict()
 
     fname_short = os.path.basename(fname)
-    utils_logger.debug(f"debug info for {fname}")
+    utils_logger.debug(f'debug info for {fname}')
     # print(f'debug info for {fname}')
-    last_timestr = "TBD"
+    last_timestr = 'TBD'
 
-    with open(fname, "r") as f:
+    with open(fname, 'r') as f:
         try:
             for line in f:
                 myline = line.strip()
                 ngood_rows += 1
                 if len(myline) > 160:  # was 155, then found some 159
-                    print(f"Line length is {len(myline)}")  # typically 153 or less
-                    err_msg = f"extreme line length {len(myline)} in {fname} at line {ngood_rows + 1}, omitting bad line."
+                    print(f'Line length is {len(myline)}')  # typically 153 or less
+                    err_msg = f'extreme line length {len(myline)} in {fname} at line {ngood_rows + 1}, omitting bad line.'
                     utils_logger.info(err_msg)
-                    err_dict["ExtremeLineLength"] = (
-                        f"line {ngood_rows + 1} has {len(myline)} characters"
-                    )
+                    err_dict['ExtremeLineLength'] = f'line {ngood_rows + 1} has {len(myline)} characters'
                     # Examples: 32994, 13248 -- appeared to be corrupted characters
                 else:
-                    if myline[0] in [";", "#"]:  # first lines should start with ;
+                    if myline[0] in [';', '#']:  # first lines should start with ;
                         header_list.append(line)
                         count_header_rows += 1
                         if myline[0] == ";":  # raw file
-                            if "SEN55" in myline:
-                                sen55_id = myline.split(" ")[-1]
-                    elif (
-                        myline[:2] == "ts"
-                    ):  # after header, col names and first col is timestamp
+                            if 'SEN55' in myline:
+                                sen55_id = myline.split(' ')[-1]
+                    elif myline[:2] == "ts":  # after header, col names and first col is timestamp
                         column_dict[fname_short] = myline
                         column_string = myline.strip("'")
-                        cols = [str(x) for x in myline.strip("'").split(",")]
-                        msg = f"cols {cols}"
+                        cols = [str(x) for x in myline.strip("'").split(',')]
+                        msg = f'cols {cols}'
                         utils_logger.info(msg)
                     else:  # after header and col names, should get the data
                         # create a subroutine to parse data row to handle all the corner case errors
-                        return_dict = parse_data_row(
-                            myline, last_timestr, ngood_rows, fname, err_dict
-                        )
+                        return_dict = parse_data_row(myline, last_timestr, ngood_rows, fname, err_dict)
 
-                        if return_dict["ok_to_append"]:
+                        if return_dict['ok_to_append']:
                             data_list.append(myline)
-                        last_timestr = return_dict["last_timestr"]
+                        last_timestr = return_dict['last_timestr']
 
         # option to group them as (UnicodeDecodeError, nameofotherError)
         except UnicodeDecodeError as e:
             # Exception has occurred: UnicodeDecodeError
             # 'utf-8' codec can't decode byte 0xf1 in position 98320: invalid continuation byte
-            err_msg = (
-                f"UnicodeDecodeError reading {fname} at line {ngood_rows + 1}, omitting bad lines."
-                + f" Keep these rows: {range(count_header_rows, ngood_rows, 1)}"
-            )
+            err_msg = f'UnicodeDecodeError reading {fname} at line {ngood_rows + 1}, omitting bad lines.' + \
+                      f' Keep these rows: {range(count_header_rows, ngood_rows, 1)}'
             utils_logger.info(err_msg)
-            err_dict["UnicodeDecodeError"] = f"line {ngood_rows + 1}"
-            utils_logger.info(f"Reason: {e.reason}")
+            err_dict['UnicodeDecodeError'] = f'line {ngood_rows + 1}'
+            utils_logger.info(f'Reason: {e.reason}')
         # custom exceptions
         except AssertionError as e:
-            err_msg = (
-                f"CUSTOM_EXCEPTION {e}; remaining lines in file will be discarded."
-            )
+            err_msg = f'CUSTOM_EXCEPTION {e}; remaining lines in file will be discarded.'
             utils_logger.warning(err_msg)
 
     return sen55_id, header_list, column_string, data_list, err_dict
 
 
 def pipeline_qa_match_sen55(s):
-    """Check that sen55 in the raw csv match expected sen55 from sensor_dict"""
-    if len(s["t"]["sen55_list"]) > 0:
-        uniq_sen55 = s["t"]["sen55_list"][0]
+    """Check that sen55 in the raw csv match expected sen55 from sensor_dict
+    """
+    if len(s['t']['sen55_list']) > 0:
+        uniq_sen55 = s['t']['sen55_list'][0]
     else:
-        uniq_sen55 = "missing"
+        uniq_sen55 = 'missing'
 
-    if s["r"]["SEN55"] == uniq_sen55:
-        s["qa"]["csv_sen55_matches_nnn_from_sensor_dict"]["ok"] = True
+    if (s['r']['SEN55'] == uniq_sen55):
+        s['qa']['csv_sen55_matches_nnn_from_sensor_dict']['ok'] = True
     else:
-        s = eh(
-            s,
-            f'SEN55 value {uniq_sen55} does not match expected value {s["r"]["SEN55"]}',
-        )
-        s["qa"]["csv_sen55_matches_nnn_from_sensor_dict"]["ok"] = True
-    s["qa"]["csv_sen55_matches_nnn_from_sensor_dict"]["set_by"] = inspect.stack()[0][3]
+        s = eh(s, f'SEN55 value {uniq_sen55} does not match expected value {s["r"]["SEN55"]}')
+        s['qa']['csv_sen55_matches_nnn_from_sensor_dict']['ok'] = True
+    s['qa']['csv_sen55_matches_nnn_from_sensor_dict']['set_by'] = inspect.stack()[0][3]
     return s
 
 
 def pipeline_qa_hdr_list(s, field, chdr_field, qa_field):
     """Check that all FW versions in the raw files were the same; record the FW version.
-    Example: for field 'fw_version_list', check
-        'fw_version_list': ['1.2.4', '1.2.4', '1.2.4', ...]
+        Example: for field 'fw_version_list', check
+            'fw_version_list': ['1.2.4', '1.2.4', '1.2.4', ...]
     """
-    rf_set = sorted(list(set(s["t"][field])))  # raw csv field
-    if len(rf_set) == 1:
-        s["r"][chdr_field] = rf_set[0]
-        s["qa"][qa_field]["ok"] = True
+    rf_set = sorted(list(set(s['t'][field])))  # raw csv field
+    if (len(rf_set) == 1):
+        s['r'][chdr_field] = rf_set[0]
+        s['qa'][qa_field]['ok'] = True
     else:
-        emsg = f"Expecting exactly one value in {field}; found {rf_set}."
+        emsg = f'Expecting exactly one value in {field}; found {rf_set}.'
         s = eh(s, emsg)
-        s["qa"][qa_field]["ok"] = False
+        s['qa'][qa_field]['ok'] = False
 
-    s["qa"][qa_field]["set_by"] = inspect.stack()[0][3]
+    s['qa'][qa_field]['set_by'] = inspect.stack()[0][3]
 
     return s
 
@@ -881,28 +827,28 @@ def qa_header(header_list, column_dict):
 
 def get_filename_stem(fname):
     """Given /some/path/20230904112231.csv, returns 20230904112231 as a string"""
-    basefile = os.path.basename(fname).split(".")[0]
+    basefile = os.path.basename(fname).split('.')[0]
     return basefile
 
 
 def get_datetime_from_fname(fname):
     """Given the stem of a date-stamped csv as a string, return a datetime object
-    Example usage:
-    fdate_obj = get_datetime_from_fname('20230904112231')
+        Example usage:
+        fdate_obj = get_datetime_from_fname('20230904112231')
     """
-    datetime_object = datetime.strptime(fname, "%Y%m%d%H%M%S")  # 4 digit Year
+    datetime_object = datetime.strptime(fname, '%Y%m%d%H%M%S')  # 4 digit Year
     return datetime_object
 
 
 def get_datetime_from_timestr(t_str):
     """Given the string timestamp in a *.csv file, return a datetime object
-    Example usage:
-    fdate_obj = datetime_from_timestampstr('2023-11-18 00:19:23')
+        Example usage:
+        fdate_obj = datetime_from_timestampstr('2023-11-18 00:19:23')
     """
     try:
-        datetime_object = datetime.strptime(t_str, "%Y-%m-%d %H:%M:%S")  # 4 digit Year
+        datetime_object = datetime.strptime(t_str, '%Y-%m-%d %H:%M:%S')  # 4 digit Year
     except Exception as e:
-        print(f"bad timestamp {e}")
+        print(f'bad timestamp {e}')
         return False
 
     return datetime_object
@@ -910,11 +856,11 @@ def get_datetime_from_timestr(t_str):
 
 def isValid_pID(pid):
     """Valid participant IDs are 4 digit numbers between 1000 and 9999 saved as strings.
-    Args:
-        pid (string): valid if between 1001 and 9999
-    Returns: True / False
+        Args:
+            pid (string): valid if between 1001 and 9999
+        Returns: True / False
     """
-    if pid == "NPID":
+    if pid == 'NPID':
         return False
 
     if (type(pid) is str) & (int(pid) > 1000) & (int(pid) <= 9999):
@@ -926,8 +872,8 @@ def isValid_pID(pid):
 def isValid_esID(esid):
     """Valid sensor IDs are numbers from 001 through about 300 saved as strings."""
     retval = False
-    if type(esid) is str:
-        if len(esid) == 3:
+    if (type(esid) is str):
+        if (len(esid) == 3):
             retval = True
     return retval
 
@@ -957,14 +903,17 @@ def get_csv_info(fname):
     """
 
     info_dict = {
-        "sen55_id": "no_sen55_id",
-        "num_hdr_lines": 0,
-        "columns": [],
-        "num_data_lines": 0,
-        "num_readable_lines": 0,
-        "first_timestamp": "no_timestamp",
-        "last_timestamp": "no_timestamp",
-        "isFullyReadable": True,
+        'sen55_id': 'no_sen55_id',
+
+        'num_hdr_lines': 0,
+        'columns': [],
+        'num_data_lines': 0,
+        'num_readable_lines': 0,
+
+        'first_timestamp': 'no_timestamp',
+        'last_timestamp': 'no_timestamp',
+
+        'isFullyReadable': True
     }
 
     #  first_timestamp = 'no_timestamp'
@@ -977,67 +926,55 @@ def get_csv_info(fname):
 
     most_recent_timestamp = None
 
-    with open(fname, "r") as f:
+    with open(fname, 'r') as f:
         try:
             for line in f:
                 myline = line.strip()
                 ngood_rows += 1
-                if myline[0] in [";", "#"]:  # first lines should start with ;
+                if myline[0] in [';', '#']:  # first lines should start with ;
                     num_hdr_lines += 1
                     if myline[0] == ";":  # raw file
-                        if "SEN55" in myline:
-                            info_dict["sen55_id"] = myline.split(" ")[-1]
+                        if 'SEN55' in myline:
+                            info_dict['sen55_id'] = myline.split(' ')[-1]
                             utils_logger.info(f'  Found SEN55: {info_dict["sen55_id"]}')
                 elif myline[:2] == "ts":  # list of column names
-                    cols = [str(x) for x in myline.strip("'").split(",")]
+                    cols = [str(x) for x in myline.strip("'").split(',')]
                     num_cols = len(cols)  # expecting 22 at this time
-                    if num_cols != CONST_NUMCOLS_RAWCSV:
-                        msg = f"File {f} has {num_cols} in header instead of {CONST_NUMCOLS_RAWCSV}"
+                    if (num_cols != CONST_NUMCOLS_RAWCSV):
+                        msg = f'File {f} has {num_cols} in header instead of {CONST_NUMCOLS_RAWCSV}'
                         utils_logger.error(msg)
                         # short data lines are handled elsewhere; unclear if short header is an issue
                 else:  # after header and col names, should get the data
                     num_data_lines += 1
 
                     # check the number of fields in the line
-                    all_fields = myline.split(",")
+                    all_fields = myline.split(',')
                     ts = all_fields[0]
 
-                    if len(all_fields) != num_cols:  # if bad row, do not use timestamp
+                    if (len(all_fields) != num_cols):  # if bad row, do not use timestamp
                         nbad_rows += 1
-                    utils_logger.error(
-                        f"{len(all_fields)} field names vs {len(cols)} in {fname}"
-                    )
+                    utils_logger.error(f'{len(all_fields)} field names vs {len(cols)} in {fname}')
                     # try using the timestamp as long as the row has 2 or more fields
-                    if len(all_fields) > 1:
+                    if (len(all_fields) > 1):
                         # record first and last timestamp
-                        if info_dict["first_timestamp"] == "no_timestamp":
-                            info_dict["first_timestamp"] = ts
-                            info_dict["last_timestamp"] = ts
+                        if (info_dict['first_timestamp'] == 'no_timestamp'):
+                            info_dict['first_timestamp'] = ts
+                            info_dict['last_timestamp'] = ts
                         else:
-                            info_dict["last_timestamp"] = (
-                                ts  # TBD should we record this if the line was bad?
-                            )
+                            info_dict['last_timestamp'] = ts  # TBD should we record this if the line was bad?
 
                         # calculate row to row time delta
-                        if (
-                            most_recent_timestamp is None
-                        ):  # handles the very first line; no tdelta possible
+                        if most_recent_timestamp is None:  # handles the very first line; no tdelta possible
                             most_recent_timestamp = ts
                         else:
-                            tprev_as_dt = get_datetime_from_timestr(
-                                most_recent_timestamp
-                            )
+                            tprev_as_dt = get_datetime_from_timestr(most_recent_timestamp)
                             tnow_as_dt = get_datetime_from_timestr(ts)
                             tdelta = tnow_as_dt - tprev_as_dt
 
-                            if (tdelta > timedelta(seconds=1)) and (
-                                tdelta < timedelta(seconds=15)
-                            ):
+                            if ((tdelta > timedelta(seconds=1)) and (tdelta < timedelta(seconds=15))):
                                 pass  # pass if time is more than 1 second or less than 15 seconds
                             else:
-                                utils_logger.info(
-                                    f"{fname} prev {most_recent_timestamp} now {ts} --> bad delta {tdelta} at {ngood_rows}"
-                                )
+                                utils_logger.info(f'{fname} prev {most_recent_timestamp} now {ts} --> bad delta {tdelta} at {ngood_rows}')
                                 nbad_time_increase += 1
 
                             most_recent_timestamp = ts  # save current timestep for use as prev on next go around
@@ -1045,15 +982,15 @@ def get_csv_info(fname):
         except UnicodeDecodeError:
             # Exception has occurred: UnicodeDecodeError
             # 'utf-8' codec can't decode byte 0xf1 in position 98320: invalid continuation byte
-            info_dict["isFullyReadable"] = False
+            info_dict['isFullyReadable'] = False
 
     # already set: 'first_timestamp', 'last_timestamp'
-    info_dict["num_readable_lines"] = ngood_rows
-    info_dict["num_hdr_lines"] = num_hdr_lines
-    info_dict["columns"] = cols
-    info_dict["num_data_lines"] = num_data_lines
-    info_dict["num_bad_tdelta"] = nbad_time_increase
-    info_dict["num_bad_rows"] = nbad_rows
+    info_dict['num_readable_lines'] = ngood_rows
+    info_dict['num_hdr_lines'] = num_hdr_lines
+    info_dict['columns'] = cols
+    info_dict['num_data_lines'] = num_data_lines
+    info_dict['num_bad_tdelta'] = nbad_time_increase
+    info_dict['num_bad_rows'] = nbad_rows
     return info_dict
 
 
@@ -1074,32 +1011,27 @@ def build_es_dict(build_csv=None):
     """
     # read the es_id as an integer and convert to 3 char later so that all esID values
     # are handled the same way
-    if build_csv is None:
-        asset_fname = "es_sensor_id.csv"
-        asset_data = pkgutil.get_data(
-            __name__, asset_fname
-        )  # creates one big binary string
-        df = pd.read_csv(
-            io.BytesIO(asset_data),  # separate the binary string into rows
-            skiprows=10,  # header section
-            encoding="utf8",
-            sep=",",
-            dtype={"esID": int, "sen55": str},
-        )
-        utils_logger.info(f"Using default sensor_id asset file {asset_fname}")
+    if (build_csv is None):
+        asset_fname = 'es_sensor_id.csv'
+        asset_data = pkgutil.get_data(__name__, asset_fname)  # creates one big binary string
+        df = pd.read_csv(io.BytesIO(asset_data),  # separate the binary string into rows
+                         skiprows=10,  # header section
+                         encoding='utf8', sep=',',
+                         dtype={'esID': int, 'sen55': str})
+        utils_logger.info(f'Using default sensor_id asset file {asset_fname}')
     else:
         # note that this presumes there are no rows to skip
-        df = pd.read_csv(build_csv, dtype={"esID": int, "sen55": str})
-        utils_logger.info(f"Read sensor ids from {build_csv}")
-    utils_logger.info(f"columns: {df.columns}")
+        df = pd.read_csv(build_csv, dtype={'esID': int, 'sen55': str})
+        utils_logger.info(f'Read sensor ids from {build_csv}')
+    utils_logger.info(f'columns: {df.columns}')
 
     def id_3char(es_id):
         if len(str(es_id)) < 3:
-            es_id = "0" + str(es_id)
+            es_id = '0' + str(es_id)
         return str(es_id)
 
-    df["es_id_3char"] = df.apply(lambda r: id_3char(r["esID"]), axis=1)
-    sensor_dict = df.set_index("es_id_3char").T.to_dict()
+    df['es_id_3char'] = df.apply(lambda r: id_3char(r['esID']), axis=1)
+    sensor_dict = df.set_index('es_id_3char').T.to_dict()
 
     return sensor_dict
 
@@ -1114,11 +1046,11 @@ def get_expected_sen55_from_esID(es_id_3char, sensor_dict):
         sen55 16-char ID
     """
     if es_id_3char in sensor_dict.keys():
-        expected_sen55 = sensor_dict[es_id_3char]["sen55"]
+        expected_sen55 = sensor_dict[es_id_3char]['sen55']
         return expected_sen55
     else:
-        utils_logger.error(f"es_id {es_id_3char} not found in EnvSensor ID table")
-        msg_str = f"ERROR: es_id {es_id_3char} not found in EnvSensor ID table"
+        utils_logger.error(f'es_id {es_id_3char} not found in EnvSensor ID table')
+        msg_str = f'ERROR: es_id {es_id_3char} not found in EnvSensor ID table'
         return msg_str
 
 
@@ -1138,102 +1070,78 @@ def build_visit_dict(visit_csv):
     # Create a minimal dict with unused participant ID 0000 only.
     # this permits other checks to provide feedback on the data content even though
     # processing cannot yet be finalized
-    default_visit_entry = {
-        "site": "no_site",
-        "visit_appt_time": "2023-07-02 14:00",
-        "appt_date": "2023-07-02",
-        "visit_date": "2023-07-02",
-        "av_dates_match": True,
-        "export_group": "TBD",
-        "esID": "000",
-        "return_date": "TBD",
-        "location": "TBD",
-        "es_data_ok": "yes",
-    }
+    default_visit_entry = {'site': 'no_site',
+                           'visit_appt_time': '2023-07-02 14:00',
+                           'appt_date': '2023-07-02',
+                           'visit_date': '2023-07-02',
+                           'av_dates_match': True,
+                           'export_group': 'TBD',
+                           'esID': '000', 'return_date': 'TBD',
+                           'location': 'TBD', 'es_data_ok': 'yes'}
     visit_dict = dict()
-    utils_logger.info(f"Using visit_csv {visit_csv}")
+    utils_logger.info(f'Using visit_csv {visit_csv}')
 
-    if visit_csv is None:
-        visit_dict = {"0000": default_visit_entry}
+    if (visit_csv is None):
+        visit_dict = {'0000': default_visit_entry}
     else:
         try:
-            df = pd.read_csv(
-                visit_csv, dtype={"studyid": str, "dvenvsn": str}  # participant ID pppp
-            )  # env sensor ID nnn
-            utils_logger.info(f"Visit csv orig has columns: {df.columns}")
+            df = pd.read_csv(visit_csv, dtype={"studyid": str,  # participant ID pppp
+                                               "dvenvsn": str})  # env sensor ID nnn
+            utils_logger.info(f'Visit csv orig has columns: {df.columns}')
 
-            df = df.rename(
-                columns={
-                    "studyid": "pid",
-                    "siteid": "site",
-                    "visdat": "visit_appt_time",  # includes time
-                    "pacmpdat": "visit_date",
-                    "dvenvendat": "return_date",
-                    "dvenvdwnd": "es_data_ok",
-                    "dvenvsn": "esID",
-                    "dvenvlocn": "location",
-                }
-            )
+            df = df.rename(columns={'studyid': 'pid',
+                                    'siteid': 'site',
+                                    'visdat': 'visit_appt_time',  # includes time
+                                    'pacmpdat': 'visit_date',
+                                    'dvenvendat': 'return_date',
+                                    'dvenvdwnd': 'es_data_ok',
+                                    'dvenvsn': 'esID',
+                                    'dvenvlocn': 'location'})
 
-            df = df.drop(
-                columns=[
-                    "dvenvenyn",
-                    "dvenvyn",
-                    "dvenvstcrcid",
-                    "dvamwstcrcid",
-                    "dvamwendwnd",
-                    "dvamwenhand",
-                    "dvamwendhand",
-                ]
-            )
+            df = df.drop(columns=['dvenvenyn', 'dvenvyn',
+                                  'dvenvstcrcid',
+                                  'dvamwstcrcid', 'dvamwendwnd',
+                                  'dvamwenhand', 'dvamwendhand'])
 
             # replace empty values with 'TBD' to avoid having to test for nan later
-            tbd_cols = ["return_date", "es_data_ok", "location"]
-            df[tbd_cols] = df[tbd_cols].fillna("TBD")
+            tbd_cols = ['return_date',
+                        'es_data_ok',
+                        'location']
+            df[tbd_cols] = df[tbd_cols].fillna('TBD')
 
             # convert appointment date and time to just date; flag if appt and visit match
-            df["appt_date"] = df.apply(
-                lambda row: row["visit_appt_time"].split(" ")[0], axis=1
-            )
-            df["av_dates_match"] = df.apply(
-                lambda row: True if row["appt_date"] == row["visit_date"] else False,
-                axis=1,
-            )
+            df['appt_date'] = df.apply(lambda row: row['visit_appt_time'].split(' ')[0], axis=1)
+            df['av_dates_match'] = df.apply(lambda row: True if row['appt_date'] == row['visit_date'] else False, axis=1)
 
             # ensure esID is a 3-char string
             def nnn_to_3char(x):
                 x_str = str(x)
                 if len(x_str) < 3:
-                    x_str = "0" + x_str
+                    x_str = '0' + x_str
                 # print(f'esID value is now .{x_str}.')
                 return x_str
-
-            df["esID"] = df.apply(lambda x: nnn_to_3char(x["esID"]), axis=1)
+            df['esID'] = df.apply(lambda x: nnn_to_3char(x['esID']), axis=1)
 
             # new file uses 1.0 and 0.0 instead of 'yes' 'ok' and 'no'
-            df["es_data_ok"] = df.apply(
-                lambda x: "yes" if x["es_data_ok"] == 1.0 else "no", axis=1
-            )
+            df['es_data_ok'] = df.apply(lambda x: 'yes' if x['es_data_ok'] == 1.0 else 'no', axis=1)
 
-            visit_dict = df.set_index("pid").T.to_dict()
+            visit_dict = df.set_index('pid').T.to_dict()
 
             # replace characters in the location text that need to be reserved for other files
             for v in visit_dict.values():
-                orig_loc = v["location"]
-                new_loc = orig_loc.replace(":", " ")  # : is used in the self-doc header
-                new_loc = new_loc.replace("\t", " ")  # \t is used in the manifest.tsv
+                orig_loc = v['location']
+                new_loc = orig_loc.replace(':', ' ')  # : is used in the self-doc header
+                new_loc = new_loc.replace('\t', ' ')  # \t is used in the manifest.tsv
                 # new_loc = new_loc.replace('L','l')  # just for testing
-                v["location"] = new_loc
+                v['location'] = new_loc
 
         except Exception as e:  # most likely FileNotFoundError
-            str1 = f"{e}"
-            str2 = "relying on default_dict with key 0000 only"
-            utils_logger.error(
-                f"Unable to build visit_dict from {visit_csv} due to {str1}; {str2}"
-            )
+            str1 = f'{e}'
+            str2 = 'relying on default_dict with key 0000 only'
+            utils_logger.error(f'Unable to build visit_dict from {visit_csv} due to {str1}; {str2}')
 
     # in all cases, add default. if visit_csv failed, it will be the only entry
-    visit_dict["0000"] = default_visit_entry  # use for pid not in dict
+    visit_dict['0000'] = default_visit_entry  # use for pid not in dict
 
     return visit_dict
 
@@ -1249,9 +1157,9 @@ def get_visit_esID(pid, visit_dict):
     """
     if pid in visit_dict.keys():
         pdict = visit_dict[pid]
-        return str(pdict["esID"])
+        return str(pdict['esID'])
     else:
-        return f"No such ID {pid} in visit_dict"
+        return f'No such ID {pid} in visit_dict'
 
 
 def get_datetime_from_visit_date(date_string, offset_hours=13):
@@ -1268,19 +1176,18 @@ def get_datetime_from_visit_date(date_string, offset_hours=13):
         adjusted date as a date_string, e.g. '2024-05-21 13:00:00'
     """
 
-    if date_string == "TBD":
-        return "TBD"
+    if date_string == 'TBD':
+        return 'TBD'
     else:
         try:
             # no hour in date_string, so make it 1 p.m. for all cases
-            datetime_object = datetime.strptime(date_string, "%Y-%m-%d") + timedelta(
-                hours=offset_hours
-            )
+            datetime_object = datetime.strptime(date_string, '%Y-%m-%d') + \
+                timedelta(hours=offset_hours)
             return datetime_object
         except Exception as e:
-            emsg = f"Error {e}; unable to get datetime from visit date info."
+            emsg = f'Error {e}; unable to get datetime from visit date info.'
             utils_logger.error(emsg)
-            return "TBD"
+            return 'TBD'
 
 
 def isInTimeWindow(date_to_check, window_start, window_end):
@@ -1298,7 +1205,6 @@ def isInTimeWindow(date_to_check, window_start, window_end):
         return True
     else:
         return False
-
 
 # Tools for auditing the EnvSensor folder data
 
@@ -1319,13 +1225,13 @@ def read_single_csv_first_data(fname):
     found_first_ts_line = -1
     # fopen_ok = False
 
-    with open(fname, "r") as f:
+    with open(fname, 'r') as f:
         # fopen_ok = True
         try:
             for line in f:
                 myline = line.strip()
                 ngood_rows += 1
-                if myline[0] not in [";", "#", "t"]:  # header and col names
+                if (myline[0] not in [';', '#', 't']):  # header and col names
                     # raw data uses ;
                     # sensor table and final data use #
                     found_first_ts_line = ngood_rows
@@ -1335,12 +1241,12 @@ def read_single_csv_first_data(fname):
         except UnicodeDecodeError as e:
             # Exception has occurred: UnicodeDecodeError
             # 'utf-8' codec can't decode byte 0xf1 in position 98320: invalid continuation byte
-            utils_logger.error(f"Reason: {e.reason}")
-            print(f"DEBUG: UnicodeDecodeError in {f} at ngood_rows {ngood_rows}")
+            utils_logger.error(f'Reason: {e.reason}')
+            print(f'DEBUG: UnicodeDecodeError in {f} at ngood_rows {ngood_rows}')
 
-    if found_first_ts_line < 3:
+    if (found_first_ts_line < 3):
         # this can happen with a short file that contains no data
-        emsg = f"DEBUG: Problem getting to timestamp in {f}"
+        emsg = f'DEBUG: Problem getting to timestamp in {f}'
         utils_logger.error(emsg)
         print(emsg)
 
@@ -1369,37 +1275,83 @@ def pipeline_qa_csv_fname_to_p_visit(s):
     """
     count_out_of_window_files = 0
     # adjust hours conservatively to leave lots of time
-    visit_datetime = get_datetime_from_visit_date(
-        s["t"]["p_visit"]["visit_date"], offset_hours=15
-    )
-    return_datetime = get_datetime_from_visit_date(
-        s["t"]["p_visit"]["return_date"], offset_hours=26
-    )
+    visit_datetime = get_datetime_from_visit_date(s["t"]['p_visit']['visit_date'], offset_hours=15)
+    return_datetime = get_datetime_from_visit_date(s["t"]['p_visit']['return_date'], offset_hours=26)
     exclude_list = list()
 
-    for idx, cfile in enumerate(s["t"]["file_list"]):
-        fname = cfile.split("/")[-1].split(".")[0]
+    for idx, cfile in enumerate(s['t']['file_list']):
+        fname = cfile.split('/')[-1].split('.')[0]
         fname_as_datetime = get_datetime_from_fname(fname)
         if isInTimeWindow(fname_as_datetime, visit_datetime, return_datetime):
             pass
         else:
-            msg = f"File in csv_list is outside observation window: {cfile}"
+            msg = f'File in csv_list is outside observation window: {cfile}'
             utils_logger.debug(msg)
             count_out_of_window_files += 1
             exclude_list.append(cfile)
 
-    final_list = [x for x in s["t"]["file_list"] if x not in exclude_list]
-    s["t"]["file_list"] = sorted(final_list)
+    final_list = [x for x in s['t']['file_list'] if x not in exclude_list]
+    s['t']['file_list'] = sorted(final_list)
 
     # record number of files tossed out
-    if count_out_of_window_files > 0:
-        wndw = f"{s['t']['p_visit']['visit_date']} - {s['t']['p_visit']['return_date']}"
-        wndw = f"{visit_datetime} - {return_datetime}"
-        exc_short = [x.split("/")[-1] for x in exclude_list]
-        estr = ",".join(exc_short)
-        s["t"]["conversion_issues"].append(
-            f"INFO: {len(exclude_list)} files were outside the observation window {wndw} and removed. {estr}"
-        )
+    if (count_out_of_window_files > 0):
+        wndw = f'{s["t"]['p_visit']['visit_date']} - {s["t"]['p_visit']['return_date']}'
+        wndw = f'{visit_datetime} - {return_datetime}'
+        exc_short = [x.split('/')[-1] for x in exclude_list]
+        estr = ','.join(exc_short)
+        s['t']['conversion_issues'].append(f'INFO: {len(exclude_list)} files were outside the observation window {wndw} and removed. {estr}')
+    return s
+
+
+def pipeline_qa_csv_drop_short_files_from_list(s):
+    """Opens each file and confirms that it is readable and has at least 1 row of data.
+    Files that do not meet these criteria are removed from the list and reported
+    in the processing history as information. First few lines are expected to contain
+
+    ; Version: 1.2.4                        # expect 17 chars
+    ; SEN55 77.. serial number              # expect 25 chars
+    ts, ... the list of column names        # expect 109 chars
+    2024-08-08 00:00:00, ... values         # expect > 0 chars
+
+    Args:
+        s (dict): structure containing list of files to check
+    Returns:
+        s (dict): updated csv list and add to 'qa' section reflecting the result of this check
+    """
+    drop_list = list()
+    for f in s['t']['file_list']:
+        # failure only if < 4 lines
+        try:
+            with open(f, 'r') as this_f:
+                for n in range(4):
+                    r = this_f.readline()  # can print during debugging
+                    msg = f'  line {n}: {len(r)} chars, {r}'
+                    utils_logger.debug(msg)
+            if (len(r) < 21):  # expect closer to 140, but 21 will cover the timestamp
+                msg = f'File is < 4 lines, drop it. {f}'
+                utils_logger.debug(msg)
+                drop_list.append(f)
+        except UnicodeDecodeError as e:
+            emsg = f'File contains an invalid byte in the first 4 lines and should be dropped...{f}'
+            emsg += f' e is {e.reason}'
+            utils_logger.warning(emsg)
+            drop_list.append(f)
+
+        except Exception as e:
+            emsg = f'File contains a read error in the first 4 lines and should be dropped...{f}'
+            emsg += f' e is {e}'
+            drop_list.append(f)
+            utils_logger.warning(emsg)
+
+    s['t']['file_drops'] = drop_list
+    keep_list = [x for x in s['t']['file_list'] if x not in drop_list]
+    msg = f'drop_short_files: orig list was {len(s['t']['file_list'])} and drop_list is {len(drop_list)}'
+    utils_logger.debug(msg)
+
+    s['t']['file_list'] = keep_list
+    msg = f'...final list is {len(s['t']['file_list'])}'
+    utils_logger.debug(msg)
+
     return s
 
 
@@ -1468,29 +1420,22 @@ def pipeline_qa_csv_namedelta_to_timestamp1(s):
     Returns:
         s (dict): updated to 'qa' section reflecting the result of this check
     """
-    s["qa"]["csv_fname_to_first_timestamps_checked"][
-        "ok"
-    ] = True  # until find one that's false
+    s['qa']['csv_fname_to_first_timestamps_checked']['ok'] = True  # until find one that's false
 
-    for f in s["t"]["file_list"]:
-        first_timestring = read_single_csv_first_data(f).split(",")[
-            0
-        ]  # returns first line
+    for f in s['t']['file_list']:
+        first_timestring = read_single_csv_first_data(f).split(',')[0]  # returns first line
         # check if the timestamp is valid; if not, handle the error here and return False
-        if isValidTimestring(first_timestring):
+        if (isValidTimestring(first_timestring)):
             # dto = get_datetime_from_timestr(first_timestring)
             fname_tdelta_ok = audit_csv_namedelta(f, first_timestring)
         else:
             fname_tdelta_ok = False  # if invalid, then can't check, so fails
 
-        if not fname_tdelta_ok:
-            eh(
-                s,
-                f"First timestamp {first_timestring} does not make sense with filename {f}",
-            )
-            s["qa"]["csv_fname_to_first_timestamps_checked"]["ok"] = False
+        if (not fname_tdelta_ok):
+            eh(s, f'First timestamp {first_timestring} does not make sense with filename {f}')
+            s['qa']['csv_fname_to_first_timestamps_checked']['ok'] = False
 
-    s["qa"]["csv_fname_to_first_timestamps_checked"]["set_by"] = inspect.stack()[0][3]
+    s['qa']['csv_fname_to_first_timestamps_checked']['set_by'] = inspect.stack()[0][3]
 
     return s
 
@@ -1514,7 +1459,7 @@ def audit_csv_namedelta(name_str, first_timestamp_str, tol=10):
     time_gap = t1_as_dt - filename_as_dt  # must be positive number less than tolerance
     dt_tolerance = timedelta(seconds=tol)
 
-    if (time_gap < dt_tolerance) and (-1 * dt_tolerance < time_gap):
+    if ((time_gap < dt_tolerance) and (-1 * dt_tolerance < time_gap)):
         # print(f'OK fname {fstem} to first timestamp {t1} is delta {delta_time}')
         return True
     else:
