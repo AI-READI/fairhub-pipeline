@@ -64,7 +64,7 @@ def pipeline(
     file_paths = []
     participant_filter_list = []
 
-    dev_allowed_files = ["ENV-1239-056.zip"]
+    # dev_allowed_files = ["ENV-1239-056.zip"]
 
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_meta_")
@@ -99,9 +99,9 @@ def pipeline(
 
         file_name = t.split("/")[-1]
 
-        if file_name not in dev_allowed_files:
-            print(f"dev-Skipping {file_name}")
-            continue
+        # if file_name not in dev_allowed_files:
+        #     print(f"dev-Skipping {file_name}")
+        #     continue
 
         # Check if the file name is in the format dataType-patientID-someOtherID.zip
         if not file_name.endswith(".zip"):
@@ -409,7 +409,7 @@ def pipeline(
         prefix="env_sensor_manual_"
     ) as manual_temp_folder_path:
         for item in manual_input_folder_contents:
-            continue
+
             item_path = str(item.name)
 
             file_name = item_path.split("/")[-1]
@@ -453,7 +453,7 @@ def pipeline(
                     )
 
                 with open(file=download_path, mode="rb") as f:
-                    # output_file_client.upload_data(f, overwrite=True)
+                    output_file_client.upload_data(f, overwrite=True)
 
                     logger.info(f"Copied {item_path} to {upload_path}")
             except Exception:
