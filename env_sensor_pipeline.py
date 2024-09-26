@@ -31,13 +31,13 @@ def pipeline(
 
     input_folder = f"{study_id}/pooled-data/EnvSensor"
     manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual"
-    processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed"
-    dependency_folder = f"{study_id}/dependency/EnvSensor"
+    processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed2"
+    dependency_folder = f"{study_id}/dependency/EnvSensor2"
     pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
-    data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
+    data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot2"
     ignore_file = f"{study_id}/ignore/envSensor.ignore"
     red_cap_export_file = f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep05_EnviroPhysSensorInfoALL.csv"
-    participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("env_sensor", print=True)
 
@@ -63,6 +63,8 @@ def pipeline(
 
     file_paths = []
     participant_filter_list = []
+
+    # dev_allowed_files = ["ENV-1239-056.zip"]
 
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_meta_")
@@ -96,6 +98,10 @@ def pipeline(
         t = str(path.name)
 
         file_name = t.split("/")[-1]
+
+        # if file_name not in dev_allowed_files:
+        #     print(f"dev-Skipping {file_name}")
+        #     continue
 
         # Check if the file name is in the format dataType-patientID-someOtherID.zip
         if not file_name.endswith(".zip"):
@@ -255,6 +261,8 @@ def pipeline(
             data_plot_folder = os.path.join(temp_folder_path, "data_plot")
             os.makedirs(data_plot_folder, exist_ok=True)
 
+            print(conversion_dict)
+
             output_file = conversion_dict["output_file"]
             # pid = conversion_dict["r"]["pppp"]
             pid = conversion_dict["participantID"]
@@ -288,18 +296,15 @@ def pipeline(
                 logger.info(
                     f"Uploaded {dataplot_output_file} to {uploaded_dataplot_output_file}"
                 )
-
             else:
                 logger.error(f"Failed to convert {patient_folder_name}")
-                error_exception = format_exc()
-                error_exception = "".join(error_exception.splitlines())
+
+                error_exception = "".join(format_exc().splitlines())
 
                 logger.error(error_exception)
-
                 file_processor.append_errors(error_exception, path)
 
                 logger.time(time_estimator.step())
-
                 continue
 
             logger.debug(
@@ -400,6 +405,7 @@ def pipeline(
         prefix="env_sensor_manual_"
     ) as manual_temp_folder_path:
         for item in manual_input_folder_contents:
+            continue
             item_path = str(item.name)
 
             file_name = item_path.split("/")[-1]
@@ -443,7 +449,7 @@ def pipeline(
                     )
 
                 with open(file=download_path, mode="rb") as f:
-                    output_file_client.upload_data(f, overwrite=True)
+                    # output_file_client.upload_data(f, overwrite=True)
 
                     logger.info(f"Copied {item_path} to {upload_path}")
             except Exception:

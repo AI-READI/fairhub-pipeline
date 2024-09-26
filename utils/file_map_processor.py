@@ -167,8 +167,29 @@ class FileMapProcessor:
 
         file_map_file_path = os.path.join(meta_temp_folder_path, "file_map.json")
 
+        errors_items_count = 0
+
+        error_file_map = []
+        error_file_list = []
+
+        for item in self.file_map:
+            if len(item["error"]) > 0:
+                errors_items_count += 1
+                error_file_list.append(item["input_file"])
+                error_file_map.append(item)
+
+        output_dict = {
+            "logs": self.file_map,
+            "errors": {
+                "count": errors_items_count,
+                "files": error_file_list,
+                "items": error_file_map,
+            },
+        }
+
         with open(file_map_file_path, "w") as f:
-            json.dump(self.file_map, f, indent=4, sort_keys=True, default=str)
+            json.dump(output_dict, f, indent=4, sort_keys=True, default=str)
+
         with open(file_map_file_path, "rb") as data:
             output_file_client = self.file_system_client.get_file_client(
                 file_path=f"{self.dependency_folder}/file_map.json",
