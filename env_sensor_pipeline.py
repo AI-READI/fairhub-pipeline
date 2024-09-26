@@ -64,7 +64,7 @@ def pipeline(
     file_paths = []
     participant_filter_list = []
 
-    # dev_allowed_files = ["ENV-1239-056.zip"]
+    dev_allowed_files = ["ENV-1239-056.zip"]
 
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_meta_")
@@ -99,9 +99,9 @@ def pipeline(
 
         file_name = t.split("/")[-1]
 
-        # if file_name not in dev_allowed_files:
-        #     print(f"dev-Skipping {file_name}")
-        #     continue
+        if file_name not in dev_allowed_files:
+            print(f"dev-Skipping {file_name}")
+            continue
 
         # Check if the file name is in the format dataType-patientID-someOtherID.zip
         if not file_name.endswith(".zip"):
@@ -300,6 +300,10 @@ def pipeline(
                 logger.error(f"Failed to convert {patient_folder_name}")
 
                 error_exception = "".join(format_exc().splitlines())
+
+                if "conversion_issues" in conversion_dict:
+                    for issue in conversion_dict["conversion_issues"]:
+                        file_processor.append_errors(issue, path)
 
                 logger.error(error_exception)
                 file_processor.append_errors(error_exception, path)
