@@ -34,7 +34,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     pipeline_workflow_log_folder = f"{study_id}/logs/Optomed"
     processed_data_output_folder = f"{study_id}/pooled-data/Optomed-processed"
     ignore_file = f"{study_id}/ignore/optomed.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("optomed", print=True)
 

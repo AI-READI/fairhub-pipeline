@@ -29,7 +29,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     input_folder = f"{study_id}/pooled-data/ECG"
     processed_data_output_folder = f"{study_id}/pooled-data/ECG-processed"
     dependency_folder = f"{study_id}/dependency/ECG"
-    participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
     pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
     ignore_file = f"{study_id}/ignore/ecg.ignore"

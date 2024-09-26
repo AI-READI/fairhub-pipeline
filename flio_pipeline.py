@@ -35,7 +35,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     dependency_folder = f"{study_id}/dependency/Flio"
     pipeline_workflow_log_folder = f"{study_id}/logs/Flio"
     ignore_file = f"{study_id}/ignore/flio.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("flio", print=True)
 

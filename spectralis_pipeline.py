@@ -35,7 +35,7 @@ def pipeline(
     dependency_folder = f"{study_id}/dependency/Spectralis"
     pipeline_workflow_log_folder = f"{study_id}/logs/Spectralis"
     ignore_file = f"{study_id}/ignore/spectralis.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/EnvSensor/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
     logger = logging.Logwatch("spectralis", print=True)
 
