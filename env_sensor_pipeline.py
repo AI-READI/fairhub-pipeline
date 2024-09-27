@@ -225,6 +225,12 @@ def pipeline(
                 zip_ref.extractall(temp_input_folder)
 
             logger.info(f"Unzipped {download_path} to {temp_input_folder}")
+            
+            # Remove any files that are not .csv
+            for root, dirs, files in os.walk(temp_input_folder):
+                for file in files:
+                    if not file.endswith(".csv"):
+                        os.remove(os.path.join(root, file))
 
             # Count the number of files in the temp_input_folder recursively
             # One liner form https://stackoverflow.com/questions/16910330/return-total-number-of-files-in-directory-and-subdirectories
