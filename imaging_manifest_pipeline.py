@@ -3,12 +3,12 @@
 import os
 import tempfile
 import shutil
-import contextlib
 import azure.storage.filedatalake as azurelake
 import config
 import json
 import utils.logwatch as logging
 from traceback import format_exc
+from utils.time_estimator import TimeEstimator
 import pandas as pd
 
 
@@ -48,6 +48,7 @@ def pipeline(
     destination_folder = f"{study_id}/completed/imaging-manifest"
 
     logger = logging.Logwatch("drain", print=True)
+    no_print_logger = logging.Logwatch("drain", print=False)
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -55,17 +56,12 @@ def pipeline(
         file_system_name="stage-1-container",
     )
 
-    # with contextlib.suppress(Exception):
-    #     file_system_client.delete_directory(destination_folder)
-
-    # Create the output folder
-    with contextlib.suppress(Exception):
-        file_system_client.create_directory(destination_folder)
-
     imaging_file_paths = []
     metadata_file_paths = []
     mfp = []
     ifp = []
+
+    time_checkpoints = TimeEstimator(0)
 
     # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp(prefix="imaging_manifest_pipeline_meta_")
@@ -162,6 +158,13 @@ def pipeline(
     )
     logger.info(f"Current total files: {len(metadata_file_paths)}")
 
+    time_checkpoints.split(
+        {
+            "id": "read",
+            "description": "Reading the contents of the data and metadata folders",
+        }
+    )
+
     if set(sorted(mfp)) == set(sorted(ifp)):
         logger.info("The metadata and imaging files are the same")
     else:
@@ -187,9 +190,16 @@ def pipeline(
                     .readall()
                 )
 
-            logger.debug(
+            no_print_logger.debug(
                 f"Downloaded {file_name} to {download_path} - ({idx + 1}/{len(metadata_file_paths)})"
             )
+
+        time_checkpoints.split(
+            {
+                "id": "download",
+                "description": "Downloading the metadata files",
+            }
+        )
 
         files = get_json_filenames(f"{temp_folder_path}/retinal_photography")
         data = []
@@ -404,6 +414,16 @@ def pipeline(
             logger.error(error_exception)
 
     shutil.rmtree(meta_temp_folder_path)
+
+    time_checkpoints.split(
+        {
+            "id": "generate",
+            "description": "Generating the manifest files",
+        }
+    )
+
+    for interval in time_checkpoints.intervals():
+        logger.time(interval["text"])
 
 
 if __name__ == "__main__":

@@ -85,6 +85,8 @@ class TimeEstimator:
     def __init__(self, total_number_of_files: int):
         self.start_time = time.time()
 
+        self.checkpoints = []
+
         # variables for the calculation of the ETA
         self.total_number_of_files = total_number_of_files
         self.total_processed_files: int = 0
@@ -106,6 +108,61 @@ class TimeEstimator:
         current_time = datetime.datetime.now()
         finish_time = current_time + datetime.timedelta(seconds=self.eta)
         return finish_time.strftime("%H:%M:%S")
+
+    def split(self, checkpoint):
+
+        self.checkpoints.append(
+            {
+                "id": checkpoint["id"],
+                "description": checkpoint["description"],
+                "checkpoint_time": time.time(),
+            }
+        )
+
+    def intervals(self):
+        intervals = []
+
+        for idx, checkpoint in enumerate(self.checkpoints):
+            if idx == 0:
+                intervals.append(
+                    {
+                        "id": checkpoint["id"],
+                        "description": checkpoint["description"],
+                        "marked_time": checkpoint["checkpoint_time"],
+                        "interval_time": human_time(
+                            checkpoint["checkpoint_time"] - self.start_time
+                        ),
+                    }
+                )
+            else:
+                intervals.append(
+                    {
+                        "id": checkpoint["id"],
+                        "description": checkpoint["description"],
+                        "marked_time": checkpoint["checkpoint_time"],
+                        "interval_time": human_time(
+                            checkpoint["checkpoint_time"]
+                            - self.checkpoints[idx - 1]["checkpoint_time"]
+                        ),
+                    }
+                )
+
+        current_time = time.time()
+        intervals.append(
+            {
+                "id": "total",
+                "description": "Total completion",
+                "marked_time": current_time,
+                "interval_time": human_time(current_time - self.start_time),
+            }
+        )
+
+        for interval in intervals:
+            interval["text"] = (
+                f"{interval['description']} took {interval['interval_time']} - (#{interval['id']})"
+            )
+
+        return intervals
 
     def currenttz(self):
         if time.daylight:
