@@ -6,7 +6,6 @@ import shutil
 import contextlib
 import azure.storage.filedatalake as azurelake
 import config
-import csv
 import json
 import utils.logwatch as logging
 from traceback import format_exc
@@ -37,6 +36,8 @@ def pipeline(
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
+    # source_imaging_folder = f"{study_id}/completed/imaging"
+    # source_metadata_folder = f"{study_id}/completed/imaging-metadata"
     source_imaging_folder = (
         f"{study_id}/pooled-data/imaging-test/test_manifest_creation/imaging"
     )
@@ -169,7 +170,7 @@ def pipeline(
     with tempfile.TemporaryDirectory(
         prefix="imaging_manifest_pipeline_"
     ) as temp_folder_path:
-        for file_item in metadata_file_paths:
+        for idx, file_item in enumerate(metadata_file_paths):
             path = file_item["file_path"]
             file_name = file_item["file_name"]
 
@@ -186,7 +187,9 @@ def pipeline(
                     .readall()
                 )
 
-            logger.debug(f"Downloaded {file_name} to {download_path}")
+            logger.debug(
+                f"Downloaded {file_name} to {download_path} - ({idx + 1}/{len(metadata_file_paths)})"
+            )
 
         files = get_json_filenames(f"{temp_folder_path}/retinal_photography")
         data = []
@@ -219,7 +222,9 @@ def pipeline(
 
         # Concatenate all DataFrames in the list into one large DataFrame
         final_df = pd.concat(data, ignore_index=True)
-        final_df = final_df.sort_values(by="participant_id")
+        final_df = final_df.sort_values(
+            ["participant_id", "filepath"], ascending=[True, True]
+        )
 
         retinal_photography_manifest_file_path = (
             f"{meta_temp_folder_path}/retinal_photography_manifest.tsv"
@@ -242,7 +247,7 @@ def pipeline(
             with open(file=retinal_photography_manifest_file_path, mode="rb") as f:
                 output_file_client.upload_data(f, overwrite=True)
 
-                logger.fastInfo(f"Uploaded {file_name} to {output_file_path}")
+                logger.info(f"Uploaded {file_name} to {output_file_path}")
         except Exception:
             logger.error(f"Failed to upload {file_name}")
 
@@ -301,7 +306,9 @@ def pipeline(
                 data.append(df_filtered)
 
         final_df = pd.concat(data, ignore_index=True)
-        final_df = final_df.sort_values(by="participant_id")
+        final_df = final_df.sort_values(
+            ["participant_id", "filepath"], ascending=[True, True]
+        )
 
         retinal_oct_manifest_file_path = (
             f"{meta_temp_folder_path}/retinal_oct_manifest.tsv"
@@ -324,7 +331,7 @@ def pipeline(
             with open(file=retinal_oct_manifest_file_path, mode="rb") as f:
                 output_file_client.upload_data(f, overwrite=True)
 
-                logger.fastInfo(f"Uploaded {file_name} to {output_file_path}")
+                logger.info(f"Uploaded {file_name} to {output_file_path}")
         except Exception:
             logger.error(f"Failed to upload {file_name}")
 
@@ -364,7 +371,9 @@ def pipeline(
                 data.append(df_filtered)
 
         final_df = pd.concat(data, ignore_index=True)
-        final_df = final_df.sort_values(by="participant_id")
+        final_df = final_df.sort_values(
+            ["participant_id", "filepath"], ascending=[True, True]
+        )
 
         retinal_flio_manifest_file_path = (
             f"{meta_temp_folder_path}/retinal_flio_manifest.tsv"
@@ -387,7 +396,7 @@ def pipeline(
             with open(file=retinal_flio_manifest_file_path, mode="rb") as f:
                 output_file_client.upload_data(f, overwrite=True)
 
-                logger.fastInfo(f"Uploaded {file_name} to {output_file_path}")
+                logger.info(f"Uploaded {file_name} to {output_file_path}")
         except Exception:
             logger.error(f"Failed to upload {file_name}")
 
