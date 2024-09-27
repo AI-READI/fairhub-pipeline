@@ -59,6 +59,14 @@ class Logwatch:
                 args=(self.drain, {"level": "trace", "message": message}),
             ).start()
 
+    def noPrintTrace(self, message: str):
+        """Send a trace message to the logwatch server without printing"""
+        with contextlib.suppress(Exception):
+            threading.Thread(
+                target=requests.post,
+                args=(self.drain, {"level": "trace", "message": message}),
+            ).start()
+
     def debug(self, message: str):
         """Send a debug message to the logwatch server"""
         if self.print:

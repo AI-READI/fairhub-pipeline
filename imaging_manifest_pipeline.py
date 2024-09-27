@@ -48,7 +48,6 @@ def pipeline(
     destination_folder = f"{study_id}/completed/imaging-manifest"
 
     logger = logging.Logwatch("drain", print=True)
-    no_print_logger = logging.Logwatch("drain", print=False)
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -190,7 +189,7 @@ def pipeline(
                     .readall()
                 )
 
-            no_print_logger.debug(
+            logger.noPrintTrace(
                 f"Downloaded {file_name} to {download_path} - ({idx + 1}/{len(metadata_file_paths)})"
             )
 
