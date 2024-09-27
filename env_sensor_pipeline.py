@@ -30,16 +30,18 @@ def pipeline(
         raise ValueError("study_id is required")
 
     # input_folder = f"{study_id}/pooled-data/EnvSensor"
-    input_folder = f"{study_id}/pooled-data/JS_EnvSensor"
-    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-year2"
-    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-pilot"
+    # manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-year2"
     # processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed"
-    processed_data_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-processed"
     # dependency_folder = f"{study_id}/dependency/EnvSensor"
-    dependency_folder = f"{study_id}/dependency/JS_EnvSensor"
-    pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
     # data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
+    pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
+
+    input_folder = f"{study_id}/pooled-data/JS_EnvSensor"
+    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-pilot"
+    processed_data_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-processed"
+    dependency_folder = f"{study_id}/dependency/JS_EnvSensor"
     data_plot_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-dataplot"
+
     ignore_file = f"{study_id}/ignore/envSensor.ignore"
     red_cap_export_file = (
         f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep13_EnviroPhysSensorInfo.csv"
