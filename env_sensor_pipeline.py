@@ -29,12 +29,17 @@ def pipeline(
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/EnvSensor"
-    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual"
-    processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed2"
-    dependency_folder = f"{study_id}/dependency/EnvSensor2"
+    # input_folder = f"{study_id}/pooled-data/EnvSensor"
+    input_folder = f"{study_id}/pooled-data/JS_EnvSensor"
+    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-year2"
+    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-pilot"
+    # processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed"
+    processed_data_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-processed"
+    # dependency_folder = f"{study_id}/dependency/EnvSensor"
+    dependency_folder = f"{study_id}/dependency/JS_EnvSensor"
     pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
-    data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot2"
+    # data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
+    data_plot_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-dataplot"
     ignore_file = f"{study_id}/ignore/envSensor.ignore"
     red_cap_export_file = (
         f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep13_EnviroPhysSensorInfo.csv"
@@ -122,11 +127,11 @@ def pipeline(
 
         patient_id = cleaned_file_name.split("-")[1]
 
-        if str(patient_id) not in participant_filter_list:
-            logger.debug(
-                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
-            )
-            continue
+        # if str(patient_id) not in participant_filter_list:
+        #     logger.debug(
+        #         f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+        #     )
+        #     continue
 
         patient_folder_name = file_name.split(".")[0]
 

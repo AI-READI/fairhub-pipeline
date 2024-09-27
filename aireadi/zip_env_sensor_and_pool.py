@@ -13,9 +13,10 @@ completed_folders_file = "completed_folders_env_sensor.json"
 
 def main():  # sourcery skip: low-code-quality
     project_name = "AI-READI"
-    site_names = ["UW", "UAB", "UCSD"]
-    # site_names = ["UAB"]
-    device = "EnvSensor"
+    # site_names = ["UW", "UAB", "UCSD"]
+    site_names = ["JS_pilot_envsensor"]
+    # device = "EnvSensor"
+    device = "JS_EnvSensor"
 
     # create datalake clients
     source_service_client = azurelake.FileSystemClient.from_connection_string(
@@ -38,7 +39,8 @@ def main():  # sourcery skip: low-code-quality
     for site_name in site_names:
         print(f"Processing {device} data for {site_name}")
 
-        source_directory = f"{project_name}/{site_name}/{site_name}_{device}"
+        # source_directory = f"{project_name}/{site_name}/{site_name}_{device}"
+        source_directory = f"{project_name}/{site_name}/{device}"
         source_folder_paths = source_service_client.get_paths(
             path=source_directory, recursive=False
         )
@@ -129,8 +131,8 @@ def main():  # sourcery skip: low-code-quality
             )
 
             # Write at the end of each loop in case of failure
-            with open(completed_folders_file, "w") as f:
-                json.dump(completed_folders, f, indent=4)
+            # with open(completed_folders_file, "w") as f:
+            #     json.dump(completed_folders, f, indent=4)
 
             print(f"Folder {batch_folder_name} processed successfully")
 
