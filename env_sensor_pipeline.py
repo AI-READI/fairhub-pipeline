@@ -29,18 +29,18 @@ def pipeline(
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    # input_folder = f"{study_id}/pooled-data/EnvSensor"
-    # manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-year2"
-    # processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed"
-    # dependency_folder = f"{study_id}/dependency/EnvSensor"
-    # data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
+    input_folder = f"{study_id}/pooled-data/EnvSensor"
+    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-year2"
+    processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed"
+    dependency_folder = f"{study_id}/dependency/EnvSensor"
+    data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
     pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
 
-    input_folder = f"{study_id}/pooled-data/JS_EnvSensor"
-    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-pilot"
-    processed_data_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-processed"
-    dependency_folder = f"{study_id}/dependency/JS_EnvSensor"
-    data_plot_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-dataplot"
+    # input_folder = f"{study_id}/pooled-data/JS_EnvSensor"
+    # manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-pilot"
+    # processed_data_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-processed"
+    # dependency_folder = f"{study_id}/dependency/JS_EnvSensor"
+    # data_plot_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-dataplot"
 
     ignore_file = f"{study_id}/ignore/envSensor.ignore"
     red_cap_export_file = (
@@ -129,11 +129,11 @@ def pipeline(
 
         patient_id = cleaned_file_name.split("-")[1]
 
-        # if str(patient_id) not in participant_filter_list:
-        #     logger.debug(
-        #         f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
-        #     )
-        #     continue
+        if str(patient_id) not in participant_filter_list:
+            logger.debug(
+                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+            )
+            continue
 
         patient_folder_name = file_name.split(".")[0]
 
@@ -225,7 +225,7 @@ def pipeline(
                 zip_ref.extractall(temp_input_folder)
 
             logger.info(f"Unzipped {download_path} to {temp_input_folder}")
-            
+
             # Remove any files that are not .csv
             for root, dirs, files in os.walk(temp_input_folder):
                 for file in files:
@@ -285,9 +285,9 @@ def pipeline(
             if conversion_dict["conversion_success"]:
                 meta_dict = env_sensor.metadata(conversion_dict["output_file"])
 
-                output_file_path = f"{data_plot_output_folder}/environmental_sensor/leelab_anura/{pid}/{output_file.split('/')[-1]}"
+                metadata_output_file_path = f"/environmental_sensor/leelab_anura/{pid}/{output_file.split('/')[-1]}"
 
-                manifest.add_metadata(meta_dict, output_file_path)
+                manifest.add_metadata(meta_dict, metadata_output_file_path)
 
                 dataplot_dict = env_sensor.dataplot(conversion_dict, data_plot_folder)
 
@@ -536,11 +536,11 @@ def pipeline(
     logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
 
     with open(json_file_path, "rb") as data:
-        dependency_output_file_Client = file_system_client.get_file_client(
+        dependency_output_file_client = file_system_client.get_file_client(
             file_path=f"{dependency_folder}/{json_file_name}"
         )
 
-        dependency_output_file_Client.upload_data(data, overwrite=True)
+        dependency_output_file_client.upload_data(data, overwrite=True)
 
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 

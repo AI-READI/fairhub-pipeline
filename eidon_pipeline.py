@@ -474,11 +474,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
 
     with open(json_file_path, "rb") as data:
-        dependency_output_file_Client = file_system_client.get_file_client(
+        dependency_output_file_client = file_system_client.get_file_client(
             file_path=f"{dependency_folder}/{json_file_name}"
         )
 
-        dependency_output_file_Client.upload_data(data, overwrite=True)
+        dependency_output_file_client.upload_data(data, overwrite=True)
 
         logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
