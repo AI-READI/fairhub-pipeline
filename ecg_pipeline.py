@@ -213,13 +213,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 logger.info(f"Converted {original_file_name}")
             except Exception:
                 logger.error(f"Failed to convert {original_file_name}")
-                error_exception = format_exc()
-                e = "".join(error_exception.splitlines())
 
-                logger.error(e)
+                error_exception = "".join(format_exc().splitlines())
+                logger.error(error_exception)
 
-                file_processor.append_errors(e, path)
-
+                file_processor.append_errors(error_exception, path)
                 logger.time(time_estimator.step())
                 continue
 
@@ -266,7 +264,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
                         error_exception = "".join(format_exc().splitlines())
                         logger.error(error_exception)
-                        file_processor.append_errors(e, path)
+
+                        file_processor.append_errors(error_exception, path)
 
                         outputs_uploaded = False
                         continue
