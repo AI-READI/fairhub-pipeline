@@ -155,6 +155,9 @@ class CGMManifest:
         self,
         file_path: str,
     ):
+        # Sort the output data by participant ID
+        self.output_data.sort(key=lambda x: x[0])
+
         # Write the data to a TSV file
         with open(file_path, "w") as f:
             f.write(

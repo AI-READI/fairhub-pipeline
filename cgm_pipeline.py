@@ -362,16 +362,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.info(f"Uploaded QC file for {file_name}")
 
             logger.time(time_estimator.step())
-
             os.remove(download_path)
 
     file_processor.delete_out_of_date_output_files()
-
     file_processor.remove_seen_flag_from_map()
 
     # Write the manifest to a file
     manifest_file_path = os.path.join(meta_temp_folder_path, "manifest_cgm_v2.tsv")
-
     manifest.write_tsv(manifest_file_path)
 
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
