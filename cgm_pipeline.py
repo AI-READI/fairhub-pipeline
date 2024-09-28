@@ -36,19 +36,22 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         raise ValueError("study_id is required")
 
     # input_folder = f"{study_id}/pooled-data/CGM"
-    input_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-Pool"
     # processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
-    processed_data_output_folder = (
-        f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-processed"
-    )
     # processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
-    processed_data_qc_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-qc"
     # dependency_folder = f"{study_id}/dependency/CGM"
-    dependency_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-dependency"
-    manifest_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-manifest"
+    # manifest_folder = f"{study_id}/manifest/CGM"
+
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
     participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+
+    input_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-Pool"
+    processed_data_output_folder = (
+        f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-processed"
+    )
+    processed_data_qc_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-qc"
+    dependency_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-dependency"
+    manifest_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-manifest"
 
     logger = logging.Logwatch("cgm", print=True)
 
@@ -109,14 +112,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         if len(file_name.split("_")) != 7:
             continue
 
-        patient_id = file_name.split("_")[3]
-
-        # if str(patient_id) not in participant_filter_list:
-        #     logger.debug(
-        #         f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
-        #     )
-        #     continue
-
         file_paths.append(
             {
                 "file_path": t,
@@ -126,7 +121,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "output_uploaded": False,
                 "qc_uploaded": True,
                 "output_files": [],
-                "patient_id": patient_id,
             }
         )
 
@@ -146,7 +140,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     time_estimator = TimeEstimator(total_files)
 
     for file_item in file_paths:
-        patient_id = file_item["patient_id"]
+        file_name_only = file_name.split(".")[0]
+        patient_id = "Unknown"
+
+        if file_name_only.split("-")[0] == "DEX":
+            patient_id = file_name_only.split("-")[1]
+        elif file_name_only.split("_")[0] == "Clarity":
+            patient_id = file_name_only.split("_")[3]
 
         logger.info(f"Processing {patient_id}")
 
@@ -160,6 +160,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         if file_processor.is_file_ignored(file_name, path):
             logger.info(f"Ignoring {file_name} because it is in the ignore file")
             logger.time(time_estimator.step())
+            continue
+
+        if str(patient_id) not in participant_filter_list:
+            logger.debug(
+                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+            )
             continue
 
         # download the file to the temp folder
