@@ -207,11 +207,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         f"Participant ID {participant_id} not in the allowed list. Skipping {original_file_name}"
                     )
 
-                    file_processor.append_errors(
-                        f"Participant ID {participant_id} not in the allowed list",
-                        path,
-                    )
-
                     logger.time(time_estimator.step())
                     continue
 
@@ -245,7 +240,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             workflow_output_files = []
 
             outputs_uploaded = True
-            upload_exception = ""
 
             file_processor.delete_preexisting_output_files(path)
 
@@ -269,15 +263,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         output_file_client.upload_data(data, overwrite=True)
                     except Exception:
                         logger.error(f"Failed to upload {file}")
-                        error_exception = format_exc()
-                        e = "".join(error_exception.splitlines())
 
-                        logger.error(e)
-
-                        outputs_uploaded = False
-
+                        error_exception = "".join(format_exc().splitlines())
+                        logger.error(error_exception)
                         file_processor.append_errors(e, path)
 
+                        outputs_uploaded = False
                         continue
 
                     file_item["output_files"].append(output_file_path)
@@ -295,7 +286,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     f"Uploaded outputs of {original_file_name} to {processed_data_output_folder}"
                 )
             else:
-                file_item["output_uploaded"] = upload_exception
+                file_item["output_uploaded"] = False
                 logger.error(
                     f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
                 )
