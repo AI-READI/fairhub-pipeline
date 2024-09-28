@@ -256,9 +256,9 @@ def pipeline(
             with open(file=retinal_photography_manifest_file_path, mode="rb") as f:
                 output_file_client.upload_data(f, overwrite=True)
 
-                logger.info(f"Uploaded {file_name} to {output_file_path}")
+                logger.info(f"Uploaded manifest to {output_file_path}")
         except Exception:
-            logger.error(f"Failed to upload {file_name}")
+            logger.error("Failed to upload manifest")
 
             error_exception = "".join(format_exc().splitlines())
             logger.error(error_exception)
@@ -340,9 +340,9 @@ def pipeline(
             with open(file=retinal_oct_manifest_file_path, mode="rb") as f:
                 output_file_client.upload_data(f, overwrite=True)
 
-                logger.info(f"Uploaded {file_name} to {output_file_path}")
+                logger.info(f"Uploaded manifest to {output_file_path}")
         except Exception:
-            logger.error(f"Failed to upload {file_name}")
+            logger.error("Failed to upload manifest")
 
             error_exception = "".join(format_exc().splitlines())
             logger.error(error_exception)
@@ -405,9 +405,9 @@ def pipeline(
             with open(file=retinal_flio_manifest_file_path, mode="rb") as f:
                 output_file_client.upload_data(f, overwrite=True)
 
-                logger.info(f"Uploaded {file_name} to {output_file_path}")
+                logger.info(f"Uploaded manifest to {output_file_path}")
         except Exception:
-            logger.error(f"Failed to upload {file_name}")
+            logger.error("Failed to upload manifest")
 
             error_exception = "".join(format_exc().splitlines())
             logger.error(error_exception)
