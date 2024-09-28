@@ -36,14 +36,14 @@ def pipeline(
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    # source_imaging_folder = f"{study_id}/completed/imaging"
-    # source_metadata_folder = f"{study_id}/completed/imaging-metadata"
-    source_imaging_folder = (
-        f"{study_id}/pooled-data/imaging-test/test_manifest_creation/imaging"
-    )
-    source_metadata_folder = (
-        f"{study_id}/pooled-data/imaging-test/test_manifest_creation/imaging-metadata"
-    )
+    source_imaging_folder = f"{study_id}/completed/imaging"
+    source_metadata_folder = f"{study_id}/completed/imaging-metadata"
+    # source_imaging_folder = (
+    #     f"{study_id}/pooled-data/imaging-test/test_manifest_creation/imaging"
+    # )
+    # source_metadata_folder = (
+    #     f"{study_id}/pooled-data/imaging-test/test_manifest_creation/imaging-metadata"
+    # )
 
     destination_folder = f"{study_id}/completed/imaging-manifest"
 
