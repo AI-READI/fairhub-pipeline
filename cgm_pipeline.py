@@ -108,10 +108,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         if file_name.split(".")[-1] != "csv":
             continue
 
-        # Check if the file name is in the format Clarity_Export_AIREADI_patientID_AIREADI-patientID_date_time.csv
-        if len(file_name.split("_")) != 7:
-            continue
-
         file_paths.append(
             {
                 "file_path": t,
