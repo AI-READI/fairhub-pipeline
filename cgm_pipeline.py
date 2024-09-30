@@ -35,23 +35,23 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    # input_folder = f"{study_id}/pooled-data/CGM"
-    # processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
-    # processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
-    # dependency_folder = f"{study_id}/dependency/CGM"
-    # manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
+    input_folder = f"{study_id}/pooled-data/CGM"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
+    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
+    dependency_folder = f"{study_id}/dependency/CGM"
+    manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
 
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
     participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
-    input_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-Pool"
-    processed_data_output_folder = (
-        f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-processed"
-    )
-    processed_data_qc_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-qc"
-    dependency_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-dependency"
-    manifest_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-manifest"
+    # input_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-Pool"
+    # processed_data_output_folder = (
+    #     f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-processed"
+    # )
+    # processed_data_qc_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-qc"
+    # dependency_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-dependency"
+    # manifest_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-manifest"
 
     logger = logging.Logwatch("cgm", print=True)
 
