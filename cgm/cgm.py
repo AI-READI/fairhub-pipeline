@@ -186,8 +186,11 @@ def convert(
     # 	df = pd.read_excel(input_path, engine='openpyxl')
     patient = df["Patient Info"][2]
 
-    # drop rows from spreadsheet that we do not need in data series
-    df.drop(index=df.index[:5], inplace=True)
+    # Dynamically detect and remove metadata rows
+    # Find the first row where "Timestamp (YYYY-MM-DDThh:mm:ss)" is not empty
+    first_data_index = df[df["Timestamp (YYYY-MM-DDThh:mm:ss)"].notna()].index[0]
+    # Keep only the rows from the first data index onward
+    df = df.loc[first_data_index:].reset_index(drop=True)
 
     # drop columns that have no data
     df.drop(
