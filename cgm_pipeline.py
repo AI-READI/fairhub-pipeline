@@ -203,15 +203,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 prefix="cgm_pipeline_temp_"
             ) as cgm_temp_folder_path:
                 cgm_output_file_path = os.path.join(
-                    cgm_temp_folder_path, f"{patient_id}_DEX.json"
+                    cgm_temp_folder_path, f"DEX-{patient_id}.json"
                 )
                 cgm_final_output_file_path = os.path.join(
                     cgm_temp_folder_path,
-                    f"DEX-{patient_id}/{patient_id}_DEX.json",
+                    f"DEX-{patient_id}/DEX-{patient_id}.json",
                 )
                 cgm_final_output_qc_file_path = os.path.join(
                     cgm_temp_folder_path,
-                    f"DEX_{patient_id}/QC_results.txt",
+                    f"DEX-{patient_id}/QC_results.txt",
                 )
 
             uuid = f"AIREADI-{patient_id}"
@@ -270,7 +270,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 with open(file, "rb") as data:
                     f2 = file.split("/")[-1]
 
-                    output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{f2}"
+                    output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{patient_id}_DEX.json"
 
                     logger.debug(f"Uploading {f2} to {output_file_path}")
 
