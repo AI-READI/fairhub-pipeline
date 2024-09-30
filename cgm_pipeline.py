@@ -188,7 +188,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # Create a temporary folder on the local machine
         with tempfile.TemporaryDirectory(prefix="cgm_pipeline_") as temp_folder_path:
             # File should be downloaded as DEX_{patient_id}.csv
-            download_path = os.path.join(temp_folder_path, f"DEX-{patient_id}.csv")
+            download_path = os.path.join(temp_folder_path, f"DEX_{patient_id}.csv")
 
             logger.debug(f"Downloading {file_name} to {download_path}")
 
@@ -203,11 +203,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 prefix="cgm_pipeline_temp_"
             ) as cgm_temp_folder_path:
                 cgm_output_file_path = os.path.join(
-                    cgm_temp_folder_path, f"DEX-{patient_id}.json"
+                    cgm_temp_folder_path, f"DEX_{patient_id}.json"
                 )
                 cgm_final_output_file_path = os.path.join(
                     cgm_temp_folder_path,
-                    f"DEX-{patient_id}/DEX-{patient_id}.json",
+                    f"DEX_{patient_id}/DEX_{patient_id}.json",
                 )
                 cgm_final_output_qc_file_path = os.path.join(
                     cgm_temp_folder_path,
