@@ -39,7 +39,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
     dependency_folder = f"{study_id}/dependency/CGM"
-    manifest_folder = f"{study_id}/manifest/CGM"
+    manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
 
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
@@ -136,6 +136,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     time_estimator = TimeEstimator(total_files)
 
     for file_item in file_paths:
+        path = file_item["file_path"]
+
+        workflow_input_files = [path]
+
+        # get the file name from the path. It's in the format Clarity_Export_AIREADI_{id}_*.csv
+        file_name = path.split("/")[-1]
+
         file_name_only = file_name.split(".")[0]
         patient_id = "Unknown"
 
@@ -145,13 +152,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             patient_id = file_name_only.split("_")[3]
 
         logger.info(f"Processing {patient_id}")
-
-        path = file_item["file_path"]
-
-        workflow_input_files = [path]
-
-        # get the file name from the path. It's in the format Clarity_Export_AIREADI_{id}_*.csv
-        file_name = path.split("/")[-1]
 
         if file_processor.is_file_ignored(file_name, path):
             logger.info(f"Ignoring {file_name} because it is in the ignore file")
@@ -371,6 +371,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     manifest_file_path = os.path.join(meta_temp_folder_path, "manifest_cgm_v2.tsv")
     manifest.write_tsv(manifest_file_path)
 
+    logger.info(f"Uploading manifest file to {manifest_folder}/manifest_cgm_v2.tsv")
+
+    # Upload the manifest file
+    with open(manifest_file_path, "rb") as data:
+        output_blob_client = file_system_client.get_file_client(
+            file_path=f"{manifest_folder}/manifest_cgm_v2.tsv"
+        )
+
+        output_blob_client.upload_data(data, overwrite=True)
+        logger.info(f"Uploaded manifest file to {manifest_folder}/manifest_cgm_v2.tsv")
+
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
 
     try:
@@ -379,15 +390,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     except Exception as e:
         logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
         raise e
-
-    # Upload the manifest file
-    with open(manifest_file_path, "rb") as data:
-
-        output_blob_client = file_system_client.get_file_client(
-            file_path=f"{manifest_folder}/manifest_cgm_v2.tsv"
-        )
-
-        output_blob_client.upload_data(data, overwrite=True)
 
     # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
