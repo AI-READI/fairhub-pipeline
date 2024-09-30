@@ -425,11 +425,16 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         output_blob_client.upload_data(data, overwrite=True)
+        logger.info(
+            f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
 
     deps_output = workflow_file_dependencies.write_to_file(meta_temp_folder_path)
 
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
+
+    logger.info(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
 
     with open(json_file_path, "rb") as data:
         output_blob_client = file_system_client.get_file_client(
@@ -437,6 +442,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         output_blob_client.upload_data(data, overwrite=True)
+        logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
 
     shutil.rmtree(meta_temp_folder_path)
 
