@@ -31,8 +31,8 @@ class GarminManifest:
 
             for row in reader:
                 participant_id = row["studyid"]
-                dominant_hand_code = row["dvamwenhand"]
-                wrist_worn_on_code = row["dvamwendhand"]
+                dominant_hand_code = row["dvamwendhand"]
+                wrist_worn_on_code = row["dvamwenhand"]
 
                 # Map numerical codes to textual descriptions
                 dominant_hand = value_mapping.get(dominant_hand_code, "None")
