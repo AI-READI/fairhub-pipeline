@@ -67,10 +67,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/FitnessTracker"
-    processed_data_output_folder = f"{study_id}/pooled-data/FitnessTracker-processed"
-    manifest_folder = f"{study_id}/pooled-data/FitnessTracker-manifest"
-    dependency_folder = f"{study_id}/dependency/FitnessTracker"
+    # input_folder = f"{study_id}/pooled-data/FitnessTracker"
+    # processed_data_output_folder = f"{study_id}/pooled-data/FitnessTracker-processed"
+    # manifest_folder = f"{study_id}/pooled-data/FitnessTracker-manifest"
+    # dependency_folder = f"{study_id}/dependency/FitnessTracker"
 
     pipeline_workflow_log_folder = f"{study_id}/logs/FitnessTracker"
     ignore_file = f"{study_id}/ignore/fitnessTracker.ignore"
@@ -80,14 +80,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     )
     participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
-    # input_folder = f"{study_id}/Stanford-Test/Pilot-Garmin/FitnessTracker-Pool"
-    # processed_data_output_folder = (
-    #     f"{study_id}/Stanford-Test/Pilot-Garmin/FitnessTracker-processed"
-    # )
-    # manifest_folder = f"{study_id}/Stanford-Test/Pilot-Garmin/FitnessTracker-manifest"
-    # dependency_folder = (
-    #     f"{study_id}/Stanford-Test/Pilot-Garmin/FitnessTracker-dependency"
-    # )
+    input_folder = f"{study_id}/Stanford-Test/Pilot-Garmin/FitnessTracker-Pool"
+    processed_data_output_folder = (
+        f"{study_id}/Stanford-Test/Pilot-Garmin/FitnessTracker-processed"
+    )
+    manifest_folder = f"{study_id}/Stanford-Test/Pilot-Garmin/FitnessTracker-manifest"
+    dependency_folder = (
+        f"{study_id}/Stanford-Test/Pilot-Garmin/FitnessTracker-dependency"
+    )
 
     logger = logging.Logwatch("fitness_tracker", print=True)
 
@@ -394,7 +394,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 logger.info(f"Standardized heart rate for {patient_id}")
-                shutil.rmtree(heart_rate_jsons_output_folder)
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(heart_rate_jsons_output_folder)
 
                 logger.debug(f"Generating manifest for heart rate for {patient_id}")
                 manifest.process_heart_rate(final_heart_rate_output_folder)
@@ -449,7 +450,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 logger.info(f"Standardized oxygen saturation for {patient_id}")
-                shutil.rmtree(oxygen_saturation_jsons_output_folder)
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(oxygen_saturation_jsons_output_folder)
 
                 logger.debug(
                     f"Generating manifest for oxygen saturation for {patient_id}"
@@ -507,8 +509,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     final_physical_activities_output_folder,
                 )
 
-                logger.info(f"Standardized physical activities for {patient_id} ")
-                shutil.rmtree(physical_activities_jsons_output_folder)
+                logger.info(f"Standardized physical activities for {patient_id}")
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(physical_activities_jsons_output_folder)
 
                 logger.debug(
                     f"Generating manifest for physical activities for {patient_id}"
@@ -568,7 +571,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     final_physical_activity_calories_output_folder,
                 )
                 logger.info(f"Standardized physical activity calories for {patient_id}")
-                shutil.rmtree(physical_activity_calories_jsons_output_folder)
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(physical_activity_calories_jsons_output_folder)
 
                 logger.debug(
                     f"Generating manifest for physical activity calories for {patient_id}"
@@ -629,7 +633,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 logger.info(f"Standardized respiratory rate for {patient_id}")
-                shutil.rmtree(respiratory_rate_jsons_output_folder)
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(respiratory_rate_jsons_output_folder)
 
                 logger.debug(
                     f"Generating manifest for respiratory rate for {patient_id}"
@@ -682,7 +687,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 logger.info(f"Standardized sleep stages for {patient_id}")
-                shutil.rmtree(sleep_stages_jsons_output_folder)
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(sleep_stages_jsons_output_folder)
 
                 logger.debug(f"Generating manifest for sleep stages for {patient_id}")
                 manifest.process_sleep(final_sleep_stages_output_folder)
@@ -732,7 +738,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
                 logger.info(f"Standardized stress for {patient_id}")
-                shutil.rmtree(stress_jsons_output_folder)
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(stress_jsons_output_folder)
 
                 logger.debug(f"Generating manifest for stress for {patient_id}")
                 manifest.process_stress(final_stress_output_folder)
@@ -927,10 +934,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 )
 
             with open(file=download_path, mode="rb") as f:
-
                 output_file_client.upload_data(f, overwrite=True)
-
-                logger.info(f"Copied {item_path} to {upload_path}")
+                logger.info(f"Uploaded {item_path} to {upload_path}")
 
             os.remove(download_path)
 
