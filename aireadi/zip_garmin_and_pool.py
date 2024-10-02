@@ -12,9 +12,10 @@ completed_folders_file = "completed_folders_garmin.json"
 
 
 def main():  # sourcery skip: low-code-quality
-    project_name = "AI-READI"
-    site_names = ["UW", "UAB", "UCSD"]
-    # site_names = ["UAB"]
+    # project_name = "AI-READI"
+    project_name = "AI-READI/Stanford-Test"
+    # site_names = ["UW", "UAB", "UCSD"]
+    site_names = ["Pilot-Garmin"]
     device = "FitnessTracker"
 
     # create datalake clients
@@ -31,12 +32,14 @@ def main():  # sourcery skip: low-code-quality
         with open(completed_folders_file, "r") as f:
             completed_folders = json.load(f)
 
-    destination_directory = f"{project_name}/pooled-data/{device}"
+    # destination_directory = f"{project_name}/pooled-data/{device}"
+    destination_directory = f"{project_name}/Pilot-Garmin/FitnessTracker-processed"
 
     for site_name in site_names:
         print(f"Processing {device} data for {site_name}")
 
-        source_directory = f"{project_name}/{site_name}/{site_name}_{device}"
+        # source_directory = f"{project_name}/{site_name}/{site_name}_{device}"
+        source_directory = f"{project_name}/{site_name}/{device}"
         source_folder_paths = source_service_client.get_paths(
             path=source_directory, recursive=False
         )
@@ -140,8 +143,8 @@ def main():  # sourcery skip: low-code-quality
             )
 
             # Write at the end of each loop in case of failure
-            with open(completed_folders_file, "w") as f:
-                json.dump(completed_folders, f, indent=4)
+            # with open(completed_folders_file, "w") as f:
+            #     json.dump(completed_folders, f, indent=4)
 
             print(f"Folder {batch_folder_name} processed successfully")
 
