@@ -33,7 +33,7 @@ def main():  # sourcery skip: low-code-quality
             completed_folders = json.load(f)
 
     # destination_directory = f"{project_name}/pooled-data/{device}"
-    destination_directory = f"{project_name}/Pilot-Garmin/FitnessTracker-processed"
+    destination_directory = f"{project_name}/Pilot-Garmin/FitnessTracker-Pool"
 
     for site_name in site_names:
         print(f"Processing {device} data for {site_name}")
