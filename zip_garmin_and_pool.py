@@ -40,7 +40,7 @@ def main():  # sourcery skip: low-code-quality
 
         # source_directory = f"{project_name}/{site_name}/{site_name}_{device}"
         source_directory = f"{project_name}/{site_name}/{device}"
-        source_folder_paths = source_service_client.get_paths(
+        source_folder_paths = destination_service_client.get_paths(
             path=source_directory, recursive=False
         )
 
