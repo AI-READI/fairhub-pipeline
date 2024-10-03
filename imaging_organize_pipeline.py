@@ -25,7 +25,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         # f"{study_id}/pooled-data/imaging-test/test/pilot-imaging/Optomed-processed",
         # f"{study_id}/pooled-data/imaging-test/test/pooled-data/Optomed-processed",
         f"{study_id}/pilot-imaging/Optomed-processed",
-        f"{study_id}/pilot-imaging/Optomed-processed",
         f"{study_id}/pilot-imaging/Eidon-processed",
         f"{study_id}/pilot-imaging/Spectralis-processed",
         f"{study_id}/pilot-imaging/Maestro2-processed",
@@ -39,6 +38,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         f"{study_id}/pooled-data/Triton-processed",
         f"{study_id}/pooled-data/Cirrus-processed",
         f"{study_id}/pooled-data/Flio-processed",
+        f"{study_id}/custom-formatted-imaging/Optomed-processed",
+        f"{study_id}/custom-formatted-imaging/Eidon-processed",
+        f"{study_id}/custom-formatted-imaging/Spectralis-processed",
+        f"{study_id}/custom-formatted-imaging/Maestro2-processed",
+        f"{study_id}/custom-formatted-imaging/Triton-processed",
+        f"{study_id}/custom-formatted-imaging/Cirrus-processed",
+        f"{study_id}/custom-formatted-imaging/Flio-processed",
     ]
 
     source_metadata_folders = [
@@ -58,6 +64,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         f"{study_id}/pooled-data/Triton-metadata",
         f"{study_id}/pooled-data/Cirrus-metadata",
         f"{study_id}/pooled-data/Flio-metadata",
+        f"{study_id}/custom-formatted-imaging/Optomed-metadata",
+        f"{study_id}/custom-formatted-imaging/Eidon-metadata",
+        f"{study_id}/custom-formatted-imaging/Spectralis-metadata",
+        f"{study_id}/custom-formatted-imaging/Maestro2-metadata",
+        f"{study_id}/custom-formatted-imaging/Triton-metadata",
+        f"{study_id}/custom-formatted-imaging/Cirrus-metadata",
+        f"{study_id}/custom-formatted-imaging/Flio-metadata",
     ]
 
     data_destination_folder = f"{study_id}/completed/imaging"
@@ -65,7 +78,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
     ignore_file = (
-        f"{study_id}/ignore/imaging/ignore_post_processing_2024_09_24_22_3344.txt"
+        f"{study_id}/ignore/imaging/ignore_post_processing_2024_10_02_16_0755.txt"
     )
 
     logger = logging.Logwatch("drain", print=True)
