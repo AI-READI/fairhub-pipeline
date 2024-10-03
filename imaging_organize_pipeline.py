@@ -38,13 +38,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         f"{study_id}/pooled-data/Triton-processed",
         f"{study_id}/pooled-data/Cirrus-processed",
         f"{study_id}/pooled-data/Flio-processed",
-        f"{study_id}/custom-formatted-imaging/Optomed-processed",
-        f"{study_id}/custom-formatted-imaging/Eidon-processed",
-        f"{study_id}/custom-formatted-imaging/Spectralis-processed",
-        f"{study_id}/custom-formatted-imaging/Maestro2-processed",
-        f"{study_id}/custom-formatted-imaging/Triton-processed",
-        f"{study_id}/custom-formatted-imaging/Cirrus-processed",
-        f"{study_id}/custom-formatted-imaging/Flio-processed",
+        f"{study_id}/custom-formatted-imaging/Optomed",
+        f"{study_id}/custom-formatted-imaging/Eidon",
+        f"{study_id}/custom-formatted-imaging/Spectralis",
+        f"{study_id}/custom-formatted-imaging/Maestro2",
+        f"{study_id}/custom-formatted-imaging/Triton",
+        f"{study_id}/custom-formatted-imaging/Cirrus",
+        f"{study_id}/custom-formatted-imaging/Flio",
     ]
 
     source_metadata_folders = [
