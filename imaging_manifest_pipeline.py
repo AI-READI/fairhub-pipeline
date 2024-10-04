@@ -74,8 +74,6 @@ def pipeline(
 
         file_name = t.split("/")[-1]
 
-        os.path.dirname(t)
-
         # Check if file_name has an extension (removes folders)
         extension = file_name.split(".")[-1]
         if extension is None:
