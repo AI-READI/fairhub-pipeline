@@ -77,7 +77,7 @@ def pipeline(
             data_file_count += 1
 
             if data_file_count % 1000 == 0:
-                logger.trace(
+                logger.debug(
                     f"Found at least {data_file_count} files in the {source_folder} folder"
                 )
 
