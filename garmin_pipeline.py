@@ -91,7 +91,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     logger = logging.Logwatch("fitness_tracker", print=True)
 
-    dev_allowed_list = ["1025", "7060", "4233", "1081", "4033", "4077", "7352"]
+    # dev_allowed_list = ["1025", "7060", "4233", "1081", "4033", "4077", "7352"]
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -164,11 +164,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         patient_id = cleaned_file_name.split("-")[1]
 
-        if str(patient_id) not in dev_allowed_list:
-            print(
-                f"dev-Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
-            )
-            continue
+        # if str(patient_id) not in dev_allowed_list:
+        #     print(
+        #         f"dev-Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+        #     )
+        #     continue
 
         if str(patient_id) not in participant_filter_list:
             print(
