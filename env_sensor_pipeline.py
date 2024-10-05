@@ -285,7 +285,7 @@ def pipeline(
             if conversion_dict["conversion_success"]:
                 meta_dict = env_sensor.metadata(conversion_dict["output_file"])
 
-                metadata_output_file_path = f"/environmental_sensor/leelab_anura/{pid}/{output_file.split('/')[-1]}"
+                metadata_output_file_path = f"/environment/environmental_sensor/leelab_anura/{pid}/{output_file.split('/')[-1]}"
 
                 manifest.add_metadata(meta_dict, metadata_output_file_path)
 
