@@ -135,3 +135,11 @@ class Logwatch:
                 target=requests.post,
                 args=(self.drain, {"level": "time", "message": message}),
             ).start()
+
+    def noPrintTime(self, message: str):
+        """Send a threaded time message to the logwatch server. Used for items that need to be processed quickly"""
+        with contextlib.suppress(Exception):
+            threading.Thread(
+                target=requests.post,
+                args=(self.drain, {"level": "time", "message": message}),
+            ).start()
