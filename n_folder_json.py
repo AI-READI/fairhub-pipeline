@@ -30,9 +30,10 @@ def pipeline(
     FAST_FOLDER_CHECK = True
 
     source_folders = [
-        f"{study_id}/completed/imaging_oct3",
-        f"{study_id}/completed/imaging_oct2",
-        f"{study_id}/completed/imaging",
+        # f"{study_id}/completed/imaging_oct3",
+        # f"{study_id}/completed/imaging_oct2",
+        # f"{study_id}/completed/imaging",
+        f"{study_id}/completed/environment",
     ]
 
     # source_folders = [
