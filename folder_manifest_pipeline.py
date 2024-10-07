@@ -82,8 +82,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             }
         )
 
-        break
-
     logger.info(f"Found {data_file_count} files in the {source_folder} folder")
     total_files = len(file_paths)
 
