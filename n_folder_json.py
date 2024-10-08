@@ -84,9 +84,10 @@ def pipeline(
 
             # Check if file_name has an extension (removes folders)
             if FAST_FOLDER_CHECK:
+                length = len(file_name.split("."))
                 extension = file_name.split(".")[-1]
 
-                if extension is None:
+                if length == 1 or extension is None:
                     logger.noPrintTrace(
                         f"Skipping {file_name} - Seems to be a folder (FFC)"
                     )

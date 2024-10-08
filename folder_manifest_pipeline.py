@@ -57,9 +57,10 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # Check if file_name has an extension (removes folders)
         if FAST_FOLDER_CHECK:
+            length = len(file_name.split("."))
             extension = file_name.split(".")[-1]
 
-            if extension is None:
+            if length == 1 or extension is None:
                 # logger.noPrintTrace(
                 #     f"Skipping {file_name} - Seems to be a folder (FFC)"
                 # )
@@ -70,7 +71,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_metadata = file_properties.metadata
 
         if file_metadata.get("hdi_isfolder"):
-            logger.noPrintTrace(f"Skipping {t} - Seems to be a folder")
+            logger.noPrintTrace(f"Skipping {t} - Seems to be a folder (Full)")
             continue
 
         file_paths.append(
