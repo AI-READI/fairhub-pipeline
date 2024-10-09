@@ -50,3 +50,7 @@ ecg.log
 .env.swp
 es.log
 
+dev/file-manifest.tsv
+
+dev/participants-datatype.tsv
+dev/new_participants.tsv
