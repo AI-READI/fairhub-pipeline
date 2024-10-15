@@ -298,7 +298,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     file_item["output_files"].append(output_file_path)
                     workflow_output_files.append(output_file_path)
 
-                    manifest_glucose_file_path = f"wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{patient_id}_DEX.json"
+                    manifest_glucose_file_path = f"/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{patient_id}_DEX.json"
 
                     logger.debug(f"Generating manifest for {f2}")
 

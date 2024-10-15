@@ -106,7 +106,7 @@ class GarminManifest:
                                 )
                                 participant_id = os.path.basename(root)
 
-                                output_file_path = f"{key_prefix}/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = f"/wearable_activity_monitor/{key_prefix}/garmin_vivosmart5/{participant_id}/{file}"
 
                                 self.add_to_participant_data(
                                     participant_id,
@@ -164,7 +164,7 @@ class GarminManifest:
                                     else 0
                                 )
 
-                                output_file_path = f"physical_activity_calorie/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = f"/wearable_activity_monitor/physical_activity_calorie/garmin_vivosmart5/{participant_id}/{file}"
 
                                 self.add_to_participant_data(
                                     participant_id,
@@ -222,9 +222,7 @@ class GarminManifest:
                                     else 0
                                 )
 
-                                output_file_path = (
-                                    f"sleep/garmin_vivosmart5/{participant_id}/{file}"
-                                )
+                                output_file_path = f"/wearable_activity_monitor/sleep/garmin_vivosmart5/{participant_id}/{file}"
 
                                 self.add_to_participant_data(
                                     participant_id,
@@ -299,7 +297,7 @@ class GarminManifest:
                                 )
 
                                 # Store the average and other details in the participant's data dictionary
-                                output_file_path = f"physical_activity/garmin_vivosmart5/{participant_id}/{file}"
+                                output_file_path = f"/wearable_activity_monitor/physical_activity/garmin_vivosmart5/{participant_id}/{file}"
 
                                 self.participants_data[participant_id][
                                     "physical_activity_filepath"
