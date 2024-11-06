@@ -21,6 +21,7 @@ with open(participants_tsv_path, "r") as file:
     headers.pop(0)
     participants.extend(row[0] for row in participants_tsv)
 
+
 exists = {}
 
 for participant in participants:
@@ -37,18 +38,27 @@ file_paths = []
 
 with open(file_manifest_tsv, "r") as file:
     reader = csv.reader(file, delimiter="\t")
-    file_paths.extend(row[2] for row in reader)
-
+    file_paths.extend(
+        {
+            "path": row[2],
+            "id_in_participants_list": None,
+        }
+        for row in reader
+    )
 file_paths.pop(0)
+
 
 for participant_id in tqdm(participants, desc="Participants"):
     for header in tqdm(headers, desc=f"Headers for {participant_id}", leave=False):
-        for file in tqdm(
-            file_paths, desc=f"Files for {participant_id}/{header}", leave=False
+        for i, file in enumerate(
+            tqdm(file_paths, desc=f"Files for {participant_id}/{header}", leave=False)
         ):
-            if f"/{participant_id}/" in file and f"/{header}/" in file:
+            file_path = file["path"]
+
+            if f"/{participant_id}/" in file_path and f"/{header}/" in file_path:
                 exists[participant_id][header] = True
-                break
+                file_paths[i]["id_in_participants_list"] = True
+
 
 new_participants_tsv = os.path.join(current_directory, "new_participants.tsv")
 
@@ -69,3 +79,25 @@ with open(new_participants_tsv, "w") as file:
                 row.append("FALSE")
 
         writer.writerow(row)
+
+# Get the list of files whose id is not in the participants list
+extra_files = []
+for file in file_paths:
+    if file["id_in_participants_list"] is None:
+        extra_files.append(file["path"])
+
+# Print the list of extra files
+print("Extra files:")
+for file in extra_files:
+    print(file)
+
+# Get the list of participant ids who don't have any date
+participants_without_data = []
+for participant_id in participants:
+    if not any(exists[participant_id].values()):
+        participants_without_data.append(participant_id)
+
+# Print the list of participants without data
+print("Participants without data:")
+for participant in participants_without_data:
+    print(participant)
