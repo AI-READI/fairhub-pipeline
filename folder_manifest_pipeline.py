@@ -1,12 +1,14 @@
 """Create a file manifest for the folder"""
 
-import os
+# import os
 import tempfile
 import azure.storage.filedatalake as azurelake
 import config
 import utils.logwatch as logging
-from utils.time_estimator import TimeEstimator
-import hashlib
+
+# from utils.time_estimator import TimeEstimator
+
+# import hashlib
 
 
 def pipeline(study_id: str):  # sourcery skip: low-code-quality
@@ -23,7 +25,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     source_folder = f"{study_id}/dataset"
     # source_folder = f"{study_id}/completed/cardiac_ecg"
 
-    destination_file = f"{study_id}/dataset/file-manifest.tsv"
+    destination_file = f"{study_id}/s/file-manifest.tsv"
     # destination_file = f"{study_id}/completed/file-manifest.tsv"
 
     logger = logging.Logwatch("drain", print=True)
@@ -61,9 +63,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             extension = file_name.split(".")[-1]
 
             if length == 1 or extension is None:
-                # logger.noPrintTrace(
-                #     f"Skipping {file_name} - Seems to be a folder (FFC)"
-                # )
+                logger.noPrintTrace(
+                    f"Skipping {file_name} - Seems to be a folder (FFC)"
+                )
                 continue
 
         file_client = file_system_client.get_file_client(file_path=path)
@@ -88,36 +90,36 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     logger.info(f"Current total files: {total_files}")
 
-    time_estimator = TimeEstimator(total_files)
+    # time_estimator = TimeEstimator(total_files)
 
-    with tempfile.TemporaryDirectory(
-        prefix="folder_manifest_download_pipeline_"
-    ) as temp_folder_path:
-        for file_item in file_paths:
-            path = file_item["file_path"]
-            file_name = file_item["file_name"]
-            relative_file_path = file_item["relative_file_path"]
+    # with tempfile.TemporaryDirectory(
+    #     prefix="folder_manifest_download_pipeline_"
+    # ) as temp_folder_path:
+    #     for file_item in file_paths:
+    #         path = file_item["file_path"]
+    #         file_name = file_item["file_name"]
+    #         relative_file_path = file_item["relative_file_path"]
 
-            download_path = os.path.join(temp_folder_path, file_name)
+    #         download_path = os.path.join(temp_folder_path, file_name)
 
-            with open(file=download_path, mode="wb") as f:
-                f.write(
-                    file_system_client.get_file_client(file_path=path)
-                    .download_file()
-                    .readall()
-                )
+    #         with open(file=download_path, mode="wb") as f:
+    #             f.write(
+    #                 file_system_client.get_file_client(file_path=path)
+    #                 .download_file()
+    #                 .readall()
+    #             )
 
-            # Calculate the md5 checksum of the file
-            file_item["md5_checksum"] = hashlib.md5(
-                open(download_path, "rb").read()
-            ).hexdigest()
+    #         # Calculate the md5 checksum of the file
+    #         file_item["md5_checksum"] = hashlib.md5(
+    #             open(download_path, "rb").read()
+    #         ).hexdigest()
 
-            logger.noPrintTrace(f"Downloaded {file_name} to {download_path}")
+    #         logger.noPrintTrace(f"Downloaded {file_name} to {download_path}")
 
-            file_item["manifest_file_path"] = f"dataset/{relative_file_path}"
+    #         file_item["manifest_file_path"] = f"dataset/{relative_file_path}"
 
-            logger.noPrintTime(time_estimator.step())
-            os.remove(download_path)
+    #         logger.noPrintTime(time_estimator.step())
+    #         os.remove(download_path)
 
     with tempfile.TemporaryDirectory(
         prefix="folder_manifest_meta_pipeline_"
