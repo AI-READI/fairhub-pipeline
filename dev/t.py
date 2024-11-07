@@ -6,9 +6,23 @@ current_directory = os.getcwd()
 
 # Load the participants-datatype.tsv file
 participants_tsv_path = os.path.join(current_directory, "participants-datatype.tsv")
+pt_path = os.path.join(current_directory, "participants.tsv")
 
 headers = []
 participants = []
+pt = []
+
+# Read the participants.tsv file
+with open(pt_path, "r") as file:
+    pt_tsv = csv.reader(file, delimiter="\t")
+
+    # Extract the headers
+    headers = next(pt_tsv)
+
+    # Remove the first element from the headers list
+    headers.pop(0)
+    pt.extend(row for row in pt_tsv)
+
 
 # Read the participants-datatype.tsv file
 with open(participants_tsv_path, "r") as file:
@@ -65,14 +79,34 @@ new_participants_tsv = os.path.join(current_directory, "new_participants.tsv")
 with open(new_participants_tsv, "w") as file:
     writer = csv.writer(file, delimiter="\t")
 
-    h = ["participant_id"]
+    h = [
+        "participant_id",
+        "clinical_site",
+        "study_group",
+        "age",
+        "study_visit_date",
+        "recommended_split",
+    ]
     h.extend(headers)
 
     writer.writerow(h)
 
     for participant_id in participants:
-        row = [participant_id]
+        participant_pt_record = next(x for x in pt if x[0] == participant_id)
+        row = [
+            participant_id,
+            participant_pt_record[1],
+            participant_pt_record[2],
+            participant_pt_record[3],
+            participant_pt_record[4],
+            participant_pt_record[5],
+        ]
+
         for header in headers:
+            if header == "clinical_data":
+                row.append("TRUE")
+                continue
+
             if exists[participant_id][header]:
                 row.append("TRUE")
             else:
