@@ -26,34 +26,16 @@ done
 """
 
 
-def pipeline(study_id: str, file_paths: list, worker: int, workflow_file_dependencies, file_processor, manifest):  # sourcery skip: low-code-quality
+def pipeline(study_id: str, file_paths: list, worker: int, workflow_file_dependencies, file_processor, manifest, participant_filter_list: list):  # sourcery skip: low-code-quality
     """Process cgm data files for a study
     Args:
         study_id (str): the study id
     """
-    file_paths = [
-    {
-        "file_path": t,
-        "status": "failed",
-        "processed": False,
-        "convert_error": True,
-        "output_uploaded": False,
-        "qc_uploaded": True,
-        "output_files": [],
-    }
-    for t in file_paths
-]
-    if study_id is None or not study_id:
-        raise ValueError("study_id is required")
 
     input_folder = f"{study_id}/pooled-data/CGM"
 
     processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
-
-    dependency_folder = f"{study_id}/dependency/CGM"
-
-    ignore_file = f"{study_id}/ignore/cgm.ignore"
 
     logger = logging.Logwatch("cgm", print=True)
 
@@ -68,8 +50,6 @@ def pipeline(study_id: str, file_paths: list, worker: int, workflow_file_depende
 
     total_files = len(file_paths)
 
-    logger.debug(f"Found {total_files} files in {input_folder}")
-
     time_estimator = TimeEstimator(total_files)
 
     for file_item in file_paths:
@@ -83,12 +63,26 @@ def pipeline(study_id: str, file_paths: list, worker: int, workflow_file_depende
         file_name_only = file_name.split(".")[0]
         patient_id = "Unknown"
 
+        if file_name_only.split("-")[0] == "DEX":
+            patient_id = file_name_only.split("-")[1]
+        elif file_name_only.split("_")[0] == "Clarity":
+            patient_id = file_name_only.split("_")[3]
+
         logger.info(f"Processing {patient_id}")
 
-        # if file_processor.is_file_ignored(file_name, path):
-        #     logger.info(f"Ignoring {file_name} because it is in the ignore file")
-        #     logger.time(time_estimator.step())
-        #     continue
+        if str(patient_id) not in participant_filter_list:
+            logger.debug(
+                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+            )
+            continue
+        patient_id = "Unknown"
+
+        logger.info(f"Processing {patient_id}")
+
+        if file_processor.is_file_ignored(file_name, path):
+            logger.info(f"Ignoring {file_name} because it is in the ignore file")
+            logger.time(time_estimator.step())
+            continue
 
         # download the file to the temp folder
         input_file_client = file_system_client.get_file_client(file_path=path)
@@ -361,44 +355,33 @@ def main(study_id: str):
 
         file_paths.append(t)
 
-    # file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
     total_files = len(file_paths)
 
     logger.debug(f"Found {total_files} files in {input_folder}")
 
-    for path in file_paths:
-        # get the file name from the path. It's in the format Clarity_Export_AIREADI_{id}_*.csv
-        file_name = path.split("/")[-1]
-
-        file_name_only = file_name.split(".")[0]
-        patient_id = "Unknown"
-
-        if file_name_only.split("-")[0] == "DEX":
-            patient_id = file_name_only.split("-")[1]
-        elif file_name_only.split("_")[0] == "Clarity":
-            patient_id = file_name_only.split("_")[3]
-
-        logger.info(f"Processing {patient_id}")
-
-        # if file_processor.is_file_ignored(file_name, path):
-        #     logger.info(f"Ignoring {file_name} because it is in the ignore file")
-        #     continue
-
-        if str(patient_id) not in participant_filter_list:
-            logger.debug(
-                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
-            )
-            continue
     workflow_file_dependencies = deps.WorkflowFileDependencies()
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
     manifest = cgm_manifest.CGMManifest()
     workers = 1
 
+    file_paths = [
+        {
+            "file_path": t,
+            "status": "failed",
+            "processed": False,
+            "convert_error": True,
+            "output_uploaded": False,
+            "qc_uploaded": True,
+            "output_files": [],
+        }
+        for t in file_paths
+    ]
+
     chunks = (len(file_paths) + workers - 1) // workers
     chunks = [file_paths[i:i + chunks] for i in range(0, len(file_paths), chunks)]
+
     for i in range(len(chunks)-1):
-        pipeline(study_id, chunks[i], i, workflow_file_dependencies, file_processor, manifest)
+        pipeline(study_id, chunks[i], i, workflow_file_dependencies, file_processor, manifest, participant_filter_list)
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
