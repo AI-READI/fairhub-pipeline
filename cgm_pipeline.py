@@ -16,6 +16,8 @@ import csv
 from utils.file_map_processor import FileMapProcessor
 import utils.logwatch as logging
 from utils.time_estimator import TimeEstimator
+from functools import partial
+
 
 """
 SCRIPT_PATH=""
@@ -26,7 +28,12 @@ done
 """
 
 
-def pipeline(study_id: str, file_paths: list, worker: int, workflow_file_dependencies, file_processor, manifest, participant_filter_list: list):  # sourcery skip: low-code-quality
+def pipeline(study_id: str,
+             workflow_file_dependencies,
+             file_processor,
+             manifest,
+             participant_filter_list: list,
+             file_paths: list):  # sourcery skip: low-code-quality
     """Process cgm data files for a study
     Args:
         study_id (str): the study id
@@ -44,9 +51,6 @@ def pipeline(study_id: str, file_paths: list, worker: int, workflow_file_depende
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-
-    # Create the output folder
-    file_system_client.create_directory(processed_data_output_folder)
 
     total_files = len(file_paths)
 
@@ -70,18 +74,15 @@ def pipeline(study_id: str, file_paths: list, worker: int, workflow_file_depende
 
         logger.info(f"Processing {patient_id}")
 
+        if file_processor.is_file_ignored(file_name, path):
+            logger.info(f"Ignoring {file_name} because it is in the ignore file")
+            logger.time(time_estimator.step())
+            continue
+
         if str(patient_id) not in participant_filter_list:
             logger.debug(
                 f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
             )
-            continue
-        patient_id = "Unknown"
-
-        logger.info(f"Processing {patient_id}")
-
-        if file_processor.is_file_ignored(file_name, path):
-            logger.info(f"Ignoring {file_name} because it is in the ignore file")
-            logger.time(time_estimator.step())
             continue
 
         # download the file to the temp folder
@@ -284,7 +285,6 @@ def pipeline(study_id: str, file_paths: list, worker: int, workflow_file_depende
             logger.time(time_estimator.step())
             os.remove(download_path)
 
-    file_processor.delete_out_of_date_output_files()
 
 def main(study_id: str):
     if study_id is None or not study_id:
@@ -305,6 +305,8 @@ def main(study_id: str):
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
+    # Create the output folder
+    file_system_client.create_directory(processed_data_output_folder)
 
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
@@ -359,7 +361,6 @@ def main(study_id: str):
 
     logger.debug(f"Found {total_files} files in {input_folder}")
 
-    workflow_file_dependencies = deps.WorkflowFileDependencies()
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
     manifest = cgm_manifest.CGMManifest()
     workers = 1
@@ -380,19 +381,18 @@ def main(study_id: str):
     chunks = (len(file_paths) + workers - 1) // workers
     chunks = [file_paths[i:i + chunks] for i in range(0, len(file_paths), chunks)]
 
-    for i in range(len(chunks)-1):
-        pipeline(study_id, chunks[i], i, workflow_file_dependencies, file_processor, manifest, participant_filter_list)
+    pipe = partial(pipeline, study_id, workflow_file_dependencies, file_processor, manifest, participant_filter_list)
+    for i in range(len(chunks) - 1):
+        pipe(chunks[i])
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
 
-    # Write the manifest to a file
+    # Write the manifest to a filerkflow_file_dependencies = deps.Wor
     # Create a temporary folder on the local machine
 
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
     manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
-
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="cgm_pipeline_meta_")
 
     manifest_file_path = os.path.join(meta_temp_folder_path, "manifest_cgm_v2.tsv")
     manifest.write_tsv(manifest_file_path)
