@@ -361,7 +361,9 @@ def main(study_id: str):
 
     logger.debug(f"Found {total_files} files in {input_folder}")
 
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
+
     manifest = cgm_manifest.CGMManifest()
     workers = 1
 
@@ -388,7 +390,7 @@ def main(study_id: str):
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
 
-    # Write the manifest to a filerkflow_file_dependencies = deps.Wor
+    # Write the manifest to a file
     # Create a temporary folder on the local machine
 
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
