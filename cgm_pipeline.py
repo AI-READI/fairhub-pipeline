@@ -1,6 +1,7 @@
 """Process ecg data files"""
 
 import contextlib
+import multiprocessing
 import os
 import tempfile
 import shutil
@@ -17,7 +18,7 @@ from utils.file_map_processor import FileMapProcessor
 import utils.logwatch as logging
 from utils.time_estimator import TimeEstimator
 from functools import partial
-
+from multiprocessing.pool import ThreadPool
 
 """
 SCRIPT_PATH=""
@@ -39,9 +40,7 @@ def pipeline(study_id: str,
         study_id (str): the study id
     """
 
-    input_folder = f"{study_id}/pooled-data/CGM"
-
-    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
 
     logger = logging.Logwatch("cgm", print=True)
@@ -55,7 +54,6 @@ def pipeline(study_id: str,
     total_files = len(file_paths)
 
     time_estimator = TimeEstimator(total_files)
-
     for file_item in file_paths:
         path = file_item["file_path"]
 
@@ -292,7 +290,7 @@ def main(study_id: str):
 
     input_folder = f"{study_id}/pooled-data/CGM"
     dependency_folder = f"{study_id}/dependency/CGM"
-    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
 
     ignore_file = f"{study_id}/ignore/cgm.ignore"
@@ -365,7 +363,7 @@ def main(study_id: str):
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
     manifest = cgm_manifest.CGMManifest()
-    workers = 1
+    workers = multiprocessing.cpu_count() * 2
 
     file_paths = [
         {
@@ -380,12 +378,18 @@ def main(study_id: str):
         for t in file_paths
     ]
 
-    chunks = (len(file_paths) + workers - 1) // workers
-    chunks = [file_paths[i:i + chunks] for i in range(0, len(file_paths), chunks)]
+    chunk_size = (len(file_paths) + workers - 1) // workers
+    chunks = [file_paths[i:i + chunk_size] for i in range(0, len(file_paths), chunk_size)]
+    logger.debug(f"Worker received chunk of {total_files} files")
 
     pipe = partial(pipeline, study_id, workflow_file_dependencies, file_processor, manifest, participant_filter_list)
-    for i in range(len(chunks) - 1):
-        pipe(chunks[i])
+    # for chunk in chunks:
+    #     logger.debug(f"Worker received chunk of {total_files} files")
+    #     pipe(chunk)
+
+    pool = ThreadPool(workers)
+    pool.map(pipe, chunks)
+
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
