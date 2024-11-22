@@ -81,7 +81,7 @@ class Logwatch:
     def info(self, message: str):
         """Send an info message to the logwatch server"""
         if self.print:
-            print(Fore.CYAN + message + self.thread_id + Style.RESET_ALL)
+            print(f"{Fore.CYAN} {message} and thread id is: {self.thread_id} {Style.RESET_ALL}")
         with contextlib.suppress(Exception):
             threading.Thread(
                 target=requests.post,
