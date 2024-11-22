@@ -10,8 +10,9 @@ just_fix_windows_console()
 class Logwatch:
     """Class for sending logging messages to the logwatch server'"""
 
-    def __init__(self, channel: str = "drain", print: bool = False):
+    def __init__(self, channel: str = "drain", print: bool = False, thread_id: int=0):
         self.print = print
+        self.thread_id = thread_id
 
         self.drain = config.FAIRHUB_CATCH_ALL_LOG_ENDPOINT
         self.triton_drain = config.FAIRHUB_TRITON_LOG_ENDPOINT
@@ -80,7 +81,7 @@ class Logwatch:
     def info(self, message: str):
         """Send an info message to the logwatch server"""
         if self.print:
-            print(Fore.CYAN + message + Style.RESET_ALL)
+            print(Fore.CYAN + message + self.thread_id + Style.RESET_ALL)
         with contextlib.suppress(Exception):
             threading.Thread(
                 target=requests.post,
@@ -130,6 +131,14 @@ class Logwatch:
         """Send a threaded time message to the logwatch server. Used for items that need to be processed quickly"""
         if self.print:
             print(Back.GREEN + Fore.WHITE + message + Style.RESET_ALL)
+        with contextlib.suppress(Exception):
+            threading.Thread(
+                target=requests.post,
+                args=(self.drain, {"level": "time", "message": message}),
+            ).start()
+
+    def noPrintTime(self, message: str):
+        """Send a threaded time message to the logwatch server. Used for items that need to be processed quickly"""
         with contextlib.suppress(Exception):
             threading.Thread(
                 target=requests.post,

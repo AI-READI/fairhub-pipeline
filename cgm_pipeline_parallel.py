@@ -1,6 +1,7 @@
 """Process ecg data files"""
 
 import contextlib
+import multiprocessing
 import os
 import tempfile
 import shutil
@@ -16,6 +17,8 @@ import csv
 from utils.file_map_processor import FileMapProcessor
 import utils.logwatch as logging
 from utils.time_estimator import TimeEstimator
+from functools import partial
+from multiprocessing.pool import ThreadPool
 
 """
 SCRIPT_PATH=""
@@ -26,34 +29,21 @@ done
 """
 
 
-def pipeline(study_id: str):  # sourcery skip: low-code-quality
+def pipeline(study_id: str,
+             workflow_file_dependencies,
+             file_processor,
+             manifest,
+             participant_filter_list: list,
+             file_paths: list):  # sourcery skip: low-code-quality
     """Process cgm data files for a study
     Args:
         study_id (str): the study id
     """
 
-    if study_id is None or not study_id:
-        raise ValueError("study_id is required")
-
-    input_folder = f"{study_id}/pooled-data/CGM"
-    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
-    dependency_folder = f"{study_id}/dependency/CGM"
-    manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
 
-    pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
-    ignore_file = f"{study_id}/ignore/cgm.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
-
-    # input_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-Pool"
-    # processed_data_output_folder = (
-    #     f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-processed"
-    # )
-    # processed_data_qc_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-qc"
-    # dependency_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-dependency"
-    # manifest_folder = f"{study_id}/Stanford-Test/PILOT-Aug29-2024/CGM-manifest"
-
-    logger = logging.Logwatch("cgm", print=True)
+    logger = logging.Logwatch("cgm", print=True, thread_id=4)
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -61,80 +51,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_system_name="stage-1-container",
     )
 
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_output_folder)
-
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_qc_folder)
-
-    with contextlib.suppress(Exception):
-        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
-
-    file_paths = []
-    participant_filter_list = []
-
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="cgm_pipeline_meta_")
-
-    # Get the participant filter list file
-    with contextlib.suppress(Exception):
-        file_client = file_system_client.get_file_client(
-            file_path=participant_filter_list_file
-        )
-
-        temp_participant_filter_list_file = os.path.join(
-            meta_temp_folder_path, "filter_file.csv"
-        )
-
-        with open(file=temp_participant_filter_list_file, mode="wb") as f:
-            f.write(file_client.download_file().readall())
-
-        with open(file=temp_participant_filter_list_file, mode="r") as f:
-            reader = csv.reader(f)
-            for row in reader:
-                participant_filter_list.append(row[0])
-
-        # remove the first row
-        participant_filter_list.pop(0)
-
-    paths = file_system_client.get_paths(path=input_folder, recursive=False)
-
-    for path in paths:
-        t = str(path.name)
-
-        file_name = t.split("/")[-1]
-
-        # Check if the item is a csv file
-        if file_name.split(".")[-1] != "csv":
-            continue
-
-        file_paths.append(
-            {
-                "file_path": t,
-                "status": "failed",
-                "processed": False,
-                "convert_error": True,
-                "output_uploaded": False,
-                "qc_uploaded": True,
-                "output_files": [],
-            }
-        )
-
-    # Create the output folder
-    file_system_client.create_directory(processed_data_output_folder)
-
-    workflow_file_dependencies = deps.WorkflowFileDependencies()
-
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
     total_files = len(file_paths)
 
-    logger.debug(f"Found {total_files} files in {input_folder}")
-
-    manifest = cgm_manifest.CGMManifest()
-
     time_estimator = TimeEstimator(total_files)
-
     for file_item in file_paths:
         path = file_item["file_path"]
 
@@ -364,10 +283,123 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             logger.time(time_estimator.step())
             os.remove(download_path)
 
+
+def main(study_id: str):
+    if study_id is None or not study_id:
+        raise ValueError("study_id is required")
+
+    input_folder = f"{study_id}/pooled-data/CGM"
+    dependency_folder = f"{study_id}/dependency/CGM"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
+    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
+
+    ignore_file = f"{study_id}/ignore/cgm.ignore"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+
+    logger = logging.Logwatch("cgm", print=True)
+
+    # Get the list of blobs in the input folder
+    file_system_client = azurelake.FileSystemClient.from_connection_string(
+        config.AZURE_STORAGE_CONNECTION_STRING,
+        file_system_name="stage-1-container",
+    )
+    # Create the output folder
+    file_system_client.create_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_qc_folder)
+
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
+
+    file_paths = []
+    participant_filter_list = []
+
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="cgm_pipeline_meta_")
+
+    # Get the participant filter list file
+    with contextlib.suppress(Exception):
+        file_client = file_system_client.get_file_client(
+            file_path=participant_filter_list_file
+        )
+
+        temp_participant_filter_list_file = os.path.join(
+            meta_temp_folder_path, "filter_file.csv"
+        )
+
+        with open(file=temp_participant_filter_list_file, mode="wb") as f:
+            f.write(file_client.download_file().readall())
+
+        with open(file=temp_participant_filter_list_file, mode="r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                participant_filter_list.append(row[0])
+
+        # remove the first row
+        participant_filter_list.pop(0)
+
+    paths = file_system_client.get_paths(path=input_folder, recursive=False)
+
+    for path in paths:
+        t = str(path.name)
+
+        file_name = t.split("/")[-1]
+        # Check if the item is a csv file
+        if file_name.split(".")[-1] != "csv":
+            continue
+
+        file_paths.append(t)
+
+    total_files = len(file_paths)
+
+    logger.debug(f"Found {total_files} files in {input_folder}")
+
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+
+    manifest = cgm_manifest.CGMManifest()
+    workers = 4
+
+    file_paths = [
+        {
+            "file_path": t,
+            "status": "failed",
+            "processed": False,
+            "convert_error": True,
+            "output_uploaded": False,
+            "qc_uploaded": True,
+            "output_files": [],
+        }
+        for t in file_paths
+    ]
+
+    chunk_size = (len(file_paths) + workers - 1) // workers
+    chunks = [file_paths[i:i + chunk_size] for i in range(0, len(file_paths), chunk_size)]
+    logger.debug(f"Worker received chunk of {total_files} files")
+
+    pipe = partial(pipeline, study_id, workflow_file_dependencies, file_processor, manifest, participant_filter_list)
+    # for chunk in chunks:
+    #     logger.debug(f"Worker received chunk of {total_files} files")
+    #     pipe(chunk)
+
+    pool = ThreadPool(workers)
+    pool.map(pipe, chunks)
+
+
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
 
     # Write the manifest to a file
+    # Create a temporary folder on the local machine
+
+    pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
+    manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
+
     manifest_file_path = os.path.join(meta_temp_folder_path, "manifest_cgm_v2.tsv")
     manifest.write_tsv(manifest_file_path)
 
@@ -421,7 +453,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         )
 
         output_blob_client = file_system_client.get_file_client(
-            file_path=f"{pipeline_workflow_log_folder}/{file_name}"
+              file_path=f"{pipeline_workflow_log_folder}/{file_name}"
         )
 
         output_blob_client.upload_data(data, overwrite=True)
@@ -446,6 +478,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
     shutil.rmtree(meta_temp_folder_path)
 
-
 if __name__ == "__main__":
-    pipeline("AI-READI")
+    main("AI-READI")
+
