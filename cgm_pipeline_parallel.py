@@ -5,6 +5,7 @@ import multiprocessing
 import os
 import tempfile
 import shutil
+import threading
 from traceback import format_exc
 
 import cgm.cgm as cgm
@@ -39,11 +40,11 @@ def pipeline(study_id: str,
     Args:
         study_id (str): the study id
     """
-
+    thread_id = threading.get_ident()
     processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
-    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
+    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc-parallel"
 
-    logger = logging.Logwatch("cgm", print=True, thread_id=4)
+    logger = logging.Logwatch("cgm", print=True, thread_id=thread_id)
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -52,7 +53,6 @@ def pipeline(study_id: str,
     )
 
     total_files = len(file_paths)
-
     time_estimator = TimeEstimator(total_files)
     for file_item in file_paths:
         path = file_item["file_path"]
@@ -291,7 +291,7 @@ def main(study_id: str):
     input_folder = f"{study_id}/pooled-data/CGM"
     dependency_folder = f"{study_id}/dependency/CGM"
     processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
-    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
+    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc-parallel"
 
     ignore_file = f"{study_id}/ignore/cgm.ignore"
     participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
@@ -384,7 +384,6 @@ def main(study_id: str):
 
     pipe = partial(pipeline, study_id, workflow_file_dependencies, file_processor, manifest, participant_filter_list)
     # for chunk in chunks:
-    #     logger.debug(f"Worker received chunk of {total_files} files")
     #     pipe(chunk)
 
     pool = ThreadPool(workers)
@@ -396,7 +395,6 @@ def main(study_id: str):
 
     # Write the manifest to a file
     # Create a temporary folder on the local machine
-
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
     manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
 
