@@ -36,8 +36,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         raise ValueError("study_id is required")
 
     input_folder = f"{study_id}/pooled-data/CGM"
-    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
-    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
+    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc-parallel"
     dependency_folder = f"{study_id}/dependency/CGM"
     manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
 
