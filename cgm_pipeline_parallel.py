@@ -35,14 +35,15 @@ def pipeline(study_id: str,
              file_processor,
              manifest,
              participant_filter_list: list,
-             file_paths: list):  # sourcery skip: low-code-quality
+             processed_data_qc_folder,
+             processed_data_output_folder,
+             file_paths: list,
+):  # sourcery skip: low-code-quality
     """Process cgm data files for a study
     Args:
         study_id (str): the study id
     """
     thread_id = threading.get_ident()
-    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
-    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc-parallel"
 
     logger = logging.Logwatch("cgm", print=True, thread_id=thread_id)
 
@@ -292,7 +293,6 @@ def main(study_id: str):
     dependency_folder = f"{study_id}/dependency/CGM"
     processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc-parallel"
-
     ignore_file = f"{study_id}/ignore/cgm.ignore"
     participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
@@ -382,13 +382,19 @@ def main(study_id: str):
     chunks = [file_paths[i:i + chunk_size] for i in range(0, len(file_paths), chunk_size)]
     logger.debug(f"Worker received chunk of {total_files} files")
 
-    pipe = partial(pipeline, study_id, workflow_file_dependencies, file_processor, manifest, participant_filter_list)
+    pipe = partial(pipeline,
+                   study_id,
+                   workflow_file_dependencies,
+                   file_processor,
+                   manifest,
+                   participant_filter_list,
+                   processed_data_qc_folder,
+                   processed_data_output_folder)
     # for chunk in chunks:
     #     pipe(chunk)
 
     pool = ThreadPool(workers)
     pool.map(pipe, chunks)
-
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
