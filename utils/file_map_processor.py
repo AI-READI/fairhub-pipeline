@@ -4,6 +4,7 @@ import tempfile
 import config
 import shutil
 import azure.storage.filedatalake as azurelake
+from azure.core.exceptions import ResourceNotFoundError
 import pathlib
 import json
 import glob
@@ -66,20 +67,24 @@ class FileMapProcessor:
             # Remove any that start with a '#'
             self.ignore_files = [x for x in self.ignore_files if not x.startswith("#")]
 
-        shutil.rmtree(self.meta_temp_folder_path)
-
-        # Downloading file map
-        with contextlib.suppress(Exception):
+    # Downloading file map
+        try:
             with open(file_map_download_path, "wb") as data:
                 meta_file_client.download_file().readinto(data)
-
-            # Load the meta file
             with open(file_map_download_path, "r") as f:
                 self.file_map = json.load(f)
+        except ResourceNotFoundError:
+            print("file map.json is not found")
+        # Load the meta file
 
+        # if isinstance(self.file_map, dict):
+        #     self.file_map = self.file_map["logs"]
         for entry in self.file_map:
             # This is to delete the output files of files that are no longer in the input folder
             entry["seen"] = False
+
+    def __del__(self):
+        shutil.rmtree(self.meta_temp_folder_path)
 
     def add_entry(self, path, input_last_modified):
         # Add files that do not exist in the array
@@ -200,7 +205,6 @@ class FileMapProcessor:
                 output_file_client.delete_file()
 
             output_file_client.upload_data(data, overwrite=True)
-        shutil.rmtree(meta_temp_folder_path)
 
     def is_file_ignored(self, file_name, path) -> bool:
         return file_name in self.ignore_files or path in self.ignore_files
