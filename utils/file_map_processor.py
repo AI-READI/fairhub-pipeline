@@ -77,8 +77,8 @@ class FileMapProcessor:
             print("file map.json is not found")
         # Load the meta file
 
-        # if isinstance(self.file_map, dict):
-        #     self.file_map = self.file_map["logs"]
+        if isinstance(self.file_map, dict):
+            self.file_map = self.file_map["logs"]
         for entry in self.file_map:
             # This is to delete the output files of files that are no longer in the input folder
             entry["seen"] = False
