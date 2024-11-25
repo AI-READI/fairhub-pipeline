@@ -67,8 +67,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_qc_folder)
 
-    with contextlib.suppress(Exception):
-        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
+    # with contextlib.suppress(Exception):
+    #     file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
     file_paths = []
     participant_filter_list = []
@@ -119,7 +119,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 "output_files": [],
             }
         )
-
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
