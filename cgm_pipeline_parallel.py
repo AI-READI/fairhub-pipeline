@@ -285,7 +285,7 @@ def pipeline(study_id: str,
             os.remove(download_path)
 
 
-def main(study_id: str):
+def worker(study_id: str):
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
@@ -481,5 +481,5 @@ def main(study_id: str):
     shutil.rmtree(meta_temp_folder_path)
 
 if __name__ == "__main__":
-    main("AI-READI")
+    worker("AI-READI")
 
