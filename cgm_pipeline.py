@@ -36,8 +36,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         raise ValueError("study_id is required")
 
     input_folder = f"{study_id}/pooled-data/CGM"
-    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed-parallel"
-    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc-parallel"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
+    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
     dependency_folder = f"{study_id}/dependency/CGM"
     manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
 
@@ -67,8 +67,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_qc_folder)
 
-    # with contextlib.suppress(Exception):
-    #     file_system_client.delete_file(f"{dependency_folder}/file_map.json")
+    # This part is for testing processing all files, and disables should_process logic. It is going to be removed soon
+    with contextlib.suppress(Exception):
+        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
     file_paths = []
     participant_filter_list = []

@@ -312,7 +312,7 @@ def main(study_id: str):
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_qc_folder)
 
-
+    # This part is for testing processing all files, and disables should_process logic. It is going to be removed soon
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
@@ -377,11 +377,9 @@ def main(study_id: str):
         }
         for t in file_paths
     ]
-
+    # This guarantees all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
     chunks = [file_paths[i:i + chunk_size] for i in range(0, len(file_paths), chunk_size)]
-    logger.debug(f"Worker received chunk of {total_files} files")
-
     pipe = partial(pipeline,
                    study_id,
                    workflow_file_dependencies,
@@ -399,9 +397,9 @@ def main(study_id: str):
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
 
-    # Write the manifest to a file
     # Create a temporary folder on the local machine
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
+    # Write the manifest to a file
     manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
 
     manifest_file_path = os.path.join(meta_temp_folder_path, "manifest_cgm_v2.tsv")
