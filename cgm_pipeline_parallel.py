@@ -30,7 +30,7 @@ done
 """
 
 
-def pipeline(study_id: str,
+def worker(study_id: str,
              workflow_file_dependencies,
              file_processor,
              manifest,
@@ -285,7 +285,7 @@ def pipeline(study_id: str,
             os.remove(download_path)
 
 
-def worker(study_id: str):
+def pipeline(study_id: str):
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
@@ -380,7 +380,7 @@ def worker(study_id: str):
     # This guarantees all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
     chunks = [file_paths[i:i + chunk_size] for i in range(0, len(file_paths), chunk_size)]
-    pipe = partial(pipeline,
+    pipe = partial(worker,
                    study_id,
                    workflow_file_dependencies,
                    file_processor,
@@ -481,5 +481,5 @@ def worker(study_id: str):
     shutil.rmtree(meta_temp_folder_path)
 
 if __name__ == "__main__":
-    worker("AI-READI")
+    pipeline("AI-READI")
 
