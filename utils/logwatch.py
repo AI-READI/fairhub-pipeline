@@ -163,18 +163,15 @@ class Logwatch:
         if self.print:
             print(f"{Fore.RED}[{self.thread_id}] {message}{Style.RESET_ALL}")
         with contextlib.suppress(Exception):
-            threading.Thread(
-                target=requests.post,
-                args=(
-                    self.drain,
-                    {
-                        "level": "error",
-                        "message": message,
-                        "type": "text",
-                        "thread": self.thread_id,
-                    },
-                ),
-            ).start()
+            requests.post(
+                self.drain,
+                json={
+                    "level": "error",
+                    "message": message,
+                    "type": "text",
+                    "thread": self.thread_id,
+                },
+            )
 
     def warn(self, message: str):
         """Send a warning message to the logwatch server"""

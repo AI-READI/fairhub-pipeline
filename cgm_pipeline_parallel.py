@@ -283,7 +283,7 @@ def worker(
             os.remove(download_path)
 
 
-def pipeline(study_id: str, workers=4):
+def pipeline(study_id: str, workers=3):
     """The function contains the work done by
     the main thread, which runs only once for each operation."""
 
