@@ -353,7 +353,16 @@ def pipeline(study_id: str):
         if file_name.split(".")[-1] != "csv":
             continue
 
-        file_paths.append(t)
+        file_paths.append(
+            {
+                "file_path": t,
+                "status": "failed",
+                "processed": False,
+                "convert_error": True,
+                "output_uploaded": False,
+                "qc_uploaded": True,
+                "output_files": [],
+            })
 
     total_files = len(file_paths)
 
@@ -365,21 +374,9 @@ def pipeline(study_id: str):
     manifest = cgm_manifest.CGMManifest()
     workers = 4
 
-    file_paths = [
-        {
-            "file_path": t,
-            "status": "failed",
-            "processed": False,
-            "convert_error": True,
-            "output_uploaded": False,
-            "qc_uploaded": True,
-            "output_files": [],
-        }
-        for t in file_paths
-    ]
     # This guarantees all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
-    chunks = [file_paths[i:i + chunk_size] for i in range(0, len(file_paths), chunk_size)]
+    chunks = [file_paths[i:i + chunk_size] for i in range(0, total_files, chunk_size)]
     pipe = partial(worker,
                    study_id,
                    workflow_file_dependencies,

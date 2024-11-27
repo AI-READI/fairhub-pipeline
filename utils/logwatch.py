@@ -81,7 +81,7 @@ class Logwatch:
     def info(self, message: str):
         """Send an info message to the logwatch server"""
         if self.print:
-            print(f"{Fore.CYAN} {message} and thread id is: {self.thread_id} {Style.RESET_ALL}")
+            print(Fore.CYAN + message + Style.RESET_ALL)
         with contextlib.suppress(Exception):
             threading.Thread(
                 target=requests.post,
@@ -122,7 +122,7 @@ class Logwatch:
     def time(self, message: str):
         """Send a time message to the logwatch server"""
         if self.print:
-            print(Back.GREEN + Fore.WHITE + message + Style.RESET_ALL)
+            print(Back.GREEN + Fore.WHITE + message + f" Thread id: {self.thread_id}" + Style.RESET_ALL)
         with contextlib.suppress(Exception):
             # Not threaded because it's a time message
             requests.post(self.drain, json={"level": "time", "message": message})
@@ -130,7 +130,7 @@ class Logwatch:
     def fastTime(self, message: str):
         """Send a threaded time message to the logwatch server. Used for items that need to be processed quickly"""
         if self.print:
-            print(Back.GREEN + Fore.WHITE + message + Style.RESET_ALL)
+            print(Back.GREEN + Fore.WHITE + message + f" Thread id: {self.thread_id}" + Style.RESET_ALL)
         with contextlib.suppress(Exception):
             threading.Thread(
                 target=requests.post,
