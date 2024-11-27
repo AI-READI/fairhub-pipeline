@@ -29,18 +29,19 @@ done
 """
 
 
-def worker(study_id: str,
-             workflow_file_dependencies,
-             file_processor,
-             manifest,
-             participant_filter_list: list,
-             processed_data_qc_folder,
-             processed_data_output_folder,
-             file_paths: list,
-             worker_id: int
-            ):  # sourcery skip: low-code-quality
+def worker(
+    workflow_file_dependencies,
+    file_processor,
+    manifest,
+    participant_filter_list: list,
+    processed_data_qc_folder,
+    processed_data_output_folder,
+    file_paths: list,
+    worker_id: int,
+):  # sourcery skip: low-code-quality
     """This function handles the work done by the worker threads,
     and contains core operations: downloading, processing, and uploading files."""
+
     logger = logging.Logwatch("cgm", print=True, thread_id=worker_id)
 
     # Get the list of blobs in the input folder
@@ -51,6 +52,7 @@ def worker(study_id: str,
 
     total_files = len(file_paths)
     time_estimator = TimeEstimator(total_files)
+
     for file_item in file_paths:
         path = file_item["file_path"]
 
@@ -67,15 +69,15 @@ def worker(study_id: str,
         elif file_name_only.split("_")[0] == "Clarity":
             patient_id = file_name_only.split("_")[3]
 
-        logger.info(f"Processing {patient_id}")
+        logger.threadInfo(f"Processing {patient_id}")
 
         if file_processor.is_file_ignored(file_name, path):
-            logger.info(f"Ignoring {file_name} because it is in the ignore file")
-            logger.time(time_estimator.step())
+            logger.threadInfo(f"Ignoring {file_name} because it is in the ignore file")
+            logger.threadTime(time_estimator.step())
             continue
 
         if str(patient_id) not in participant_filter_list:
-            logger.debug(
+            logger.threadDebug(
                 f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
             )
             continue
@@ -88,13 +90,13 @@ def worker(study_id: str,
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
-            logger.time(time_estimator.step())
-            logger.debug(
+            logger.threadTime(time_estimator.step())
+            logger.threadDebug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
-            logger.debug(f"Skipping {path} - File has not been modified")
+            logger.threadDebug(f"Skipping {path} - File has not been modified")
 
-            logger.time(time_estimator.step())
+            logger.threadTime(time_estimator.step())
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -106,12 +108,12 @@ def worker(study_id: str,
             # File should be downloaded as DEX_{patient_id}.csv
             download_path = os.path.join(temp_folder_path, f"DEX_{patient_id}.csv")
 
-            logger.debug(f"Downloading {file_name} to {download_path}")
+            logger.threadDebug(f"Downloading {file_name} to {download_path}")
 
             with open(download_path, "wb") as data:
                 input_file_client.download_file().readinto(data)
 
-            logger.info(f"Downloaded {file_name} to {download_path}")
+            logger.threadInfo(f"Downloaded {file_name} to {download_path}")
 
             cgm_path = download_path
 
@@ -138,7 +140,7 @@ def worker(study_id: str,
             if patient_id.startswith("7"):
                 timezone = "cst"
 
-            logger.debug(f"Converting {file_name}")
+            logger.threadDebug(f"Converting {file_name}")
 
             try:
                 cgm.convert(
@@ -154,23 +156,23 @@ def worker(study_id: str,
                     timezone=timezone,
                 )
             except Exception:
-                logger.error(f"Failed to convert {file_name}")
+                logger.threadError(f"Failed to convert {file_name}")
 
                 error_exception = "".join(format_exc().splitlines())
 
-                logger.error(error_exception)
+                logger.threadError(error_exception)
 
                 file_processor.append_errors(error_exception, path)
 
-                logger.time(time_estimator.step())
+                logger.threadTime(time_estimator.step())
                 continue
 
-            logger.info(f"Converted {file_name}")
+            logger.threadInfo(f"Converted {file_name}")
 
             file_item["convert_error"] = False
             file_item["processed"] = True
 
-            logger.debug(
+            logger.threadDebug(
                 f"Uploading outputs of {file_name} to {processed_data_output_folder}"
             )
 
@@ -188,7 +190,7 @@ def worker(study_id: str,
 
                     output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{patient_id}_DEX.json"
 
-                    logger.debug(f"Uploading {f2} to {output_file_path}")
+                    logger.threadDebug(f"Uploading {f2} to {output_file_path}")
 
                     try:
                         output_blob_client = file_system_client.get_file_client(
@@ -197,16 +199,16 @@ def worker(study_id: str,
 
                         output_blob_client.upload_data(data, overwrite=True)
 
-                        logger.info(f"Uploaded {f2} to {output_file_path}")
+                        logger.threadInfo(f"Uploaded {f2} to {output_file_path}")
                     except Exception:
                         outputs_uploaded = False
 
-                        logger.error(f"Failed to upload {file}")
+                        logger.threadError(f"Failed to upload {file}")
 
                         error_exception = format_exc()
                         error_exception = "".join(error_exception.splitlines())
 
-                        logger.error(error_exception)
+                        logger.threadError(error_exception)
 
                         file_processor.append_errors(error_exception, path)
                         continue
@@ -216,16 +218,16 @@ def worker(study_id: str,
 
                     manifest_glucose_file_path = f"/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{patient_id}_DEX.json"
 
-                    logger.debug(f"Generating manifest for {f2}")
+                    logger.threadDebug(f"Generating manifest for {f2}")
 
                     # Generate the manifest entry
                     manifest.calculate_file_sampling_extent(
                         cgm_final_output_file_path, manifest_glucose_file_path
                     )
 
-                    logger.info(f"Generated manifest for {f2}")
+                    logger.threadInfo(f"Generated manifest for {f2}")
 
-            logger.info(
+            logger.threadInfo(
                 f"Uploaded the outputs of {file_name} to {processed_data_output_folder}"
             )
 
@@ -237,11 +239,11 @@ def worker(study_id: str,
             if outputs_uploaded:
                 file_item["output_uploaded"] = True
                 file_item["status"] = "success"
-                logger.info(
+                logger.threadInfo(
                     f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
                 )
             else:
-                logger.error(
+                logger.threadError(
                     f"Failed to upload outputs of {file_name} to {processed_data_output_folder})"
                 )
 
@@ -250,7 +252,7 @@ def worker(study_id: str,
             )
 
             # upload the QC file
-            logger.debug(f"Uploading QC file for {file_name}")
+            logger.threadDebug(f"Uploading QC file for {file_name}")
 
             output_qc_file_path = (
                 f"{processed_data_qc_folder}/{patient_id}/QC_results.txt"
@@ -268,28 +270,30 @@ def worker(study_id: str,
 
                 error_exception = "".join(format_exc().splitlines())
 
-                logger.error(error_exception)
+                logger.threadError(error_exception)
 
                 file_processor.append_errors(error_exception, path)
 
-                logger.time(time_estimator.step())
+                logger.threadTime(time_estimator.step())
                 continue
 
-            logger.info(f"Uploaded QC file for {file_name}")
+            logger.threadInfo(f"Uploaded QC file for {file_name}")
 
-            logger.time(time_estimator.step())
+            logger.threadTime(time_estimator.step())
             os.remove(download_path)
 
 
 def pipeline(study_id: str, workers=4):
     """The function contains the work done by
-     the main thread, which runs only once for each operation."""
+    the main thread, which runs only once for each operation."""
 
     # Process cgm data files for a study. Args:study_id (str): the study id
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
     # takes an optional argument
-    workers = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else workers
+    workers = (
+        int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else workers
+    )
 
     input_folder = f"{study_id}/pooled-data/CGM"
     dependency_folder = f"{study_id}/dependency/CGM"
@@ -364,7 +368,8 @@ def pipeline(study_id: str, workers=4):
                 "output_uploaded": False,
                 "qc_uploaded": True,
                 "output_files": [],
-            })
+            }
+        )
 
     total_files = len(file_paths)
 
@@ -378,17 +383,17 @@ def pipeline(study_id: str, workers=4):
     # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
     # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
-    chunks = [file_paths[i:i + chunk_size] for i in range(0, total_files, chunk_size)]
+    chunks = [file_paths[i : i + chunk_size] for i in range(0, total_files, chunk_size)]
     args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
-    pipe = partial(worker,
-                   study_id,
-                   workflow_file_dependencies,
-                   file_processor,
-                   manifest,
-                   participant_filter_list,
-                   processed_data_qc_folder,
-                   processed_data_output_folder
-                   )
+    pipe = partial(
+        worker,
+        workflow_file_dependencies,
+        file_processor,
+        manifest,
+        participant_filter_list,
+        processed_data_qc_folder,
+        processed_data_output_folder,
+    )
     # Thread pool created
     pool = ThreadPool(workers)
     # Distributes the pipe function across the threads in the pool
@@ -455,7 +460,7 @@ def pipeline(study_id: str, workers=4):
         )
 
         output_blob_client = file_system_client.get_file_client(
-              file_path=f"{pipeline_workflow_log_folder}/{file_name}"
+            file_path=f"{pipeline_workflow_log_folder}/{file_name}"
         )
 
         output_blob_client.upload_data(data, overwrite=True)
@@ -480,6 +485,6 @@ def pipeline(study_id: str, workers=4):
 
     shutil.rmtree(meta_temp_folder_path)
 
+
 if __name__ == "__main__":
     pipeline("AI-READI")
-
