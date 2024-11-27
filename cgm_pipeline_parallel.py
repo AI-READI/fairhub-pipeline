@@ -1,11 +1,10 @@
 """Process ecg data files"""
 
 import contextlib
-import multiprocessing
 import os
 import tempfile
 import shutil
-import threading
+import sys
 from traceback import format_exc
 
 import cgm.cgm as cgm
@@ -40,10 +39,8 @@ def worker(study_id: str,
              file_paths: list,
              worker_id: int
             ):  # sourcery skip: low-code-quality
-    """Process cgm data files for a study
-    Args:
-        study_id (str): the study id
-    """
+    """This function handles the work done by the worker threads,
+    and contains core operations: downloading, processing, and uploading files."""
     logger = logging.Logwatch("cgm", print=True, thread_id=worker_id)
 
     # Get the list of blobs in the input folder
@@ -284,9 +281,15 @@ def worker(study_id: str,
             os.remove(download_path)
 
 
-def pipeline(study_id: str):
+def pipeline(study_id: str, workers=4):
+    """The function contains the work done by
+     the main thread, which runs only once for each operation."""
+
+    # Process cgm data files for a study. Args:study_id (str): the study id
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
+    # takes an optional argument
+    workers = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else workers
 
     input_folder = f"{study_id}/pooled-data/CGM"
     dependency_folder = f"{study_id}/dependency/CGM"
@@ -372,9 +375,9 @@ def pipeline(study_id: str):
 
     manifest = cgm_manifest.CGMManifest()
 
-    workers = 4
-    # This guarantees all paths are considered, even if the number of items is not evenly divisible by workers.
+    # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
+    # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
     chunks = [file_paths[i:i + chunk_size] for i in range(0, total_files, chunk_size)]
     args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
     pipe = partial(worker,
@@ -386,8 +389,9 @@ def pipeline(study_id: str):
                    processed_data_qc_folder,
                    processed_data_output_folder
                    )
-
+    # Thread pool created
     pool = ThreadPool(workers)
+    # Distributes the pipe function across the threads in the pool
     pool.starmap(pipe, args)
 
     file_processor.delete_out_of_date_output_files()
