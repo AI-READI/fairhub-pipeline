@@ -30,9 +30,10 @@ def worker(
     file_processor,
     processed_data_output_folder,
     processed_metadata_output_folder,
+    overall_time_estimator,
+    overall_logger,
     file_paths: list,
     worker_id: int,
-    overall_time_estimator,
 ):  # sourcery skip: low-code-quality
     """This function handles the work done by the worker threads,
     and contains core operations: downloading, processing, and uploading files."""
@@ -62,7 +63,7 @@ def worker(
             logger.threadInfo(f"Ignoring {file_name}")
 
             logger.threadTime(time_estimator.step())
-            logger.threadTime(overall_time_estimator.step())
+            overall_logger.threadTime(overall_time_estimator.step())
             continue
 
         input_file_client = file_system_client.get_file_client(file_path=path)
@@ -78,7 +79,7 @@ def worker(
             logger.threadDebug(f"Skipping {path} - File has not been modified")
 
             logger.threadTime(time_estimator.step())
-            logger.threadTime(overall_time_estimator.step())
+            overall_logger.threadTime(overall_time_estimator.step())
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -141,7 +142,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.threadTime(time_estimator.step())
-                logger.threadTime(overall_time_estimator.step())
+                overall_logger.threadTime(overall_time_estimator.step())
                 continue
 
             logger.threadInfo(f"Organized {file_name}")
@@ -184,7 +185,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.threadTime(time_estimator.step())
-                logger.threadTime(overall_time_estimator.step())
+                overall_logger.threadTime(overall_time_estimator.step())
                 continue
 
             logger.threadInfo(f"Converted {file_name}")
@@ -220,7 +221,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.threadTime(time_estimator.step())
-                logger.threadTime(overall_time_estimator.step())
+                overall_logger.threadTime(overall_time_estimator.step())
                 continue
 
             file_item["format_error"] = False
@@ -349,7 +350,7 @@ def worker(
             )
 
             logger.threadTime(time_estimator.step())
-            logger.threadTime(overall_time_estimator.step())
+            overall_logger.threadTime(overall_time_estimator.step())
 
 
 def pipeline(study_id: str, workers: int = 4):
@@ -515,6 +516,7 @@ def pipeline(study_id: str, workers: int = 4):
         processed_data_output_folder,
         processed_metadata_output_folder,
         overall_time_estimator,
+        logger,
     )
 
     # Thread pool created
