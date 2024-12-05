@@ -1,5 +1,6 @@
 """Process cirrus data files"""
 
+import argparse
 import os
 import tempfile
 import shutil
@@ -345,18 +346,13 @@ def worker(
             logger.threadTime(time_estimator.step())
 
 
-def pipeline(study_id: str, workers=3):
+def pipeline(study_id: str, workers: int = 4):
     """The function contains the work done by
     the main thread, which runs only once for each operation."""
 
     # Process cirrus data files for a study. Args:study_id (str): the study id
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
-
-    # takes an optional argument
-    workers = (
-        int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else workers
-    )
 
     input_folder = f"{study_id}/pooled-data/Cirrus"
     processed_data_output_folder = f"{study_id}/pooled-data/Cirrus-Parallel-processed"
@@ -598,4 +594,16 @@ def pipeline(study_id: str, workers=3):
 
 
 if __name__ == "__main__":
-    pipeline("AI-READI")
+    workers = 4
+
+    parser = argparse.ArgumentParser(description="Process cirrus data files")
+    parser.add_argument(
+        "--workers", type=int, default=workers, help="Number of workers to use"
+    )
+    args = parser.parse_args()
+
+    workers = args.workers
+
+    print(f"Using {workers} workers to process cirrus data files")
+
+    pipeline("AI-READI", workers)
