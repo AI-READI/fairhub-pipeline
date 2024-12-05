@@ -24,21 +24,26 @@ from multiprocessing.pool import ThreadPool
 
 from pydicom.datadict import DicomDictionary, keyword_dict
 
+overall_time_estimator = TimeEstimator(1)  # default to 1 for now
+
 
 def worker(
     workflow_file_dependencies,
     file_processor,
     processed_data_output_folder,
     processed_metadata_output_folder,
-    overall_time_estimator,
-    overall_logger,
     file_paths: list,
     worker_id: int,
 ):  # sourcery skip: low-code-quality
     """This function handles the work done by the worker threads,
     and contains core operations: downloading, processing, and uploading files."""
 
-    logger = logging.Logwatch("cirrus", print=True, thread_id=worker_id)
+    logger = logging.Logwatch(
+        "cirrus",
+        print=True,
+        thread_id=worker_id,
+        overall_time_estimator=overall_time_estimator,
+    )
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -63,7 +68,6 @@ def worker(
             logger.info(f"Ignoring {file_name}")
 
             logger.time(time_estimator.step())
-            overall_logger.time(overall_time_estimator.step())
             continue
 
         input_file_client = file_system_client.get_file_client(file_path=path)
@@ -79,7 +83,6 @@ def worker(
             logger.debug(f"Skipping {path} - File has not been modified")
 
             logger.time(time_estimator.step())
-            overall_logger.time(overall_time_estimator.step())
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -142,7 +145,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.time(time_estimator.step())
-                overall_logger.time(overall_time_estimator.step())
+
                 continue
 
             logger.info(f"Organized {file_name}")
@@ -185,7 +188,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.time(time_estimator.step())
-                overall_logger.time(overall_time_estimator.step())
+
                 continue
 
             logger.info(f"Converted {file_name}")
@@ -221,7 +224,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.time(time_estimator.step())
-                overall_logger.time(overall_time_estimator.step())
+
                 continue
 
             file_item["format_error"] = False
@@ -350,12 +353,13 @@ def worker(
             )
 
             logger.time(time_estimator.step())
-            overall_logger.time(overall_time_estimator.step())
 
 
 def pipeline(study_id: str, workers: int = 4):
     """The function contains the work done by
     the main thread, which runs only once for each operation."""
+
+    global overall_time_estimator
 
     # Process cirrus data files for a study. Args:study_id (str): the study id
     if study_id is None or not study_id:
@@ -515,8 +519,6 @@ def pipeline(study_id: str, workers: int = 4):
         file_processor,
         processed_data_output_folder,
         processed_metadata_output_folder,
-        overall_time_estimator,
-        logger,
     )
 
     # Thread pool created
@@ -589,17 +591,21 @@ def pipeline(study_id: str, workers: int = 4):
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
 
-    logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
+    logger.debug(
+        f"Uploading dependencies to {dependency_folder}/file_dependencies/{json_file_name}"
+    )
 
     with open(json_file_path, "rb") as data:
 
         output_file_client = file_system_client.get_file_client(
-            file_path=f"{dependency_folder}/{json_file_name}"
+            file_path=f"{dependency_folder}/file_dependencies/{json_file_name}"
         )
 
         output_file_client.upload_data(data, overwrite=True)
 
-        logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
+        logger.info(
+            f"Uploaded dependencies to {dependency_folder}/file_dependencies/{json_file_name}"
+        )
 
     shutil.rmtree(meta_temp_folder_path)
 

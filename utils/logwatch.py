@@ -4,6 +4,7 @@ import config
 import threading
 import json
 from colorama import just_fix_windows_console, Fore, Back, Style
+from utils.time_estimator import TimeEstimator
 
 just_fix_windows_console()
 
@@ -11,9 +12,16 @@ just_fix_windows_console()
 class Logwatch:
     """Class for sending logging messages to the logwatch server'"""
 
-    def __init__(self, channel: str = "drain", print: bool = False, thread_id: int = 0):
+    def __init__(
+        self,
+        channel: str = "drain",
+        print: bool = False,
+        thread_id: int = 0,
+        overall_time_estimator: TimeEstimator = None,
+    ):  # sourcery skip: low-code-quality
         self.print = print
         self.thread_id = thread_id
+        self.overall_time_estimator = overall_time_estimator
 
         self.drain = config.FAIRHUB_CATCH_ALL_LOG_ENDPOINT
         self.triton_drain = config.FAIRHUB_TRITON_LOG_ENDPOINT
@@ -182,6 +190,7 @@ class Logwatch:
 
     def time(self, message: str):
         """Send a time message to the logwatch server"""
+        overall_messsage = self.overall_time_estimator.step()
         if self.print:
             if self.thread_id != 0:
                 print(
@@ -189,6 +198,10 @@ class Logwatch:
                 )
             else:
                 print(f"{Back.GREEN}{Fore.WHITE}{message}{Style.RESET_ALL}")
+
+            # keep track of the overall time for threaded workflows
+            if self.overall_time_estimator is not None:
+                print(f"{Back.GREEN}{Fore.WHITE}{overall_messsage}{Style.RESET_ALL}")
 
         with contextlib.suppress(Exception):
             args = {
@@ -202,6 +215,13 @@ class Logwatch:
 
             # Not threaded because it's a time message
             requests.post(self.drain, json.dumps(args))
+
+            # keep track of the overall time for threaded workflows
+            if self.overall_time_estimator is not None:
+                if "thread" in args:
+                    del args["thread"]
+                args["message"] = overall_messsage
+                requests.post(self.drain, json.dumps(args))
 
     def fastTime(self, message: str):
         """Send a threaded time message to the logwatch server. Used for items that need to be processed quickly"""

@@ -501,7 +501,7 @@ def pipeline(
 
     with open(json_file_path, "rb") as data:
         output_file_client = file_system_client.get_file_client(
-            file_path=f"{dependency_folder}/{json_file_name}"
+            file_path=f"{dependency_folder}/file_dependencies/{json_file_name}"
         )
 
         output_file_client.upload_data(data, overwrite=True)

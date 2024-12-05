@@ -457,16 +457,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
 
-    logger.debug(f"Uploading dependencies to {dependency_folder}/{json_file_name}")
+    logger.debug(
+        f"Uploading dependencies to {dependency_folder}/file_dependencies/{json_file_name}"
+    )
 
     with open(json_file_path, "rb") as data:
         dependency_output_file_client = file_system_client.get_file_client(
-            file_path=f"{dependency_folder}/{json_file_name}"
+            file_path=f"{dependency_folder}/file_dependencies/{json_file_name}"
         )
 
         dependency_output_file_client.upload_data(data, overwrite=True)
 
-        logger.info(f"Uploaded dependencies to {dependency_folder}/{json_file_name}")
+        logger.info(
+            f"Uploaded dependencies to {dependency_folder}/file_dependencies/{json_file_name}"
+        )
 
     shutil.rmtree(temp_folder_path)
 
