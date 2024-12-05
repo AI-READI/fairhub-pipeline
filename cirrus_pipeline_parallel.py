@@ -60,9 +60,9 @@ def worker(
         file_name = path.split("/")[-1]
 
         if file_processor.is_file_ignored(file_name, path):
-            logger.threadInfo(f"Ignoring {file_name}")
+            logger.info(f"Ignoring {file_name}")
 
-            logger.threadTime(time_estimator.step())
+            logger.time(time_estimator.step())
             overall_logger.time(overall_time_estimator.step())
             continue
 
@@ -78,7 +78,7 @@ def worker(
             )
             logger.debug(f"Skipping {path} - File has not been modified")
 
-            logger.threadTime(time_estimator.step())
+            logger.time(time_estimator.step())
             overall_logger.time(overall_time_estimator.step())
             continue
 
@@ -99,7 +99,7 @@ def worker(
             with open(file=download_path, mode="wb") as f:
                 f.write(input_file_client.download_file().readall())
 
-            logger.threadInfo(f"Downloaded {file_name} to {download_path}")
+            logger.info(f"Downloaded {file_name} to {download_path}")
 
             step2_folder = os.path.join(temp_folder_path, "step2")
             os.makedirs(step2_folder, exist_ok=True)
@@ -111,7 +111,7 @@ def worker(
             for zip_file in zip_files:
                 imaging_utils.unzip_fda_file(zip_file, step2_folder)
 
-            logger.threadInfo(f"Unzipped {download_path} to {step2_folder}")
+            logger.info(f"Unzipped {download_path} to {step2_folder}")
 
             step2_data_folders = imaging_utils.list_subfolders(
                 os.path.join(step2_folder, device)
@@ -134,18 +134,18 @@ def worker(
                     file_item["organize_result"] = json.dumps(organize_result)
 
             except Exception:
-                logger.threadError(f"Failed to organize {file_name}")
+                logger.error(f"Failed to organize {file_name}")
 
                 error_exception = "".join(format_exc().splitlines())
 
-                logger.threadError(error_exception)
+                logger.error(error_exception)
                 file_processor.append_errors(error_exception, path)
 
-                logger.threadTime(time_estimator.step())
+                logger.time(time_estimator.step())
                 overall_logger.time(overall_time_estimator.step())
                 continue
 
-            logger.threadInfo(f"Organized {file_name}")
+            logger.info(f"Organized {file_name}")
 
             file_item["organize_error"] = False
 
@@ -176,19 +176,19 @@ def worker(
                         cirrus_instance.convert(folder, output_folder_path)
 
             except Exception:
-                logger.threadError(f"Failed to convert {file_name}")
+                logger.error(f"Failed to convert {file_name}")
                 error_exception = format_exc()
                 error_exception = "".join(error_exception.splitlines())
 
-                logger.threadError(error_exception)
+                logger.error(error_exception)
 
                 file_processor.append_errors(error_exception, path)
 
-                logger.threadTime(time_estimator.step())
+                logger.time(time_estimator.step())
                 overall_logger.time(overall_time_estimator.step())
                 continue
 
-            logger.threadInfo(f"Converted {file_name}")
+            logger.info(f"Converted {file_name}")
 
             file_item["convert_error"] = False
 
@@ -213,19 +213,19 @@ def worker(
                             cirrus_instance.metadata(full_file_path, metadata_folder)
 
             except Exception:
-                logger.threadError(f"Failed to format {file_name}")
+                logger.error(f"Failed to format {file_name}")
 
                 error_exception = "".join(format_exc().splitlines())
 
-                logger.threadError(error_exception)
+                logger.error(error_exception)
                 file_processor.append_errors(error_exception, path)
 
-                logger.threadTime(time_estimator.step())
+                logger.time(time_estimator.step())
                 overall_logger.time(overall_time_estimator.step())
                 continue
 
             file_item["format_error"] = False
-            logger.threadInfo(f"Formatted {file_name}")
+            logger.info(f"Formatted {file_name}")
 
             # Upload the processed files to the output folder
             logger.debug(
@@ -267,14 +267,14 @@ def worker(
                         with open(full_file_path, "rb") as f:
                             output_file_client.upload_data(f, overwrite=True)
 
-                            logger.threadInfo(f"Uploaded {combined_file_name}")
+                            logger.info(f"Uploaded {combined_file_name}")
                     except Exception:
                         outputs_uploaded = False
-                        logger.threadError(f"Failed to upload {combined_file_name}")
+                        logger.error(f"Failed to upload {combined_file_name}")
 
                         upload_exception = "".join(format_exc().splitlines())
 
-                        logger.threadError(upload_exception)
+                        logger.error(upload_exception)
 
                         file_processor.append_errors(upload_exception, path)
                         continue
@@ -282,7 +282,7 @@ def worker(
                     file_item["output_files"].append(output_file_path)
                     workflow_output_files.append(output_file_path)
 
-            logger.threadInfo(f"Uploaded outputs for {file_name}")
+            logger.info(f"Uploaded outputs for {file_name}")
 
             logger.debug(f"Uploading metadata for {file_name}")
 
@@ -310,16 +310,16 @@ def worker(
                         with open(full_file_path, "rb") as f:
                             output_file_client.upload_data(f, overwrite=True)
 
-                            logger.threadInfo(
+                            logger.info(
                                 f"Uploaded {file_name} to {processed_metadata_output_folder}"
                             )
                     except Exception:
                         outputs_uploaded = False
-                        logger.threadError(f"Failed to upload {file_name}")
+                        logger.error(f"Failed to upload {file_name}")
 
                         error_exception = "".join(format_exc().splitlines())
 
-                        logger.threadError(error_exception)
+                        logger.error(error_exception)
                         file_processor.append_errors(error_exception, path)
 
                         continue
@@ -327,7 +327,7 @@ def worker(
                     file_item["output_files"].append(output_file_path)
                     workflow_output_files.append(output_file_path)
 
-            logger.threadInfo(f"Uploaded metadata for {file_name}")
+            logger.info(f"Uploaded metadata for {file_name}")
 
             file_processor.confirm_output_files(
                 path, workflow_output_files, input_last_modified
@@ -336,12 +336,12 @@ def worker(
             if outputs_uploaded:
                 file_item["output_uploaded"] = True
                 file_item["status"] = "success"
-                logger.threadInfo(
+                logger.info(
                     f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
                 )
             else:
                 file_item["output_uploaded"] = upload_exception
-                logger.threadError(
+                logger.error(
                     f"Failed to upload outputs of {file_name} to {processed_data_output_folder}"
                 )
 
@@ -349,7 +349,7 @@ def worker(
                 workflow_input_files, workflow_output_files
             )
 
-            logger.threadTime(time_estimator.step())
+            logger.time(time_estimator.step())
             overall_logger.time(overall_time_estimator.step())
 
 
