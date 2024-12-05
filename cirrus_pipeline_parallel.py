@@ -63,7 +63,7 @@ def worker(
             logger.threadInfo(f"Ignoring {file_name}")
 
             logger.threadTime(time_estimator.step())
-            overall_logger.threadTime(overall_time_estimator.step())
+            overall_logger.time(overall_time_estimator.step())
             continue
 
         input_file_client = file_system_client.get_file_client(file_path=path)
@@ -79,7 +79,7 @@ def worker(
             logger.threadDebug(f"Skipping {path} - File has not been modified")
 
             logger.threadTime(time_estimator.step())
-            overall_logger.threadTime(overall_time_estimator.step())
+            overall_logger.time(overall_time_estimator.step())
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -142,7 +142,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.threadTime(time_estimator.step())
-                overall_logger.threadTime(overall_time_estimator.step())
+                overall_logger.time(overall_time_estimator.step())
                 continue
 
             logger.threadInfo(f"Organized {file_name}")
@@ -185,7 +185,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.threadTime(time_estimator.step())
-                overall_logger.threadTime(overall_time_estimator.step())
+                overall_logger.time(overall_time_estimator.step())
                 continue
 
             logger.threadInfo(f"Converted {file_name}")
@@ -221,7 +221,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.threadTime(time_estimator.step())
-                overall_logger.threadTime(overall_time_estimator.step())
+                overall_logger.time(overall_time_estimator.step())
                 continue
 
             file_item["format_error"] = False
@@ -350,7 +350,7 @@ def worker(
             )
 
             logger.threadTime(time_estimator.step())
-            overall_logger.threadTime(overall_time_estimator.step())
+            overall_logger.time(overall_time_estimator.step())
 
 
 def pipeline(study_id: str, workers: int = 4):
