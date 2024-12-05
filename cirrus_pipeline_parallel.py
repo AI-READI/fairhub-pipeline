@@ -73,10 +73,10 @@ def worker(
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
-            logger.threadDebug(
+            logger.debug(
                 f"The file {path} has not been modified since the last time it was processed",
             )
-            logger.threadDebug(f"Skipping {path} - File has not been modified")
+            logger.debug(f"Skipping {path} - File has not been modified")
 
             logger.threadTime(time_estimator.step())
             overall_logger.time(overall_time_estimator.step())
@@ -86,7 +86,7 @@ def worker(
 
         file_processor.clear_errors(path)
 
-        logger.threadDebug(f"Processing {path}")
+        logger.debug(f"Processing {path}")
 
         with tempfile.TemporaryDirectory(prefix="cirrus_pipeline_") as temp_folder_path:
             step_1_folder = os.path.join(temp_folder_path, "step1", device)
@@ -94,7 +94,7 @@ def worker(
 
             download_path = os.path.join(step_1_folder, file_name)
 
-            logger.threadDebug(f"Downloading {file_name} to {download_path}")
+            logger.debug(f"Downloading {file_name} to {download_path}")
 
             with open(file=download_path, mode="wb") as f:
                 f.write(input_file_client.download_file().readall())
@@ -104,7 +104,7 @@ def worker(
             step2_folder = os.path.join(temp_folder_path, "step2")
             os.makedirs(step2_folder, exist_ok=True)
 
-            logger.threadDebug(f"Unzipping {download_path} to {step2_folder}")
+            logger.debug(f"Unzipping {download_path} to {step2_folder}")
 
             zip_files = imaging_utils.list_zip_files(step_1_folder)
 
@@ -123,7 +123,7 @@ def worker(
             # process the files
             cirrus_instance = Cirrus.Cirrus()
 
-            logger.threadDebug(f"Organizing {file_name}")
+            logger.debug(f"Organizing {file_name}")
 
             try:
                 for step2_data_folder in step2_data_folders:
@@ -159,7 +159,7 @@ def worker(
                 "cirrus_onh_optic_disc_cube",
             ]
 
-            logger.threadDebug("Converting to nema compliant dicom files")
+            logger.debug("Converting to nema compliant dicom files")
 
             try:
                 for protocol in protocols:
@@ -200,7 +200,7 @@ def worker(
             metadata_folder = os.path.join(temp_folder_path, "metadata")
             os.makedirs(metadata_folder, exist_ok=True)
 
-            logger.threadDebug("Formatting files and generating metadata")
+            logger.debug("Formatting files and generating metadata")
 
             try:
                 for device_folder in device_list:
@@ -228,7 +228,7 @@ def worker(
             logger.threadInfo(f"Formatted {file_name}")
 
             # Upload the processed files to the output folder
-            logger.threadDebug(
+            logger.debug(
                 f"Uploading outputs of {file_name} to {processed_data_output_folder}"
             )
 
@@ -239,13 +239,13 @@ def worker(
 
             file_processor.delete_preexisting_output_files(path)
 
-            logger.threadDebug(f"Uploading outputs for {file_name}")
+            logger.debug(f"Uploading outputs for {file_name}")
 
             for root, dirs, files in os.walk(destination_folder):
                 for file in files:
                     full_file_path = os.path.join(root, file)
 
-                    logger.threadDebug(f"Found file {full_file_path}")
+                    logger.debug(f"Found file {full_file_path}")
 
                     f2 = full_file_path.split("/")[-5:]
 
@@ -255,7 +255,7 @@ def worker(
                         f"{processed_data_output_folder}/{combined_file_name}"
                     )
 
-                    logger.threadDebug(
+                    logger.debug(
                         f"Uploading {combined_file_name} to {output_file_path}"
                     )
 
@@ -284,7 +284,7 @@ def worker(
 
             logger.threadInfo(f"Uploaded outputs for {file_name}")
 
-            logger.threadDebug(f"Uploading metadata for {file_name}")
+            logger.debug(f"Uploading metadata for {file_name}")
 
             for root, dirs, files in os.walk(metadata_folder):
                 for file in files:
@@ -298,7 +298,7 @@ def worker(
                         f"{processed_metadata_output_folder}/{combined_file_name}"
                     )
 
-                    logger.threadDebug(
+                    logger.debug(
                         f"Uploading {full_file_path} to {processed_metadata_output_folder}"
                     )
 

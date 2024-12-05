@@ -2,6 +2,7 @@ import requests
 import contextlib
 import config
 import threading
+import json
 from colorama import just_fix_windows_console, Fore, Back, Style
 
 just_fix_windows_console()
@@ -74,65 +75,55 @@ class Logwatch:
                 ),
             ).start()
 
-    def debug(self, message: str):
+    def debug(self, message: str):  # sourcery skip: class-extract-method
         """Send a debug message to the logwatch server"""
         if self.print:
-            print(Fore.BLUE + message + Style.RESET_ALL)
-        with contextlib.suppress(Exception):
-            threading.Thread(
-                target=requests.post,
-                args=(
-                    self.drain,
-                    {"level": "debug", "message": message, "type": "text"},
-                ),
-            ).start()
+            if self.thread_id != 0:
+                print(f"{Fore.BLUE}[{self.thread_id}] {message}{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.BLUE}{message}{Style.RESET_ALL}")
 
-    def threadDebug(self, message: str):
-        """Send a debug message to the logwatch server"""
-        if self.print:
-            print(f"{Fore.BLUE}[{self.thread_id}] {message}{Style.RESET_ALL}")
         with contextlib.suppress(Exception):
+            args = {
+                "level": "debug",
+                "message": message,
+                "type": "text",
+            }
+
+            if self.thread_id != 0:
+                args["thread"] = self.thread_id
+
             threading.Thread(
                 target=requests.post,
                 args=(
                     self.drain,
-                    {
-                        "level": "debug",
-                        "message": message,
-                        "type": "text",
-                        "thread": self.thread_id,
-                    },
+                    json.dumps(args),
                 ),
             ).start()
 
     def info(self, message: str):
         """Send an info message to the logwatch server"""
         if self.print:
-            print(Fore.CYAN + message + Style.RESET_ALL)
-        with contextlib.suppress(Exception):
-            threading.Thread(
-                target=requests.post,
-                args=(
-                    self.drain,
-                    {"level": "info", "message": message, "type": "text"},
-                ),
-            ).start()
+            if self.thread_id != 0:
+                print(f"{Fore.CYAN}[{self.thread_id}] {message}{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.CYAN}{message}{Style.RESET_ALL}")
 
-    def threadInfo(self, message: str):
-        """Send a threaded info message to the logwatch server"""
-        if self.print:
-            print(f"{Fore.CYAN}[{self.thread_id}] {message}{Style.RESET_ALL}")
         with contextlib.suppress(Exception):
+            args = {
+                "level": "info",
+                "message": message,
+                "type": "text",
+            }
+
+            if self.thread_id != 0:
+                args["thread"] = self.thread_id
+
             threading.Thread(
                 target=requests.post,
                 args=(
                     self.drain,
-                    {
-                        "level": "info",
-                        "message": message,
-                        "type": "text",
-                        "thread": self.thread_id,
-                    },
+                    json.dumps(args),
                 ),
             ).start()
 
@@ -152,26 +143,22 @@ class Logwatch:
     def error(self, message: str):
         """Send an error message to the logwatch server"""
         if self.print:
-            print(Fore.RED + message + Style.RESET_ALL)
-        with contextlib.suppress(Exception):
-            requests.post(
-                self.drain, json={"level": "error", "message": message, "type": "text"}
-            )
+            if self.thread_id != 0:
+                print(f"{Fore.RED}[{self.thread_id}] {message}{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.RED}{message}{Style.RESET_ALL}")
 
-    def threadError(self, message: str):
-        """Send an error message to the logwatch server"""
-        if self.print:
-            print(f"{Fore.RED}[{self.thread_id}] {message}{Style.RESET_ALL}")
         with contextlib.suppress(Exception):
-            requests.post(
-                self.drain,
-                json={
-                    "level": "error",
-                    "message": message,
-                    "type": "text",
-                    "thread": self.thread_id,
-                },
-            )
+            args = {
+                "level": "error",
+                "message": message,
+                "type": "text",
+            }
+
+            if self.thread_id != 0:
+                args["thread"] = self.thread_id
+
+            requests.post(self.drain, json.dumps(args))
 
     def warn(self, message: str):
         """Send a warning message to the logwatch server"""
@@ -196,69 +183,48 @@ class Logwatch:
     def time(self, message: str):
         """Send a time message to the logwatch server"""
         if self.print:
-            print(Back.GREEN + Fore.WHITE + message + Style.RESET_ALL)
-        with contextlib.suppress(Exception):
-            # Not threaded because it's a time message
-            requests.post(
-                self.drain, json={"level": "time", "message": message, "type": "text"}
-            )
+            if self.thread_id != 0:
+                print(
+                    f"{Back.GREEN}{Fore.WHITE}[{self.thread_id}] {message}{Style.RESET_ALL}"
+                )
+            else:
+                print(f"{Back.GREEN}{Fore.WHITE}{message}{Style.RESET_ALL}")
 
-    def threadTime(self, message: str):
-        """Send a time message to the logwatch server"""
-        if self.print:
-            print(
-                Back.GREEN
-                + Fore.WHITE
-                + f"[{self.thread_id}] "
-                + message
-                + Style.RESET_ALL
-            )
         with contextlib.suppress(Exception):
-            requests.post(
-                self.drain,
-                json={
-                    "level": "time",
-                    "message": message,
-                    "type": "text",
-                    "thread": self.thread_id,
-                },
-            )
+            args = {
+                "level": "time",
+                "message": message,
+                "type": "text",
+            }
+
+            if self.thread_id != 0:
+                args["thread"] = self.thread_id
+
+            # Not threaded because it's a time message
+            requests.post(self.drain, json.dumps(args))
 
     def fastTime(self, message: str):
         """Send a threaded time message to the logwatch server. Used for items that need to be processed quickly"""
         if self.print:
-            print(Back.GREEN + Fore.WHITE + message + Style.RESET_ALL)
+            if self.thread_id != 0:
+                print(
+                    f"{Back.GREEN}{Fore.WHITE}[{self.thread_id}] {message}{Style.RESET_ALL}"
+                )
+            else:
+                print(f"{Back.GREEN}{Fore.WHITE}{message}{Style.RESET_ALL}")
         with contextlib.suppress(Exception):
-            threading.Thread(
-                target=requests.post,
-                args=(
-                    self.drain,
-                    {"level": "time", "message": message, "type": "text"},
-                ),
-            ).start()
+            args = {
+                "level": "time",
+                "message": message,
+                "type": "text",
+            }
 
-    def threadFastTime(self, message: str):
-        """Send a threaded time message to the logwatch server. Used for items that need to be processed quickly"""
-        if self.print:
-            print(
-                Back.GREEN
-                + Fore.WHITE
-                + f"[{self.thread_id}] "
-                + message
-                + Style.RESET_ALL
-            )
-        with contextlib.suppress(Exception):
+            if self.thread_id != 0:
+                args["thread"] = self.thread_id
+
             threading.Thread(
                 target=requests.post,
-                args=(
-                    self.drain,
-                    {
-                        "level": "time",
-                        "message": message,
-                        "type": "text",
-                        "thread": self.thread_id,
-                    },
-                ),
+                args=(self.drain, json.dumps(args)),
             ).start()
 
     def noPrintTime(self, message: str):
