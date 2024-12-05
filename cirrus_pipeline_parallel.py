@@ -5,7 +5,6 @@ import os
 import tempfile
 import shutil
 import contextlib
-import sys
 import time
 from traceback import format_exc
 import json
