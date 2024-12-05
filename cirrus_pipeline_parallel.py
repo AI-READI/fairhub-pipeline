@@ -33,6 +33,7 @@ def worker(
     processed_metadata_output_folder,
     file_paths: list,
     worker_id: int,
+    overall_time_estimator,
 ):  # sourcery skip: low-code-quality
     """This function handles the work done by the worker threads,
     and contains core operations: downloading, processing, and uploading files."""
@@ -62,6 +63,7 @@ def worker(
             logger.threadInfo(f"Ignoring {file_name}")
 
             logger.threadTime(time_estimator.step())
+            logger.threadTime(overall_time_estimator.step())
             continue
 
         input_file_client = file_system_client.get_file_client(file_path=path)
@@ -77,6 +79,7 @@ def worker(
             logger.threadDebug(f"Skipping {path} - File has not been modified")
 
             logger.threadTime(time_estimator.step())
+            logger.threadTime(overall_time_estimator.step())
             continue
 
         file_processor.add_entry(path, input_last_modified)
@@ -139,6 +142,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.threadTime(time_estimator.step())
+                logger.threadTime(overall_time_estimator.step())
                 continue
 
             logger.threadInfo(f"Organized {file_name}")
@@ -181,6 +185,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.threadTime(time_estimator.step())
+                logger.threadTime(overall_time_estimator.step())
                 continue
 
             logger.threadInfo(f"Converted {file_name}")
@@ -216,6 +221,7 @@ def worker(
                 file_processor.append_errors(error_exception, path)
 
                 logger.threadTime(time_estimator.step())
+                logger.threadTime(overall_time_estimator.step())
                 continue
 
             file_item["format_error"] = False
@@ -344,6 +350,7 @@ def worker(
             )
 
             logger.threadTime(time_estimator.step())
+            logger.threadTime(overall_time_estimator.step())
 
 
 def pipeline(study_id: str, workers: int = 4):
@@ -495,6 +502,8 @@ def pipeline(study_id: str, workers: int = 4):
     workflow_file_dependencies = deps.WorkflowFileDependencies()
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
 
+    overall_time_estimator = TimeEstimator(total_files)
+
     # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
     # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
@@ -506,6 +515,7 @@ def pipeline(study_id: str, workers: int = 4):
         file_processor,
         processed_data_output_folder,
         processed_metadata_output_folder,
+        overall_time_estimator,
     )
 
     # Thread pool created
