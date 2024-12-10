@@ -190,7 +190,12 @@ class Logwatch:
 
     def time(self, message: str):
         """Send a time message to the logwatch server"""
-        overall_messsage = self.overall_time_estimator.step()
+
+        overall_messsage = ""
+
+        if self.overall_time_estimator is not None:
+            overall_messsage = self.overall_time_estimator.step()
+
         if self.print:
             if self.thread_id != 0:
                 print(
