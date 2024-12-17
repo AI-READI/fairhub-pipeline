@@ -500,9 +500,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
             }
         )
 
-    # Use only the first 20 items for testing
-    file_paths = file_paths[:20]
-
     total_files = len(file_paths)
 
     logger.debug(f"Found {total_files} items in {input_folder}")
