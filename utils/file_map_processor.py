@@ -14,13 +14,19 @@ import time
 class FileMapProcessor:
     """Class for handling file processing"""
 
-    def __init__(self, dependency_folder: str, ignore_file=None):
+    def __init__(
+        self,
+        dependency_folder: str,
+        ignore_file=None,
+        args: list = [],
+    ):
 
         self.file_map = []
         # where actually ignored files are stored in the array
         self.ignore_files = []
         self.dependency_folder = dependency_folder
         self.start_time = time.time()
+        self.args = args
 
         # Create a temporary folder on the local machine
         self.meta_temp_folder_path = tempfile.mkdtemp()
@@ -195,6 +201,7 @@ class FileMapProcessor:
             "start_time": self.start_time,
             "end_time": time.time(),
             "duration": time.time() - self.start_time,
+            "args": " ".join(self.args),
         }
 
         with open(file_map_file_path, "w") as f:

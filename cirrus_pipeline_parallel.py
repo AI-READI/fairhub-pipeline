@@ -8,6 +8,7 @@ import contextlib
 import time
 from traceback import format_exc
 import json
+import sys
 
 import imaging.imaging_cirrus_root as Cirrus
 import imaging.imaging_utils as imaging_utils
@@ -355,9 +356,12 @@ def worker(
             logger.time(time_estimator.step())
 
 
-def pipeline(study_id: str, workers: int = 4):
+def pipeline(study_id: str, workers: int = 4, args: list = None):
     """The function contains the work done by
     the main thread, which runs only once for each operation."""
+
+    if args is None:
+        args = []
 
     global overall_time_estimator
 
@@ -496,6 +500,9 @@ def pipeline(study_id: str, workers: int = 4):
             }
         )
 
+    # Use only the first 20 items for testing
+    file_paths = file_paths[:20]
+
     total_files = len(file_paths)
 
     logger.debug(f"Found {total_files} items in {input_folder}")
@@ -504,7 +511,7 @@ def pipeline(study_id: str, workers: int = 4):
     file_system_client.create_directory(processed_data_output_folder)
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
 
     overall_time_estimator = TimeEstimator(total_files)
 
@@ -611,6 +618,8 @@ def pipeline(study_id: str, workers: int = 4):
 
 
 if __name__ == "__main__":
+    sys_args = sys.argv
+
     workers = 4
 
     parser = argparse.ArgumentParser(description="Process cirrus data files")
@@ -623,4 +632,4 @@ if __name__ == "__main__":
 
     print(f"Using {workers} workers to process cirrus data files")
 
-    pipeline("AI-READI", workers)
+    pipeline("AI-READI", workers, sys_args)
