@@ -23,6 +23,9 @@ from multiprocessing.pool import ThreadPool
 JSON_PATH = os.path.join(os.path.dirname(__file__), "flio", "flio_uid_data.json")
 
 
+overall_time_estimator = TimeEstimator(1)  # default to 1 for now
+
+
 def worker(
         workflow_file_dependencies,
         file_processor,
@@ -31,10 +34,15 @@ def worker(
         worker_id: int,
         study_id
 ):  # sourcery skip: low-code-quality
-    
+
     # input_folder = f"{study_id}/pooled-data/Flio"
     processed_metadata_output_folder = f"{study_id}/pooled-data/Flio-metadata"
-    logger = logging.Logwatch("flio", print=True, thread_id=worker_id)
+    logger = logging.Logwatch(
+    "flio",
+          print=True,
+          thread_id=worker_id,
+          overall_time_estimator=overall_time_estimator,
+)
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -326,9 +334,11 @@ def worker(
 
 
 
-def pipeline(study_id: str, workers=4):
+def pipeline(study_id: str, workers: int = 4):
     """The function contains the work done by
     the main thread, which runs only once for each operation."""
+
+    global overall_time_estimator
 
     # Process cgm data files for a study. Args:study_id (str): the study id
     if study_id is None or not study_id:
@@ -393,9 +403,9 @@ def pipeline(study_id: str, workers=4):
         # remove the first row
         participant_filter_list.pop(0)
 
-    paths = file_system_client.get_paths(path=input_folder, recursive=False)
+    batch_folder_paths = file_system_client.get_paths(path=input_folder, recursive=False)
 
-    for batch_folder_path in paths:
+    for batch_folder_path in batch_folder_paths:
         t = str(batch_folder_path.name)
 
         batch_folder = t.split("/")[-1]
@@ -441,13 +451,12 @@ def pipeline(study_id: str, workers=4):
 
 
     total_files = len(file_paths)
+    overall_time_estimator = TimeEstimator(total_files)
 
     logger.debug(f"Found {total_files} files in {input_folder}")
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
     file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
-    # manifest = cgm_manifest.CGMManifest()
 
     # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
@@ -466,7 +475,6 @@ def pipeline(study_id: str, workers=4):
     pool = ThreadPool(workers)
     # Distributes the pipe function across the threads in the pool
     pool.starmap(pipe, args)
-
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
