@@ -30,7 +30,7 @@ class WorkflowFileDependencies:
     def write_to_file(self, folder_path: str):
         """Write the dependencies to a file"""
         timestr = time.strftime("%Y%m%d-%H%M%S")
-        file_name = f"file_map_{timestr}.json"
+        file_name = f"file_dependencies_{timestr}.json"
 
         file_path = os.path.join(folder_path, file_name)
 

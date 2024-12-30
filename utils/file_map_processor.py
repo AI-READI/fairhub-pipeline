@@ -8,17 +8,25 @@ from azure.core.exceptions import ResourceNotFoundError
 import pathlib
 import json
 import glob
+import time
 
 
 class FileMapProcessor:
     """Class for handling file processing"""
 
-    def __init__(self, dependency_folder: str, ignore_file=None):
+    def __init__(
+        self,
+        dependency_folder: str,
+        ignore_file=None,
+        args: list = [],
+    ):
 
         self.file_map = []
         # where actually ignored files are stored in the array
         self.ignore_files = []
         self.dependency_folder = dependency_folder
+        self.start_time = time.time()
+        self.args = args
 
         # Create a temporary folder on the local machine
         self.meta_temp_folder_path = tempfile.mkdtemp()
@@ -67,7 +75,7 @@ class FileMapProcessor:
             # Remove any that start with a '#'
             self.ignore_files = [x for x in self.ignore_files if not x.startswith("#")]
 
-    # Downloading file map
+        # Downloading file map
         try:
             with open(file_map_download_path, "wb") as data:
                 meta_file_client.download_file().readinto(data)
@@ -190,6 +198,10 @@ class FileMapProcessor:
                 "files": error_file_list,
                 "items": error_file_map,
             },
+            "start_time": self.start_time,
+            "end_time": time.time(),
+            "duration": time.time() - self.start_time,
+            "args": " ".join(self.args),
         }
 
         with open(file_map_file_path, "w") as f:
@@ -200,7 +212,19 @@ class FileMapProcessor:
                 file_path=f"{self.dependency_folder}/file_map.json",
             )
 
-            # # delete the existing file map
+            with contextlib.suppress(Exception):
+                output_file_client.delete_file()
+
+            output_file_client.upload_data(data, overwrite=True)
+
+        with open(file_map_file_path, "rb") as data:
+            timestr = time.strftime("%Y%m%d-%H%M%S")
+            workflow_file_name = f"workflow_{timestr}.json"
+
+            output_file_client = self.file_system_client.get_file_client(
+                file_path=f"{self.dependency_folder}/workflow/{workflow_file_name}",
+            )
+
             with contextlib.suppress(Exception):
                 output_file_client.delete_file()
 

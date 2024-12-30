@@ -1,44 +1,50 @@
-"""Process triton data files"""
+"""Process cirrus data files"""
 
+import argparse
 import os
 import tempfile
 import shutil
 import contextlib
+import time
 from traceback import format_exc
 import json
+import sys
 
-import imaging.imaging_maestro2_triton_root as Maestro2_Triton
+import imaging.imaging_cirrus_root as Cirrus
 import imaging.imaging_utils as imaging_utils
+import cirrus.cirrus_utils as cirrus_utils
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
-import time
 import csv
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
+from functools import partial
+from multiprocessing.pool import ThreadPool
 
 from pydicom.datadict import DicomDictionary, keyword_dict
 
+overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
-def pipeline(study_id: str):  # sourcery skip: low-code-quality
-    """Process triton data files for a study
-    Args:
-        study_id (str): the study id
-    """
 
-    if study_id is None or not study_id:
-        raise ValueError("study_id is required")
+def worker(
+    workflow_file_dependencies,
+    file_processor,
+    processed_data_output_folder,
+    processed_metadata_output_folder,
+    file_paths: list,
+    worker_id: int,
+):  # sourcery skip: low-code-quality
+    """This function handles the work done by the worker threads,
+    and contains core operations: downloading, processing, and uploading files."""
 
-    input_folder = f"{study_id}/pooled-data/Triton"
-    dependency_folder = f"{study_id}/dependency/Triton"
-    pipeline_workflow_log_folder = f"{study_id}/logs/Triton"
-    processed_data_output_folder = f"{study_id}/pooled-data/Triton-processed"
-    processed_metadata_output_folder = f"{study_id}/pooled-data/Triton-metadata"
-    ignore_file = f"{study_id}/ignore/triton.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
-
-    logger = logging.Logwatch("triton", print=True)
+    logger = logging.Logwatch(
+        "cirrus",
+        print=True,
+        thread_id=worker_id,
+        overall_time_estimator=overall_time_estimator,
+    )
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -46,138 +52,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_system_name="stage-1-container",
     )
 
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_output_folder)
-
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_metadata_output_folder)
-
-    with contextlib.suppress(Exception):
-        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
-
-    file_paths = []
-    participant_filter_list = []
-
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="optomed_pipeline_meta_")
-
-    # Get the participant filter list file
-    with contextlib.suppress(Exception):
-        file_client = file_system_client.get_file_client(
-            file_path=participant_filter_list_file
-        )
-
-        temp_participant_filter_list_file = os.path.join(
-            meta_temp_folder_path, "filter_file.csv"
-        )
-
-        with open(file=temp_participant_filter_list_file, mode="wb") as f:
-            f.write(file_client.download_file().readall())
-
-        with open(file=temp_participant_filter_list_file, mode="r") as f:
-            reader = csv.reader(f)
-            for row in reader:
-                participant_filter_list.append(row[0])
-
-        # remove the first row
-        participant_filter_list.pop(0)
-
-    # Define items as (VR, VM, description, is_retired flag, keyword)
-    #   Leave is_retired flag blank.
-    new_dict_items = {
-        0x0022EEE0: (
-            "SQ",
-            "1",
-            "En Face Volume Descriptor Sequence",
-            "",
-            "EnFaceVolumeDescriptorSequence",
-        ),
-        0x0022EEE1: (
-            "CS",
-            "1",
-            "En Face Volume Descriptor Scope",
-            "",
-            "EnFaceVolumeDescriptorScope",
-        ),
-        0x0022EEE2: (
-            "SQ",
-            "1",
-            "Referenced Segmentation Sequence",
-            "",
-            "ReferencedSegmentationSequence",
-        ),
-        0x0022EEE3: ("FL", "1", "Surface Offset", "", "SurfaceOffset"),
-    }
-
-    # Update the dictionary itself
-    DicomDictionary.update(new_dict_items)
-
-    # Update the reverse mapping from name to tag
-    new_names_dict = dict([(val[4], tag) for tag, val in new_dict_items.items()])
-    keyword_dict.update(new_names_dict)
-
-    paths = file_system_client.get_paths(path=input_folder)
-
-    for path in paths:
-        t = str(path.name)
-
-        file_name = t.split("/")[-1]
-
-        # Check if the item is an .fda.zip file
-        if not file_name.endswith(".zip"):
-            continue
-
-        # Get the parent folder of the file.
-        # The name of this file is in the format siteName_dataType_startDate-endDate_*.fda.zip
-
-        parts = file_name.split("_")
-
-        if len(parts) != 4:
-            continue
-
-        site_name = parts[0]
-        data_type = parts[1]
-
-        start_date_end_date = parts[2]
-
-        start_date = start_date_end_date.split("-")[0]
-        end_date = start_date_end_date.split("-")[1]
-
-        file_paths.append(
-            {
-                "file_path": t,
-                "status": "failed",
-                "processed": False,
-                "site_name": site_name,
-                "data_type": data_type,
-                "start_date": start_date,
-                "end_date": end_date,
-                "organize_error": True,
-                "organize_result": "",
-                "convert_error": True,
-                "format_error": False,
-                "output_uploaded": False,
-                "output_files": [],
-            }
-        )
-
-    logger.debug(f"Found {len(file_paths)} files in {input_folder}")
-
-    # Create the output folder
-    file_system_client.create_directory(processed_data_output_folder)
-
-    workflow_file_dependencies = deps.WorkflowFileDependencies()
-
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
     total_files = len(file_paths)
-
-    device = "Triton"
-
     time_estimator = TimeEstimator(total_files)
 
-    for file_item in file_paths:
+    device = "Cirrus"
 
+    for file_item in file_paths:
         path = file_item["file_path"]
 
         workflow_input_files = [path]
@@ -187,14 +67,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         if file_processor.is_file_ignored(file_name, path):
             logger.info(f"Ignoring {file_name}")
+
+            logger.time(time_estimator.step())
             continue
 
         input_file_client = file_system_client.get_file_client(file_path=path)
+
         input_last_modified = input_file_client.get_file_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
 
         if not should_process:
+            logger.debug(
+                f"The file {path} has not been modified since the last time it was processed",
+            )
             logger.debug(f"Skipping {path} - File has not been modified")
 
             logger.time(time_estimator.step())
@@ -206,13 +92,11 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         logger.debug(f"Processing {path}")
 
-        with tempfile.TemporaryDirectory(prefix="triton_pipeline_") as temp_folder_path:
-            step1_folder = os.path.join(temp_folder_path, "step1")
+        with tempfile.TemporaryDirectory(prefix="cirrus_pipeline_") as temp_folder_path:
+            step_1_folder = os.path.join(temp_folder_path, "step1", device)
+            os.makedirs(step_1_folder, exist_ok=True)
 
-            if not os.path.exists(step1_folder):
-                os.makedirs(step1_folder)
-
-            download_path = os.path.join(step1_folder, file_name)
+            download_path = os.path.join(step_1_folder, file_name)
 
             logger.debug(f"Downloading {file_name} to {download_path}")
 
@@ -221,41 +105,38 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.info(f"Downloaded {file_name} to {download_path}")
 
-            zip_files = imaging_utils.list_zip_files(step1_folder)
-
-            if len(zip_files) == 0:
-                logger.warn(f"No zip files found in {step1_folder}")
-                continue
-
             step2_folder = os.path.join(temp_folder_path, "step2")
+            os.makedirs(step2_folder, exist_ok=True)
 
-            if not os.path.exists(step2_folder):
-                os.makedirs(step2_folder)
+            logger.debug(f"Unzipping {download_path} to {step2_folder}")
 
-            logger.debug(f"Unzipping {file_name} to {step2_folder}")
+            zip_files = imaging_utils.list_zip_files(step_1_folder)
 
-            imaging_utils.unzip_fda_file(download_path, step2_folder)
+            for zip_file in zip_files:
+                imaging_utils.unzip_fda_file(zip_file, step2_folder)
 
-            logger.info(f"Unzipped {file_name} to {step2_folder}")
-
-            step3_folder = os.path.join(temp_folder_path, "step3")
+            logger.info(f"Unzipped {download_path} to {step2_folder}")
 
             step2_data_folders = imaging_utils.list_subfolders(
                 os.path.join(step2_folder, device)
             )
 
+            step3_folder = os.path.join(temp_folder_path, "step3")
+            os.makedirs(step3_folder, exist_ok=True)
+
             # process the files
-            triton_instance = Maestro2_Triton.Maestro2_Triton()
+            cirrus_instance = Cirrus.Cirrus()
 
             logger.debug(f"Organizing {file_name}")
 
             try:
                 for step2_data_folder in step2_data_folders:
-                    organize_result = triton_instance.organize(
+                    organize_result = cirrus_instance.organize(
                         step2_data_folder, os.path.join(step3_folder, device)
                     )
 
                     file_item["organize_result"] = json.dumps(organize_result)
+
             except Exception:
                 logger.error(f"Failed to organize {file_name}")
 
@@ -265,23 +146,24 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 file_processor.append_errors(error_exception, path)
 
                 logger.time(time_estimator.step())
+
                 continue
 
             logger.info(f"Organized {file_name}")
+
             file_item["organize_error"] = False
 
             step4_folder = os.path.join(temp_folder_path, "step4")
-
-            if not os.path.exists(step4_folder):
-                os.makedirs(step4_folder)
+            os.makedirs(step4_folder, exist_ok=True)
 
             protocols = [
-                "triton_3d_radial_oct",
-                "triton_macula_6x6_octa",
-                "triton_macula_12x12_octa",
+                "cirrus_mac_angiography",
+                "cirrus_mac_macular_cube",
+                "cirrus_onh_angiography",
+                "cirrus_onh_optic_disc_cube",
             ]
 
-            logger.debug(f"Converting {file_name}")
+            logger.debug("Converting to nema compliant dicom files")
 
             try:
                 for protocol in protocols:
@@ -295,26 +177,29 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     )
 
                     for folder in folders:
-                        logger.debug(f"Converting {folder}")
-                        triton_instance.convert(folder, output_folder_path)
+                        cirrus_instance.convert(folder, output_folder_path)
 
             except Exception:
                 logger.error(f"Failed to convert {file_name}")
-
                 error_exception = format_exc()
                 error_exception = "".join(error_exception.splitlines())
 
                 logger.error(error_exception)
 
                 file_processor.append_errors(error_exception, path)
+
+                logger.time(time_estimator.step())
+
                 continue
 
             logger.info(f"Converted {file_name}")
+
             file_item["convert_error"] = False
 
             device_list = [os.path.join(step4_folder, device)]
 
             destination_folder = os.path.join(temp_folder_path, "step5")
+            os.makedirs(destination_folder, exist_ok=True)
 
             metadata_folder = os.path.join(temp_folder_path, "metadata")
             os.makedirs(metadata_folder, exist_ok=True)
@@ -323,15 +208,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             try:
                 for device_folder in device_list:
-                    file_list = imaging_utils.get_filtered_file_names(device_folder)
+                    filelist = imaging_utils.get_filtered_file_names(device_folder)
 
-                    for file in file_list:
-                        if full_file_path := imaging_utils.format_file(
+                    for file in filelist:
+                        if full_file_path := cirrus_utils.format_cirrus_file(
                             file, destination_folder
                         ):
-                            triton_instance.metadata(full_file_path, metadata_folder)
+                            cirrus_instance.metadata(full_file_path, metadata_folder)
+
             except Exception:
-                file_item["format_error"] = True
                 logger.error(f"Failed to format {file_name}")
 
                 error_exception = "".join(format_exc().splitlines())
@@ -340,11 +225,13 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                 file_processor.append_errors(error_exception, path)
 
                 logger.time(time_estimator.step())
+
                 continue
 
+            file_item["format_error"] = False
             logger.info(f"Formatted {file_name}")
-            file_item["processed"] = True
 
+            # Upload the processed files to the output folder
             logger.debug(
                 f"Uploading outputs of {file_name} to {processed_data_output_folder}"
             )
@@ -352,6 +239,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             workflow_output_files = []
 
             outputs_uploaded = True
+            upload_exception = ""
 
             file_processor.delete_preexisting_output_files(path)
 
@@ -360,6 +248,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             for root, dirs, files in os.walk(destination_folder):
                 for file in files:
                     full_file_path = os.path.join(root, file)
+
+                    logger.debug(f"Found file {full_file_path}")
 
                     f2 = full_file_path.split("/")[-5:]
 
@@ -378,19 +268,19 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                             file_path=output_file_path
                         )
 
-                        with open(f"{full_file_path}", "rb") as data:
-                            output_file_client.upload_data(data, overwrite=True)
+                        with open(full_file_path, "rb") as f:
+                            output_file_client.upload_data(f, overwrite=True)
 
                             logger.info(f"Uploaded {combined_file_name}")
                     except Exception:
                         outputs_uploaded = False
                         logger.error(f"Failed to upload {combined_file_name}")
 
-                        error_exception = "".join(format_exc().splitlines())
+                        upload_exception = "".join(format_exc().splitlines())
 
-                        logger.error(error_exception)
-                        file_processor.append_errors(error_exception, path)
+                        logger.error(upload_exception)
 
+                        file_processor.append_errors(upload_exception, path)
                         continue
 
                     file_item["output_files"].append(output_file_path)
@@ -432,8 +322,8 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                         logger.error(f"Failed to upload {file_name}")
 
                         error_exception = "".join(format_exc().splitlines())
-                        logger.error(error_exception)
 
+                        logger.error(error_exception)
                         file_processor.append_errors(error_exception, path)
 
                         continue
@@ -443,7 +333,6 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.info(f"Uploaded metadata for {file_name}")
 
-            # Add the new output files to the file map
             file_processor.confirm_output_files(
                 path, workflow_output_files, input_last_modified
             )
@@ -455,6 +344,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
                     f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
                 )
             else:
+                file_item["output_uploaded"] = upload_exception
                 logger.error(
                     f"Failed to upload outputs of {file_name} to {processed_data_output_folder}"
                 )
@@ -464,6 +354,181 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             )
 
             logger.time(time_estimator.step())
+
+
+def pipeline(study_id: str, workers: int = 4, args: list = None):
+    """The function contains the work done by
+    the main thread, which runs only once for each operation."""
+
+    if args is None:
+        args = []
+
+    global overall_time_estimator
+
+    # Process cirrus data files for a study. Args:study_id (str): the study id
+    if study_id is None or not study_id:
+        raise ValueError("study_id is required")
+
+    input_folder = f"{study_id}/pooled-data/Cirrus"
+    processed_data_output_folder = f"{study_id}/pooled-data/Cirrus-Parallel-processed"
+    processed_metadata_output_folder = (
+        f"{study_id}/pooled-data/Cirrus-Parallel-metadata"
+    )
+    dependency_folder = f"{study_id}/dependency/Cirrus"
+    pipeline_workflow_log_folder = f"{study_id}/logs/Cirrus"
+    ignore_file = f"{study_id}/ignore/cirrus.ignore"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+
+    logger = logging.Logwatch("cirrus", print=True)
+
+    # Get the list of blobs in the input folder
+    file_system_client = azurelake.FileSystemClient.from_connection_string(
+        config.AZURE_STORAGE_CONNECTION_STRING,
+        file_system_name="stage-1-container",
+    )
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_metadata_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
+
+    file_paths = []
+    participant_filter_list = []
+
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="cirrus_meta_")
+
+    # Get the participant filter list file
+    with contextlib.suppress(Exception):
+        file_client = file_system_client.get_file_client(
+            file_path=participant_filter_list_file
+        )
+
+        temp_participant_filter_list_file = os.path.join(
+            meta_temp_folder_path, "filter_file.csv"
+        )
+
+        with open(file=temp_participant_filter_list_file, mode="wb") as f:
+            f.write(file_client.download_file().readall())
+
+        with open(file=temp_participant_filter_list_file, mode="r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                participant_filter_list.append(row[0])
+
+        # remove the first row
+        participant_filter_list.pop(0)
+
+    paths = file_system_client.get_paths(path=input_folder, recursive=False)
+
+    # Define items as (VR, VM, description, is_retired flag, keyword)
+    #   Leave is_retired flag blank.
+    new_dict_items = {
+        0x0022EEE0: (
+            "SQ",
+            "1",
+            "En Face Volume Descriptor Sequence",
+            "",
+            "EnFaceVolumeDescriptorSequence",
+        ),
+        0x0022EEE1: (
+            "CS",
+            "1",
+            "En Face Volume Descriptor Scope",
+            "",
+            "EnFaceVolumeDescriptorScope",
+        ),
+        0x0022EEE2: (
+            "SQ",
+            "1",
+            "Referenced Segmentation Sequence",
+            "",
+            "ReferencedSegmentationSequence",
+        ),
+        0x0022EEE3: ("FL", "1", "Surface Offset", "", "SurfaceOffset"),
+    }
+
+    # Update the dictionary itself
+    DicomDictionary.update(new_dict_items)
+
+    # Update the reverse mapping from name to tag
+    new_names_dict = dict([(val[4], tag) for tag, val in new_dict_items.items()])
+    keyword_dict.update(new_names_dict)
+
+    for path in paths:
+        t = str(path.name)
+
+        file_name = t.split("/")[-1]
+
+        # Check if the item is an .fda.zip file
+        if not file_name.endswith(".fda.zip"):
+            continue
+
+        # The name of the file is in the format siteName_dataType_startDate-endDate_someNumber.fda.zip
+        parts = file_name.split("_")
+
+        if len(parts) != 4:
+            continue
+
+        site_name = parts[0]
+        data_type = parts[1]
+
+        start_date_end_date = parts[2]
+
+        start_date = start_date_end_date.split("-")[0]
+        end_date = start_date_end_date.split("-")[1]
+
+        file_paths.append(
+            {
+                "file_path": t,
+                "status": "failed",
+                "processed": False,
+                "site_name": site_name,
+                "data_type": data_type,
+                "start_date": start_date,
+                "end_date": end_date,
+                "organize_error": True,
+                "organize_result": "",
+                "convert_error": True,
+                "format_error": True,
+                "output_uploaded": False,
+                "output_files": [],
+            }
+        )
+
+    total_files = len(file_paths)
+
+    logger.debug(f"Found {total_files} items in {input_folder}")
+
+    # Create the output folder
+    file_system_client.create_directory(processed_data_output_folder)
+
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
+
+    overall_time_estimator = TimeEstimator(total_files)
+
+    # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
+    chunk_size = (len(file_paths) + workers - 1) // workers
+    # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
+    chunks = [file_paths[i : i + chunk_size] for i in range(0, total_files, chunk_size)]
+    args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
+    pipe = partial(
+        worker,
+        workflow_file_dependencies,
+        file_processor,
+        processed_data_output_folder,
+        processed_metadata_output_folder,
+    )
+
+    # Thread pool created
+    pool = ThreadPool(workers)
+    # Distributes the pipe function across the threads in the pool
+    pool.starmap(pipe, args)
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
@@ -482,7 +547,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     file_name = f"status_report_{timestr}.csv"
     workflow_log_file_path = os.path.join(meta_temp_folder_path, file_name)
 
-    with open(workflow_log_file_path, mode="w") as f:
+    with open(workflow_log_file_path, mode="w", newline="") as csvfile:
         fieldnames = [
             "file_path",
             "status",
@@ -492,15 +557,15 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             "data_type",
             "start_date",
             "end_date",
-            "organize_error",
             "organize_result",
+            "organize_error",
             "convert_error",
             "format_error",
             "output_uploaded",
             "output_files",
         ]
 
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=",")
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=",")
 
         for file_item in file_paths:
             file_item["output_files"] = ";".join(file_item["output_files"])
@@ -508,16 +573,17 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         writer.writeheader()
         writer.writerows(file_paths)
 
-    with open(workflow_log_file_path, mode="rb") as data:
         logger.debug(
             f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
         )
 
-        workflow_output_file_Client = file_system_client.get_file_client(
+    # Upload the workflow log file to the pipeline_workflow_log_folder
+    with open(workflow_log_file_path, mode="rb") as data:
+        output_file_client = file_system_client.get_file_client(
             file_path=f"{pipeline_workflow_log_folder}/{file_name}"
         )
 
-        workflow_output_file_Client.upload_data(data, overwrite=True)
+        output_file_client.upload_data(data, overwrite=True)
 
         logger.info(
             f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
@@ -534,11 +600,12 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     )
 
     with open(json_file_path, "rb") as data:
-        dependency_output_file_client = file_system_client.get_file_client(
+
+        output_file_client = file_system_client.get_file_client(
             file_path=f"{dependency_folder}/file_dependencies/{json_file_name}"
         )
 
-        dependency_output_file_client.upload_data(data, overwrite=True)
+        output_file_client.upload_data(data, overwrite=True)
 
         logger.info(
             f"Uploaded dependencies to {dependency_folder}/file_dependencies/{json_file_name}"
@@ -548,4 +615,18 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
 
 if __name__ == "__main__":
-    pipeline("AI-READI")
+    sys_args = sys.argv
+
+    workers = 4
+
+    parser = argparse.ArgumentParser(description="Process cirrus data files")
+    parser.add_argument(
+        "--workers", type=int, default=workers, help="Number of workers to use"
+    )
+    args = parser.parse_args()
+
+    workers = args.workers
+
+    print(f"Using {workers} workers to process cirrus data files")
+
+    pipeline("AI-READI", workers, sys_args)
