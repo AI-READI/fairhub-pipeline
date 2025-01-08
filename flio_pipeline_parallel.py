@@ -3,8 +3,6 @@
 
 from imaging.imaging_flio_root import Flio
 
-from functools import partial
-from multiprocessing.pool import ThreadPool
 import argparse
 import os
 import tempfile
@@ -60,10 +58,6 @@ def worker(
 
     total_files = len(file_paths)
     time_estimator = TimeEstimator(total_files)
-
-    # logger.debug(f"Getting batch folder paths in {input_folder}")
-    #
-    # logger.info(f"Found {len(file_paths)} items in {input_folder}")
 
     for file_item in file_paths:
         path = file_item["file_path"]
@@ -341,13 +335,16 @@ def worker(
             logger.time(time_estimator.step())
 
 
-def pipeline(study_id: str, workers: int = 4):
+def pipeline(study_id: str, workers: int = 4, args: list = None):
     """The function contains the work done by
     the main thread, which runs only once for each operation."""
 
+    if args is None:
+        args = []
+
     global overall_time_estimator
 
-    # Process cgm data files for a study. Args:study_id (str): the study id
+    # Process cirrus data files for a study. Args:study_id (str): the study id
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
     # takes an optional argument
@@ -462,7 +459,7 @@ def pipeline(study_id: str, workers: int = 4):
     logger.debug(f"Found {total_files} files in {input_folder}")
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
 
     # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
