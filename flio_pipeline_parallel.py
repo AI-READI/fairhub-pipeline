@@ -1,24 +1,33 @@
 """Process flio data files"""
 
-import contextlib
+
+from imaging.imaging_flio_root import Flio
+
+from functools import partial
+from multiprocessing.pool import ThreadPool
+import argparse
 import os
 import tempfile
 import shutil
+import contextlib
+import time
+from traceback import format_exc
+import json
+import sys
+
+import imaging.imaging_utils as imaging_utils
 import azure.storage.filedatalake as azurelake
 import config
-import time
-import json
-import csv
-import imaging.imaging_utils as imaging_utils
 import utils.dependency as deps
-from imaging.imaging_flio_root import Flio
-from traceback import format_exc
-from utils.file_map_processor import FileMapProcessor
-import sys
+import csv
 import utils.logwatch as logging
+from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
 from functools import partial
 from multiprocessing.pool import ThreadPool
+
+
+overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
 JSON_PATH = os.path.join(os.path.dirname(__file__), "flio", "flio_uid_data.json")
 
@@ -539,4 +548,18 @@ def pipeline(study_id: str, workers: int = 4):
 
 
 if __name__ == "__main__":
-    pipeline("AI-READI")
+    sys_args = sys.argv
+
+    workers = 4
+
+    parser = argparse.ArgumentParser(description="Process flio data files")
+    parser.add_argument(
+        "--workers", type=int, default=workers, help="Number of workers to use"
+    )
+    args = parser.parse_args()
+
+    workers = args.workers
+
+    print(f"Using {workers} workers to process flio data files")
+
+    pipeline("AI-READI", workers, sys_args)

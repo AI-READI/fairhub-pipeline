@@ -19,6 +19,7 @@ import utils.logwatch as logging
 from utils.time_estimator import TimeEstimator
 from functools import partial
 from multiprocessing.pool import ThreadPool
+import sys
 
 """
 SCRIPT_PATH=""
@@ -295,9 +296,12 @@ def worker(
             os.remove(download_path)
 
 
-def pipeline(study_id: str, workers: int = 4):
+def pipeline(study_id: str, workers: int = 4, args: list = None):
     """The function contains the work done by
     the main thread, which runs only once for each operation."""
+
+    if args is None:
+        args = []
 
     global overall_time_estimator
 
@@ -387,7 +391,7 @@ def pipeline(study_id: str, workers: int = 4):
     logger.debug(f"Found {total_files} files in {input_folder}")
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
 
     manifest = cgm_manifest.CGMManifest()
 
@@ -502,9 +506,11 @@ def pipeline(study_id: str, workers: int = 4):
 
 
 if __name__ == "__main__":
+    sys_args = sys.argv
+
     workers = 4
 
-    parser = argparse.ArgumentParser(description="Process cirrus data files")
+    parser = argparse.ArgumentParser(description="Process cgm data files")
     parser.add_argument(
         "--workers", type=int, default=workers, help="Number of workers to use"
     )
@@ -512,6 +518,6 @@ if __name__ == "__main__":
 
     workers = args.workers
 
-    print(f"Using {workers} workers to process cirrus data files")
+    print(f"Using {workers} workers to process cgm data files")
 
-    pipeline("AI-READI", workers)
+    pipeline("AI-READI", workers, sys_args)
