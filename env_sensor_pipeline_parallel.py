@@ -31,6 +31,7 @@ def worker(
     manifest,
     processed_data_output_folder,
     red_cap_export_file_path,
+    data_plot_output_folder,
     file_paths: list,
     worker_id: int,
 ):  # sourcery skip: low-code-quality
@@ -353,6 +354,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         participant_filter_list.pop(0)
 
     paths = file_system_client.get_paths(path=input_folder, recursive=False)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
 
     for path in paths:
         t = str(path.name)
@@ -401,26 +403,21 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
             }
         )
 
-    workflow_file_dependencies = deps.WorkflowFileDependencies()
-    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
-
-    # Download the redcap export file
-    red_cap_export_file_path = os.path.join(meta_temp_folder_path, "redcap_export.csv")
-
-    red_cap_export_file_client = file_system_client.get_file_client(
-        file_path=red_cap_export_file
-    )
-
-    with open(red_cap_export_file_path, "wb") as data:
-        red_cap_export_file_client.download_file().readinto(data)
-
     total_files = len(file_paths)
 
     logger.info(f"Found {total_files} items in {input_folder}")
 
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
+
+    # Download the redcap export file
+    red_cap_export_file_path = os.path.join(meta_temp_folder_path, "redcap_export.csv")
+    red_cap_export_file_client = file_system_client.get_file_client(
+        file_path=red_cap_export_file
+    )
+    with open(red_cap_export_file_path, "wb") as data:
+        red_cap_export_file_client.download_file().readinto(data)
 
     manifest = es_metadata.ESManifest()
-
 
     overall_time_estimator = TimeEstimator(total_files)
 
@@ -442,7 +439,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     pool = ThreadPool(workers)
     # Distributes the pipe function across the threads in the pool
     pool.starmap(pipe, args)
-
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
