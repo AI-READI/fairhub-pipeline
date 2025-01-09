@@ -3,7 +3,6 @@
 
 from imaging.imaging_flio_root import Flio
 
-import argparse
 import os
 import tempfile
 import shutil
@@ -12,6 +11,7 @@ import time
 from traceback import format_exc
 import json
 import sys
+import argparse
 
 import imaging.imaging_utils as imaging_utils
 import azure.storage.filedatalake as azurelake
@@ -24,25 +24,21 @@ from utils.time_estimator import TimeEstimator
 from functools import partial
 from multiprocessing.pool import ThreadPool
 
-
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
-
 JSON_PATH = os.path.join(os.path.dirname(__file__), "flio", "flio_uid_data.json")
-
-overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
 
 def worker(
-        workflow_file_dependencies,
-        file_processor,
-        processed_data_output_folder,
-        file_paths: list,
-        worker_id: int,
-        study_id
+    workflow_file_dependencies,
+    file_processor,
+    processed_data_output_folder,
+    processed_metadata_output_folder,
+    file_paths: list,
+    worker_id: int,
 ):  # sourcery skip: low-code-quality
+    """This function handles the work done by the worker threads,
+    and contains core operations: downloading, processing, and uploading files."""
 
-    # input_folder = f"{study_id}/pooled-data/Flio"
-    processed_metadata_output_folder = f"{study_id}/pooled-data/Flio-metadata"
     logger = logging.Logwatch(
         "flio",
         print=True,
@@ -191,7 +187,7 @@ def worker(
                 for file_name in filtered_list:
                     if "flio" in file_name:
                         if full_file_path := imaging_utils.format_file(
-                                file_name, step5_folder
+                            file_name, step5_folder
                         ):
                             flio_instance.metadata(full_file_path, metadata_folder)
             except Exception:
@@ -347,14 +343,12 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     # Process cirrus data files for a study. Args:study_id (str): the study id
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
-    # takes an optional argument
-    workers = (
-        int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else workers
-    )
-    input_folder = f"{study_id}/pooled-data/CGM"
-    dependency_folder = f"{study_id}/dependency/Flio-parallel"
-    processed_data_output_folder = f"{study_id}/pooled-data/Flio-processed-parallel"
-    processed_data_qc_folder = f"{study_id}/pooled-data/Flio-qc-parallel"
+
+    input_folder = f"{study_id}/pooled-data/Flio"
+    processed_data_output_folder = f"{study_id}/pooled-data/Flio-processed"
+    processed_metadata_output_folder = f"{study_id}/pooled-data/Flio-metadata"
+    dependency_folder = f"{study_id}/dependency/Flio"
+    pipeline_workflow_log_folder = f"{study_id}/logs/Flio"
     ignore_file = f"{study_id}/ignore/flio.ignore"
     participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
 
@@ -365,18 +359,13 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    # Create the output folder
-    file_system_client.create_directory(processed_data_output_folder)
 
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
 
     with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_qc_folder)
+        file_system_client.delete_directory(processed_metadata_output_folder)
 
-    logger.debug(f"Getting batch folder paths in {input_folder}")
-
-    # This part is for testing processing all files, and disables should_process logic. It is going to be removed soon
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
@@ -384,7 +373,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     participant_filter_list = []
 
     # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="cgm_pipeline_meta_")
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="flio_meta_")
 
     # Get the participant filter list file
     with contextlib.suppress(Exception):
@@ -407,8 +396,11 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         # remove the first row
         participant_filter_list.pop(0)
 
-    batch_folder_paths = file_system_client.get_paths(path=input_folder, recursive=False)
+    logger.debug(f"Getting batch folder paths in {input_folder}")
 
+    batch_folder_paths = file_system_client.get_paths(
+        path=input_folder, recursive=False
+    )
     for batch_folder_path in batch_folder_paths:
         t = str(batch_folder_path.name)
 
@@ -454,12 +446,13 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
             )
 
     total_files = len(file_paths)
-    overall_time_estimator = TimeEstimator(total_files)
 
-    logger.debug(f"Found {total_files} files in {input_folder}")
+    logger.info(f"Found {len(file_paths)} items in {input_folder}")
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
-    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+
+    overall_time_estimator = TimeEstimator(total_files)
 
     # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
@@ -470,10 +463,10 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         worker,
         workflow_file_dependencies,
         file_processor,
-        participant_filter_list,
-        processed_data_qc_folder,
         processed_data_output_folder,
+        processed_metadata_output_folder,
     )
+
     # Thread pool created
     pool = ThreadPool(workers)
     # Distributes the pipe function across the threads in the pool
@@ -481,8 +474,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
-
-    pipeline_workflow_log_folder = f"{study_id}/logs/Flio"
 
     logger.debug(f"Uploading file map to {dependency_folder}/file_map.json")
     try:
@@ -536,12 +527,13 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     with open(json_file_path, "rb") as data:
         output_file_client = file_system_client.get_file_client(
-            file_path=f"{dependency_folder}/{json_file_name}"
+            file_path=f"{dependency_folder}/file_dependencies/{json_file_name}"
         )
 
         output_file_client.upload_data(data, overwrite=True)
 
     shutil.rmtree(meta_temp_folder_path)
+
 
 
 if __name__ == "__main__":
