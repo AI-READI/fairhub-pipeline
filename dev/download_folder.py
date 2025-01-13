@@ -10,7 +10,7 @@ completed_folders_file = "completed_folders_garmin.json"
 def main():  # sourcery skip: low-code-quality
     source_directory = "AI-READI/heidelberg_octa_test"
     # source_directory = "AI-READI/dependency/Cirrus"
-    local_download_folder = "C:\Users\b2aiUsr\Desktop"
+    local_download_folder = r"C:\Users\b2aiUsr\Desktop\heidelberg_octa_test"
 
     
     if not os.path.exists(local_download_folder):
