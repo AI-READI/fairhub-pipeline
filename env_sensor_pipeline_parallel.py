@@ -612,7 +612,7 @@ if __name__ == "__main__":
 
     sys_args = sys.argv
 
-    workers = 1
+    workers = 4
 
     parser = argparse.ArgumentParser(description="Process env sensor data files")
     parser.add_argument(
