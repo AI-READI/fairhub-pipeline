@@ -345,8 +345,8 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         raise ValueError("study_id is required")
 
     input_folder = f"{study_id}/pooled-data/Flio"
-    processed_data_output_folder = f"{study_id}/pooled-data/Flio-processed"
-    processed_metadata_output_folder = f"{study_id}/pooled-data/Flio-metadata"
+    processed_data_output_folder = f"{study_id}/pooled-data/Flio-processed_parallel"
+    processed_metadata_output_folder = f"{study_id}/pooled-data/Flio-metadata_parallel"
     dependency_folder = f"{study_id}/dependency/Flio"
     pipeline_workflow_log_folder = f"{study_id}/logs/Flio"
     ignore_file = f"{study_id}/ignore/flio.ignore"
@@ -450,7 +450,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     logger.info(f"Found {len(file_paths)} items in {input_folder}")
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
 
     overall_time_estimator = TimeEstimator(total_files)
 

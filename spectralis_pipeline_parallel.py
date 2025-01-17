@@ -470,7 +470,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     logger.info(f"Found {len(file_paths)} items in {input_folder}")
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
 
     overall_time_estimator = TimeEstimator(total_files)
 
