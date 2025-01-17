@@ -21,7 +21,6 @@ import shutil
 import contextlib
 import time
 from traceback import format_exc
-import json
 import sys
 
 import azure.storage.filedatalake as azurelake
@@ -913,10 +912,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     pool = ThreadPool(workers)
     # Distributes the pipe function across the threads in the pool
     pool.starmap(pipe, args)
-
-    file_processor.delete_out_of_date_output_files()
-    file_processor.remove_seen_flag_from_map()
-
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
