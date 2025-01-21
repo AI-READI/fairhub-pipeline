@@ -548,7 +548,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 if __name__ == "__main__":
     sys_args = sys.argv
 
-    workers = 1
+    workers = 4
 
     parser = argparse.ArgumentParser(description="Process optomed data files")
     parser.add_argument(
