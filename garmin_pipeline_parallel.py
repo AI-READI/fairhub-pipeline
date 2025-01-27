@@ -79,7 +79,7 @@ def worker(
     and contains core operations: downloading, processing, and uploading files."""
 
     logger = logging.Logwatch(
-        "garmin",
+        "fitness_tracker",
         print=True,
         thread_id=worker_id,
         overall_time_estimator=overall_time_estimator,
