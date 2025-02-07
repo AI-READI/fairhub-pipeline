@@ -357,8 +357,8 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         raise ValueError("study_id is required")
 
     input_folder = f"{study_id}/pooled-data/Spectralis"
-    processed_data_output_folder = f"{study_id}/pooled-data/Spectralis-processed-parallel"
-    processed_metadata_output_folder = f"{study_id}/pooled-data/Spectralis-metadata-parallel"
+    processed_data_output_folder = f"{study_id}/pooled-data/Spectralis-processed"
+    processed_metadata_output_folder = f"{study_id}/pooled-data/Spectralis-metadata"
     dependency_folder = f"{study_id}/dependency/Spectralis"
     pipeline_workflow_log_folder = f"{study_id}/logs/Spectralis"
     ignore_file = f"{study_id}/ignore/spectralis.ignore"
