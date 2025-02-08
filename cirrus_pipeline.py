@@ -459,11 +459,8 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     new_names_dict = dict([(val[4], tag) for tag, val in new_dict_items.items()])
     keyword_dict.update(new_names_dict)
 
-    for idx, path in enumerate(paths):
-        if idx == 5:
-            break
+    for path in paths:
         t = str(path.name)
-
         file_name = t.split("/")[-1]
 
         # Check if the item is an .fda.zip file

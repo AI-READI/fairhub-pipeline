@@ -1,54 +1,49 @@
 """Process env sensor data files"""
 
-import contextlib
+import env_sensor.es_root as es
+import env_sensor.es_metadata as es_metadata
+import zipfile
 import os
 import tempfile
 import shutil
-import env_sensor.es_root as es
-import env_sensor.es_metadata as es_metadata
+import contextlib
+import time
+from traceback import format_exc
+import sys
+import argparse
+
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
-import time
 import csv
-from traceback import format_exc
 import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
-import zipfile
+from functools import partial
+from multiprocessing.pool import ThreadPool
 
 
-def pipeline(
-    study_id: str,
-):  # sourcery skip: collection-builtin-to-comprehension, comprehension-to-generator, low-code-quality
-    """Process env sensor data files for a study
-    Args:
-        study_id (str): the study id
-    """
+overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
-    if study_id is None or not study_id:
-        raise ValueError("study_id is required")
+def worker(
+    workflow_file_dependencies,
+    file_processor,
+    manifest,
+    processed_data_output_folder,
+    red_cap_export_file_path,
+    data_plot_output_folder,
+    file_paths: list,
+    worker_id: int,
+):  # sourcery skip: low-code-quality
+    """This function handles the work done by the worker threads,
+    and contains core operations: downloading, processing, and uploading files."""
 
-    input_folder = f"{study_id}/pooled-data/EnvSensor"
-    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-year2"
-    processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed"
-    dependency_folder = f"{study_id}/dependency/EnvSensor"
-    data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
-    pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
-
-    # input_folder = f"{study_id}/pooled-data/JS_EnvSensor"
-    # manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-pilot"
-    # processed_data_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-processed"
-    # dependency_folder = f"{study_id}/dependency/JS_EnvSensor"
-    # data_plot_output_folder = f"{study_id}/pooled-data/JS_EnvSensor-dataplot"
-
-    ignore_file = f"{study_id}/ignore/envSensor.ignore"
-    red_cap_export_file = (
-        f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep13_EnviroPhysSensorInfo.csv"
+    logger = logging.Logwatch(
+        "env_sensor",
+        print=True,
+        thread_id=worker_id,
+        overall_time_estimator=overall_time_estimator,
     )
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
-
-    logger = logging.Logwatch("env_sensor", print=True)
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -56,118 +51,7 @@ def pipeline(
         file_system_name="stage-1-container",
     )
 
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_output_folder)
-
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(data_plot_output_folder)
-
-    with contextlib.suppress(Exception):
-        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
-
-    with contextlib.suppress(Exception):
-        file_system_client.delete_file(f"{dependency_folder}/manifest.tsv")
-
-    paths = file_system_client.get_paths(path=input_folder, recursive=False)
-
-    file_paths = []
-    participant_filter_list = []
-
-    # dev_allowed_files = ["ENV-1239-056.zip"]
-
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_meta_")
-
-    logger.debug(f"Getting file paths in {input_folder}")
-
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
-    # Get the participant filter list file
-    with contextlib.suppress(Exception):
-        file_client = file_system_client.get_file_client(
-            file_path=participant_filter_list_file
-        )
-
-        temp_participant_filter_list_file = os.path.join(
-            meta_temp_folder_path, "filter_file.csv"
-        )
-
-        with open(file=temp_participant_filter_list_file, mode="wb") as f:
-            f.write(file_client.download_file().readall())
-
-        with open(file=temp_participant_filter_list_file, mode="r") as f:
-            reader = csv.reader(f)
-            for row in reader:
-                participant_filter_list.append(row[0])
-
-        # remove the first row
-        participant_filter_list.pop(0)
-
-    for path in paths:
-        t = str(path.name)
-
-        file_name = t.split("/")[-1]
-
-        # if file_name not in dev_allowed_files:
-        #     print(f"dev-Skipping {file_name}")
-        #     continue
-
-        # Check if the file name is in the format dataType-patientID-someOtherID.zip
-        if not file_name.endswith(".zip"):
-            logger.debug(f"Skipping {file_name}")
-            continue
-
-        if len(file_name.split("-")) != 3:
-            logger.debug(f"Skipping {file_name}")
-            continue
-
-        cleaned_file_name = file_name.replace(".zip", "")
-
-        if file_processor.is_file_ignored_by_path(cleaned_file_name):
-            logger.debug(f"Skipping {t}")
-            continue
-
-        patient_id = cleaned_file_name.split("-")[1]
-
-        if str(patient_id) not in participant_filter_list:
-            logger.debug(
-                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
-            )
-            continue
-
-        patient_folder_name = file_name.split(".")[0]
-
-        file_paths.append(
-            {
-                "file_path": t,
-                "status": "failed",
-                "processed": False,
-                "patient_folder": patient_folder_name,
-                "patient_id": patient_id,
-                "convert_error": True,
-                "output_uploaded": False,
-                "output_files": [],
-            }
-        )
-
-    # Download the redcap export file
-    red_cap_export_file_path = os.path.join(meta_temp_folder_path, "redcap_export.csv")
-
-    red_cap_export_file_client = file_system_client.get_file_client(
-        file_path=red_cap_export_file
-    )
-
-    with open(red_cap_export_file_path, "wb") as data:
-        red_cap_export_file_client.download_file().readinto(data)
-
     total_files = len(file_paths)
-
-    logger.info(f"Found {total_files} items in {input_folder}")
-
-    workflow_file_dependencies = deps.WorkflowFileDependencies()
-
-    manifest = es_metadata.ESManifest()
-
     time_estimator = TimeEstimator(total_files)
 
     for file_item in file_paths:
@@ -335,43 +219,6 @@ def pipeline(
             outputs_uploaded = True
 
             file_processor.delete_preexisting_output_files(path)
-
-            with open(f"{output_file}", "rb") as data:
-                f2 = output_file.split("/")[-1]
-
-                output_file_path = f"{processed_data_output_folder}/environmental_sensor/leelab_anura/{pid}/{f2}"
-
-                logger.debug(f"Uploading {output_file} to {output_file_path}")
-
-                try:
-                    output_file_client = file_system_client.get_file_client(
-                        file_path=output_file_path
-                    )
-
-                    # Check if the file already exists. If it does, throw an exception
-                    if output_file_client.exists():
-                        raise Exception(
-                            f"File {output_file_path} already exists. Throwing exception"
-                        )
-
-                    output_file_client.upload_data(data, overwrite=True)
-
-                    logger.info(f"Uploaded {output_file_path}")
-                except Exception:
-                    outputs_uploaded = False
-                    logger.error(f"Failed to upload {output_file_path}")
-
-                    error_exception = "".join(format_exc().splitlines())
-
-                    logger.error(error_exception)
-                    file_processor.append_errors(error_exception, path)
-
-                    logger.time(time_estimator.step())
-                    continue
-
-                file_item["output_files"].append(output_file_path)
-                workflow_output_files.append(output_file_path)
-
             file_processor.confirm_output_files(path, workflow_output_files, "")
 
             if outputs_uploaded:
@@ -390,6 +237,173 @@ def pipeline(
             )
 
             logger.time(time_estimator.step())
+
+
+def pipeline(study_id: str, workers: int = 4, args: list = None):
+    """The function contains the work done by
+    the main thread, which runs only once for each operation."""
+
+    if args is None:
+        args = []
+
+    global overall_time_estimator
+
+    # Process cirrus data files for a study. Args:study_id (str): the study id
+    if study_id is None or not study_id:
+        raise ValueError("study_id is required")
+
+    input_folder = f"{study_id}/pooled-data/EnvSensor"
+    manual_input_folder = f"{study_id}/pooled-data/EnvSensor-manual-year2"
+    processed_data_output_folder = f"{study_id}/pooled-data/EnvSensor-processed"
+    dependency_folder = f"{study_id}/dependency/EnvSensor"
+    data_plot_output_folder = f"{study_id}/pooled-data/EnvSensor-dataplot"
+    pipeline_workflow_log_folder = f"{study_id}/logs/EnvSensor"
+
+    ignore_file = f"{study_id}/ignore/envSensor.ignore"
+    red_cap_export_file = (
+        f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep13_EnviroPhysSensorInfo.csv"
+    )
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+
+    logger = logging.Logwatch("env_sensor", print=True)
+
+    # Get the list of blobs in the input folder
+    file_system_client = azurelake.FileSystemClient.from_connection_string(
+        config.AZURE_STORAGE_CONNECTION_STRING,
+        file_system_name="stage-1-container",
+    )
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(data_plot_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_file(f"{dependency_folder}/manifest.tsv")
+
+    # dev_allowed_files = ["ENV-1239-056.zip"]
+
+    file_paths = []
+    participant_filter_list = []
+
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="env_sensor_meta_")
+
+    logger.debug(f"Getting file paths in {input_folder}")
+
+    # Get the participant filter list file
+    with contextlib.suppress(Exception):
+        file_client = file_system_client.get_file_client(
+            file_path=participant_filter_list_file
+        )
+
+        temp_participant_filter_list_file = os.path.join(
+            meta_temp_folder_path, "filter_file.csv"
+        )
+
+        with open(file=temp_participant_filter_list_file, mode="wb") as f:
+            f.write(file_client.download_file().readall())
+
+        with open(file=temp_participant_filter_list_file, mode="r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                participant_filter_list.append(row[0])
+
+        # remove the first row
+        participant_filter_list.pop(0)
+
+    paths = file_system_client.get_paths(path=input_folder, recursive=False)
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
+
+    for path in paths:
+        t = str(path.name)
+
+        file_name = t.split("/")[-1]
+
+        # if file_name not in dev_allowed_files:
+        #     print(f"dev-Skipping {file_name}")
+        #     continue
+
+        # Check if the file name is in the format dataType-patientID-someOtherID.zip
+        if not file_name.endswith(".zip"):
+            logger.debug(f"Skipping {file_name}")
+            continue
+
+        if len(file_name.split("-")) != 3:
+            logger.debug(f"Skipping {file_name}")
+            continue
+
+        cleaned_file_name = file_name.replace(".zip", "")
+
+        if file_processor.is_file_ignored_by_path(cleaned_file_name):
+            logger.debug(f"Skipping {t}")
+            continue
+
+        patient_id = cleaned_file_name.split("-")[1]
+
+        if str(patient_id) not in participant_filter_list:
+            logger.debug(
+                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+            )
+            continue
+
+        patient_folder_name = file_name.split(".")[0]
+
+        file_paths.append(
+            {
+                "file_path": t,
+                "status": "failed",
+                "processed": False,
+                "patient_folder": patient_folder_name,
+                "patient_id": patient_id,
+                "convert_error": True,
+                "output_uploaded": False,
+                "output_files": [],
+            }
+        )
+
+    total_files = len(file_paths)
+
+    logger.info(f"Found {total_files} items in {input_folder}")
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
+
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
+
+    # Download the redcap export file
+    red_cap_export_file_path = os.path.join(meta_temp_folder_path, "redcap_export.csv")
+    red_cap_export_file_client = file_system_client.get_file_client(
+        file_path=red_cap_export_file
+    )
+    with open(red_cap_export_file_path, "wb") as data:
+        red_cap_export_file_client.download_file().readinto(data)
+
+    manifest = es_metadata.ESManifest()
+
+    overall_time_estimator = TimeEstimator(total_files)
+
+    # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
+    chunk_size = (len(file_paths) + workers - 1) // workers
+    # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
+    chunks = [file_paths[i : i + chunk_size] for i in range(0, total_files, chunk_size)]
+    args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
+    pipe = partial(
+        worker,
+        workflow_file_dependencies,
+        file_processor,
+        manifest,
+        processed_data_output_folder,
+        red_cap_export_file_path,
+        data_plot_output_folder,
+    )
+
+    # Thread pool created
+    pool = ThreadPool(workers)
+    # Distributes the pipe function across the threads in the pool
+    pool.starmap(pipe, args)
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
@@ -548,12 +562,29 @@ def pipeline(
             f"Uploaded dependencies to {dependency_folder}/file_dependencies/{json_file_name}"
         )
 
+    # Clean up the temporary folder
     shutil.rmtree(meta_temp_folder_path)
 
 
 if __name__ == "__main__":
-    pipeline("AI-READI")
-
     # delete the ecg.log file
     if os.path.exists("es.log"):
         os.remove("es.log")
+
+    sys_args = sys.argv
+
+    workers = 4
+
+    parser = argparse.ArgumentParser(description="Process env sensor data files")
+    parser.add_argument(
+        "--workers", type=int, default=workers, help="Number of workers to use"
+    )
+    args = parser.parse_args()
+
+    workers = args.workers
+
+    print(f"Using {workers} workers to process env sensor data files")
+
+    pipeline("AI-READI", workers, sys_args)
+
+
