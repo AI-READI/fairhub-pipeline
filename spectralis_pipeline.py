@@ -562,7 +562,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 if __name__ == "__main__":
     sys_args = sys.argv
 
-    workers = 4
+    workers = 3
 
     parser = argparse.ArgumentParser(description="Process spectralis data files")
     parser.add_argument(

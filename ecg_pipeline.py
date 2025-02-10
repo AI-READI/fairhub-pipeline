@@ -502,7 +502,6 @@ if __name__ == "__main__":
 
     pipeline("AI-READI", workers, sys_args)
 
-
     # delete the ecg.log file
     if os.path.exists("ecg.log"):
         os.remove("ecg.log")
