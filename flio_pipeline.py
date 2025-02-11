@@ -1,43 +1,50 @@
 """Process flio data files"""
 
-import contextlib
+
+from imaging.imaging_flio_root import Flio
+
 import os
 import tempfile
 import shutil
+import contextlib
+import time
+from traceback import format_exc
+import json
+import sys
+import argparse
+
+import imaging.imaging_utils as imaging_utils
 import azure.storage.filedatalake as azurelake
 import config
-import time
-import json
-import csv
-import imaging.imaging_utils as imaging_utils
 import utils.dependency as deps
+import csv
 import utils.logwatch as logging
-from imaging.imaging_flio_root import Flio
-from traceback import format_exc
 from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
+from functools import partial
+from multiprocessing.pool import ThreadPool
 
+overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 JSON_PATH = os.path.join(os.path.dirname(__file__), "flio", "flio_uid_data.json")
 
 
-def pipeline(study_id: str):  # sourcery skip: low-code-quality
-    """Process flio data files for a study
-    Args:
-        study_id (str): the study id
-    """
+def worker(
+    workflow_file_dependencies,
+    file_processor,
+    processed_data_output_folder,
+    processed_metadata_output_folder,
+    file_paths: list,
+    worker_id: int,
+):  # sourcery skip: low-code-quality
+    """This function handles the work done by the worker threads,
+    and contains core operations: downloading, processing, and uploading files."""
 
-    if study_id is None or not study_id:
-        raise ValueError("study_id is required")
-
-    input_folder = f"{study_id}/pooled-data/Flio"
-    processed_data_output_folder = f"{study_id}/pooled-data/Flio-processed"
-    processed_metadata_output_folder = f"{study_id}/pooled-data/Flio-metadata"
-    dependency_folder = f"{study_id}/dependency/Flio"
-    pipeline_workflow_log_folder = f"{study_id}/logs/Flio"
-    ignore_file = f"{study_id}/ignore/flio.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
-
-    logger = logging.Logwatch("flio", print=True)
+    logger = logging.Logwatch(
+        "flio",
+        print=True,
+        thread_id=worker_id,
+        overall_time_estimator=overall_time_estimator,
+    )
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
@@ -45,100 +52,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         file_system_name="stage-1-container",
     )
 
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_output_folder)
-
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_metadata_output_folder)
-
-    with contextlib.suppress(Exception):
-        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
-
-    batch_folder_paths = file_system_client.get_paths(
-        path=input_folder, recursive=False
-    )
-
-    file_paths = []
-    participant_filter_list = []
-
-    # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="flio_meta_")
-
-    # Get the participant filter list file
-    with contextlib.suppress(Exception):
-        file_client = file_system_client.get_file_client(
-            file_path=participant_filter_list_file
-        )
-
-        temp_participant_filter_list_file = os.path.join(
-            meta_temp_folder_path, "filter_file.csv"
-        )
-
-        with open(file=temp_participant_filter_list_file, mode="wb") as f:
-            f.write(file_client.download_file().readall())
-
-        with open(file=temp_participant_filter_list_file, mode="r") as f:
-            reader = csv.reader(f)
-            for row in reader:
-                participant_filter_list.append(row[0])
-
-        # remove the first row
-        participant_filter_list.pop(0)
-
-    logger.debug(f"Getting batch folder paths in {input_folder}")
-
-    for batch_folder_path in batch_folder_paths:
-        t = str(batch_folder_path.name)
-
-        batch_folder = t.split("/")[-1]
-
-        # For each batch folder, get the list of patient folders in the batch folder
-        patient_folder_paths = file_system_client.get_paths(
-            path=f"{input_folder}/{batch_folder}", recursive=False
-        )
-
-        for patient_folder_path in patient_folder_paths:
-            q = str(patient_folder_path.name)
-
-            patient_folder = q.split("/")[-1]
-
-            # Check if the folder name is in the format xx_AIREADI_patientID
-            if len(patient_folder.split("_")) != 3:
-                logger.debug(f"Skipping {patient_folder}")
-                continue
-
-            paitent_id = patient_folder.split("_")[2]
-
-            if str(paitent_id) not in participant_filter_list:
-                logger.debug(
-                    f"Participant ID {paitent_id} not in the allowed list. Skipping {patient_folder}"
-                )
-                continue
-
-            file_paths.append(
-                {
-                    "file_path": q,
-                    "status": "failed",
-                    "processed": False,
-                    "batch_folder": batch_folder,
-                    "patient_folder": patient_folder,
-                    "organize_error": True,
-                    "organize_result": "",
-                    "convert_error": True,
-                    "format_error": True,
-                    "output_uploaded": False,
-                    "output_files": [],
-                }
-            )
-
-    logger.info(f"Found {len(file_paths)} items in {input_folder}")
-
     total_files = len(file_paths)
-
-    file_processor = FileMapProcessor(dependency_folder, ignore_file)
-
-    workflow_file_dependencies = deps.WorkflowFileDependencies()
-
     time_estimator = TimeEstimator(total_files)
 
     for file_item in file_paths:
@@ -416,6 +330,148 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
             logger.time(time_estimator.step())
 
+
+def pipeline(study_id: str, workers: int = 4, args: list = None):
+    """The function contains the work done by
+    the main thread, which runs only once for each operation."""
+
+    if args is None:
+        args = []
+
+    global overall_time_estimator
+
+    # Process cirrus data files for a study. Args:study_id (str): the study id
+    if study_id is None or not study_id:
+        raise ValueError("study_id is required")
+
+    input_folder = f"{study_id}/pooled-data/Flio"
+    processed_data_output_folder = f"{study_id}/pooled-data/Flio-processed"
+    processed_metadata_output_folder = f"{study_id}/pooled-data/Flio-metadata"
+    dependency_folder = f"{study_id}/dependency/Flio"
+    pipeline_workflow_log_folder = f"{study_id}/logs/Flio"
+    ignore_file = f"{study_id}/ignore/flio.ignore"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+
+    logger = logging.Logwatch("flio", print=True)
+
+    # Get the list of blobs in the input folder
+    file_system_client = azurelake.FileSystemClient.from_connection_string(
+        config.AZURE_STORAGE_CONNECTION_STRING,
+        file_system_name="stage-1-container",
+    )
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_metadata_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
+
+    file_paths = []
+    participant_filter_list = []
+
+    # Create a temporary folder on the local machine
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="flio_meta_")
+
+    # Get the participant filter list file
+    with contextlib.suppress(Exception):
+        file_client = file_system_client.get_file_client(
+            file_path=participant_filter_list_file
+        )
+
+        temp_participant_filter_list_file = os.path.join(
+            meta_temp_folder_path, "filter_file.csv"
+        )
+
+        with open(file=temp_participant_filter_list_file, mode="wb") as f:
+            f.write(file_client.download_file().readall())
+
+        with open(file=temp_participant_filter_list_file, mode="r") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                participant_filter_list.append(row[0])
+
+        # remove the first row
+        participant_filter_list.pop(0)
+
+    logger.debug(f"Getting batch folder paths in {input_folder}")
+
+    batch_folder_paths = file_system_client.get_paths(
+        path=input_folder, recursive=False
+    )
+    for batch_folder_path in batch_folder_paths:
+        t = str(batch_folder_path.name)
+
+        batch_folder = t.split("/")[-1]
+
+        # For each batch folder, get the list of patient folders in the batch folder
+        patient_folder_paths = file_system_client.get_paths(
+            path=f"{input_folder}/{batch_folder}", recursive=False
+        )
+
+        for patient_folder_path in patient_folder_paths:
+            q = str(patient_folder_path.name)
+
+            patient_folder = q.split("/")[-1]
+
+            # Check if the folder name is in the format xx_AIREADI_patientID
+            if len(patient_folder.split("_")) != 3:
+                logger.debug(f"Skipping {patient_folder}")
+                continue
+
+            paitent_id = patient_folder.split("_")[2]
+
+            if str(paitent_id) not in participant_filter_list:
+                logger.debug(
+                    f"Participant ID {paitent_id} not in the allowed list. Skipping {patient_folder}"
+                )
+                continue
+
+            file_paths.append(
+                {
+                    "file_path": q,
+                    "status": "failed",
+                    "processed": False,
+                    "batch_folder": batch_folder,
+                    "patient_folder": patient_folder,
+                    "organize_error": True,
+                    "organize_result": "",
+                    "convert_error": True,
+                    "format_error": True,
+                    "output_uploaded": False,
+                    "output_files": [],
+                }
+            )
+
+    total_files = len(file_paths)
+
+    logger.info(f"Found {len(file_paths)} items in {input_folder}")
+
+    workflow_file_dependencies = deps.WorkflowFileDependencies()
+    file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
+
+    overall_time_estimator = TimeEstimator(total_files)
+
+    # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
+    chunk_size = (len(file_paths) + workers - 1) // workers
+    # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
+    chunks = [file_paths[i: i + chunk_size] for i in range(0, total_files, chunk_size)]
+    args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
+    pipe = partial(
+        worker,
+        workflow_file_dependencies,
+        file_processor,
+        processed_data_output_folder,
+        processed_metadata_output_folder,
+    )
+
+    # Thread pool created
+    pool = ThreadPool(workers)
+    # Distributes the pipe function across the threads in the pool
+    pool.starmap(pipe, args)
+
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
 
@@ -479,5 +535,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     shutil.rmtree(meta_temp_folder_path)
 
 
+
 if __name__ == "__main__":
-    pipeline("AI-READI")
+    sys_args = sys.argv
+
+    workers = 4
+
+    parser = argparse.ArgumentParser(description="Process flio data files")
+    parser.add_argument(
+        "--workers", type=int, default=workers, help="Number of workers to use"
+    )
+    args = parser.parse_args()
+
+    workers = args.workers
+
+    print(f"Using {workers} workers to process flio data files")
+
+    pipeline("AI-READI", workers, sys_args)
