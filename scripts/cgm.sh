@@ -9,6 +9,9 @@ ARGS="--workers 8"
 # Go to project directory
 cd "$PROJECT_DIR" || exit
 
+# Print the current directory
+echo "Current directory: $PWD"
+
 # Activate virtual environment
 source "$VENV_DIR/bin/activate"
 
