@@ -16,7 +16,7 @@ echo "Current directory: $PWD"
 source "$VENV_DIR/bin/activate"
 
 # Run the Python script
-python3 "$PYTHON_SCRIPT" $ARGS
+python3 "$PYTHON_SCRIPT" $ARGS > cgm.log 2>&1
 
 # Deactivate virtual environment
 deactivate
