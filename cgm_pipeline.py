@@ -1,4 +1,4 @@
-"""Process ecg data files"""
+"""Process cgm data files"""
 
 import contextlib
 import os
