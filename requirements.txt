@@ -5,7 +5,21 @@
 # Core
 pyfairdatatools
 jsonschema
+pandas
+xmltodict
+colorama
+termcolor
+pydicom==2.4.4
 
+# ecg
+sierraecg
+wfdb
+
+#flio
+beautifulsoup4
+
+# garmin
+fitparse
 
 # Azure
 azure-functions
@@ -29,9 +43,6 @@ pydocstyle
 # Development
 faker
 poethepoet
-
-# Temporary
-pydicom
 
 # Database
 psycopg2-binary
