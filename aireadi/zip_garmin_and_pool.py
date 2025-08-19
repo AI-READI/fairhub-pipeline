@@ -7,6 +7,7 @@ import tempfile
 import shutil
 import azure.storage.filedatalake as azurelake  # type: ignore
 import config
+import contextlib
 
 completed_folders_file = "completed_folders_garmin.json"
 
@@ -32,6 +33,9 @@ def main():  # sourcery skip: low-code-quality
             completed_folders = json.load(f)
 
     destination_directory = f"{project_name}/pooled-data/{device}"
+
+    with contextlib.suppress(Exception):
+        destination_service_client.delete_directory(destination_directory)
 
     for site_name in site_names:
         print(f"Processing {device} data for {site_name}")
