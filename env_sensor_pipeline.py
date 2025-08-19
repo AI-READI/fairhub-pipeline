@@ -25,6 +25,7 @@ from multiprocessing.pool import ThreadPool
 
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
+
 def worker(
     workflow_file_dependencies,
     file_processor,
@@ -263,7 +264,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     red_cap_export_file = (
         f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep13_EnviroPhysSensorInfo.csv"
     )
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
 
     logger = logging.Logwatch("env_sensor", print=True)
 
@@ -586,5 +587,3 @@ if __name__ == "__main__":
     print(f"Using {workers} workers to process env sensor data files")
 
     pipeline("AI-READI", workers, sys_args)
-
-

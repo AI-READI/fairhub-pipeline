@@ -76,7 +76,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     data_destination_folder = f"{study_id}/completed/imaging"
     metadata_destination_folder = f"{study_id}/completed/imaging-metadata"
 
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
     ignore_file = (
         f"{study_id}/ignore/imaging/ignore_post_processing_2024_10_02_16_0755.txt"
     )

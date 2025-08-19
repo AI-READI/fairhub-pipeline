@@ -314,7 +314,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
 
     logger = logging.Logwatch("cgm", print=True)
 

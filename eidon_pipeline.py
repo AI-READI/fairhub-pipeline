@@ -344,7 +344,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     pipeline_workflow_log_folder = f"{study_id}/logs/Eidon"
     processed_data_output_folder = f"{study_id}/pooled-data/Eidon-processed"
     ignore_file = f"{study_id}/ignore/eidon.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
 
     logger = logging.Logwatch("eidon", print=True)
 
@@ -447,7 +447,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
     # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
-    chunks = [file_paths[i: i + chunk_size] for i in range(0, total_files, chunk_size)]
+    chunks = [file_paths[i : i + chunk_size] for i in range(0, total_files, chunk_size)]
     args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
     pipe = partial(
         worker,

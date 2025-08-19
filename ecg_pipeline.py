@@ -276,7 +276,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     input_folder = f"{study_id}/pooled-data/ECG"
     processed_data_output_folder = f"{study_id}/pooled-data/ECG-processed"
     dependency_folder = f"{study_id}/dependency/ECG"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
     pipeline_workflow_log_folder = f"{study_id}/logs/ECG"
     data_plot_output_folder = f"{study_id}/pooled-data/ECG-dataplot"
     ignore_file = f"{study_id}/ignore/ecg.ignore"
@@ -297,7 +297,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
-
 
     file_paths = []
     participant_filter_list = []
@@ -380,7 +379,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     # Create the output folder
     file_system_client.create_directory(processed_data_output_folder)
 
-
     overall_time_estimator = TimeEstimator(total_files)
 
     # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
@@ -395,7 +393,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         processed_data_output_folder,
         participant_filter_list,
         data_plot_output_folder,
-        manifest
+        manifest,
     )
 
     # Thread pool created

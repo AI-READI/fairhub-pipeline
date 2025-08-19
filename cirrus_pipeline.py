@@ -371,13 +371,11 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     input_folder = f"{study_id}/pooled-data/Cirrus"
     processed_data_output_folder = f"{study_id}/pooled-data/Cirrus-processed"
-    processed_metadata_output_folder = (
-        f"{study_id}/pooled-data/Cirrus-metadata"
-    )
+    processed_metadata_output_folder = f"{study_id}/pooled-data/Cirrus-metadata"
     dependency_folder = f"{study_id}/dependency/Cirrus"
     pipeline_workflow_log_folder = f"{study_id}/logs/Cirrus"
     ignore_file = f"{study_id}/ignore/cirrus.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
 
     logger = logging.Logwatch("cirrus", print=True)
 

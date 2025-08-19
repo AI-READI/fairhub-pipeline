@@ -1,6 +1,5 @@
 """Process flio data files"""
 
-
 from imaging.imaging_flio_root import Flio
 
 import os
@@ -350,7 +349,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     dependency_folder = f"{study_id}/dependency/Flio"
     pipeline_workflow_log_folder = f"{study_id}/logs/Flio"
     ignore_file = f"{study_id}/ignore/flio.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through07-31-2024.csv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
 
     logger = logging.Logwatch("flio", print=True)
 
@@ -457,7 +456,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
     # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
-    chunks = [file_paths[i: i + chunk_size] for i in range(0, total_files, chunk_size)]
+    chunks = [file_paths[i : i + chunk_size] for i in range(0, total_files, chunk_size)]
     args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
     pipe = partial(
         worker,
@@ -533,7 +532,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         output_file_client.upload_data(data, overwrite=True)
 
     shutil.rmtree(meta_temp_folder_path)
-
 
 
 if __name__ == "__main__":
