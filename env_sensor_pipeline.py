@@ -264,7 +264,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     red_cap_export_file = (
         f"{study_id}/pooled-data/REDCap/AIREADiPilot-2024Sep13_EnviroPhysSensorInfo.csv"
     )
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csv"
 
     logger = logging.Logwatch("env_sensor", print=True)
 

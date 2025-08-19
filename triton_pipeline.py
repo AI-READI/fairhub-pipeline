@@ -367,7 +367,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     processed_data_output_folder = f"{study_id}/pooled-data/Triton-processed"
     processed_metadata_output_folder = f"{study_id}/pooled-data/Triton-metadata"
     ignore_file = f"{study_id}/ignore/triton.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csv"
 
     logger = logging.Logwatch("triton", print=True)
 

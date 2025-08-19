@@ -344,7 +344,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     pipeline_workflow_log_folder = f"{study_id}/logs/Optomed"
     processed_data_output_folder = f"{study_id}/pooled-data/Optomed-processed"
     ignore_file = f"{study_id}/ignore/optomed.ignore"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csvcsv"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csv"
 
     logger = logging.Logwatch("optomed", print=True)
 
