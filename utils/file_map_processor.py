@@ -94,7 +94,7 @@ class FileMapProcessor:
     def __del__(self):
         shutil.rmtree(self.meta_temp_folder_path)
 
-    def add_entry(self, path, input_last_modified):
+    def add_entry(self, path, input_last_modified, additional_data=None):
         # Add files that do not exist in the array
         entry = [entry for entry in self.file_map if entry["input_file"] == path]
         if not entry:
@@ -105,8 +105,13 @@ class FileMapProcessor:
                     "input_last_modified": input_last_modified,
                     "seen": True,
                     "error": [],
+                    "additional_data": additional_data,
                 }
             )
+
+    def add_additional_data(self, path, additional_data):
+        if entry := [entry for entry in self.file_map if entry["input_file"] == path]:
+            entry["additional_data"] = additional_data
 
     def file_should_process(self, path, input_last_modified) -> bool:
         """Check if the file has been modified since the last time it was

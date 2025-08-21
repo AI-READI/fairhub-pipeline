@@ -9,6 +9,7 @@ from traceback import format_exc
 
 import cgm.cgm as cgm
 import cgm.cgm_manifest as cgm_manifest
+from cgm.cgm_sanity import sanity_check_cgm_file
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
@@ -179,6 +180,17 @@ def worker(
                 continue
 
             logger.info(f"Converted {file_name}")
+
+            # Run sanity checks on the created JSON before any uploads or manifest work
+            check_path = (
+                cgm_final_output_file_path
+                if os.path.exists(cgm_final_output_file_path)
+                else cgm_output_file_path
+            )
+
+            summary = sanity_check_cgm_file(check_path, logger)
+
+            file_processor.add_additional_data(path, summary)
 
             file_item["convert_error"] = False
             file_item["processed"] = True
