@@ -110,7 +110,8 @@ class FileMapProcessor:
             )
 
     def add_additional_data(self, path, additional_data):
-        if entry := [entry for entry in self.file_map if entry["input_file"] == path]:
+        entry = [entry for entry in self.file_map if entry["input_file"] == path]
+        if entry:
             entry["additional_data"] = additional_data
 
     def file_should_process(self, path, input_last_modified) -> bool:
