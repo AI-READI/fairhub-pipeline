@@ -110,9 +110,10 @@ class FileMapProcessor:
             )
 
     def add_additional_data(self, path, additional_data):
-        entry = [entry for entry in self.file_map if entry["input_file"] == path]
-        if entry:
-            entry["additional_data"] = additional_data
+        for entry in self.file_map:
+            if entry["input_file"] == path:
+                entry["additional_data"] = additional_data
+                break
 
     def file_should_process(self, path, input_last_modified) -> bool:
         """Check if the file has been modified since the last time it was
