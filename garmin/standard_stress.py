@@ -39,7 +39,9 @@ def merge_json_files(file_paths, outdir, ptname):
         json.dump(combined_data, combined_file, indent=4)
 
 
-def standardize_stress(root_dir, patient_id, output_folder, final_output):
+def standardize_stress(
+    root_dir, patient_id, output_folder, final_output, timezone="pst"
+):
     pt = patient_id
 
     pt_hr_count = 0
@@ -74,6 +76,7 @@ def standardize_stress(root_dir, patient_id, output_folder, final_output):
                     "creation_date_time": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "user_id": f"AIREADI-{patient_ID}",
                     "schema_id": {"namespace": "", "name": "", "version": ""},
+                    "timezone": timezone,
                 },
                 "body": {"stress": []},
             }

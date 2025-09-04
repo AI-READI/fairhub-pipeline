@@ -39,7 +39,7 @@ def merge_json_files(file_paths, outdir, ptname):
 
 
 def standardize_physical_activity_calories(
-    root_dir, patient_id, output_folder, final_output
+    root_dir, patient_id, output_folder, final_output, timezone="pst"
 ):
     pt = patient_id
 
@@ -81,6 +81,7 @@ def standardize_physical_activity_calories(
                         "name": "physical-activity",
                         "version": 1.0,
                     },
+                    "timezone": timezone,
                 },
                 "body": {"activity": []},
             }

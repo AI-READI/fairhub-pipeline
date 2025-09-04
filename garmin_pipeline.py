@@ -22,6 +22,7 @@ import contextlib
 import time
 from traceback import format_exc
 import sys
+import random
 
 import azure.storage.filedatalake as azurelake
 import config
@@ -97,6 +98,10 @@ def worker(
         patient_id = patient_folder["patient_id"]
 
         logger.info(f"Processing {patient_id}")
+
+        timezone = "pst"
+        if patient_id.startswith("7"):
+            timezone = "cst"
 
         patient_folder_path = patient_folder["file_path"]
         patient_folder_name = patient_folder["patient_folder_name"]
@@ -279,6 +284,7 @@ def worker(
                     patient_id,
                     heart_rate_jsons_output_folder,
                     final_heart_rate_output_folder,
+                    timezone,
                 )
 
                 logger.info(f"Standardized heart rate for {patient_id}")
@@ -870,6 +876,9 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
                 "patient_id": patient_id,
             }
         )
+
+    # dev - only process a random 10 files
+    file_paths = random.sample(file_paths, 20)
 
     total_files = len(file_paths)
 

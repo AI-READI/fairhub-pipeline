@@ -7,7 +7,9 @@ from pathlib import Path
 from traceback import format_exc
 
 
-def standardize_physical_activities(root_dir, patient_id, output_folder, final_output):
+def standardize_physical_activities(
+    root_dir, patient_id, output_folder, final_output, timezone="pst"
+):
     pt = patient_id
 
     pt_hr_count = 0
@@ -59,6 +61,7 @@ def standardize_physical_activities(root_dir, patient_id, output_folder, final_o
                 "creation_date_time": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "user_id": f"AIREADI-{patient_ID}",
                 "schema_id": {"namespace": "", "name": "", "version": ""},
+                "timezone": timezone,
             },
             "body": {"activity": []},
         }

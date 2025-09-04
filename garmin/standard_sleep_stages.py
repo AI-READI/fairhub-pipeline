@@ -37,7 +37,9 @@ def merge_json_files(file_paths, outdir, ptname):
         json.dump(combined_data, combined_file, indent=4)
 
 
-def standardize_sleep_stages(root_dir, patient_id, output_folder, final_output):
+def standardize_sleep_stages(
+    root_dir, patient_id, output_folder, final_output, timezone="pst"
+):
     pt = patient_id
 
     pt_hr_count = 0
@@ -91,6 +93,7 @@ def standardize_sleep_stages(root_dir, patient_id, output_folder, final_output):
                             "name": "sleep-stages",
                             "version": 2.0,
                         },
+                        "timezone": timezone,
                     },
                     "body": {"sleep": []},
                 }
