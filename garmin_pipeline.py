@@ -341,6 +341,7 @@ def worker(
                     patient_id,
                     oxygen_saturation_jsons_output_folder,
                     final_oxygen_saturation_output_folder,
+                    timezone,
                 )
 
                 logger.info(f"Standardized oxygen saturation for {patient_id}")
@@ -401,6 +402,7 @@ def worker(
                     patient_id,
                     physical_activities_jsons_output_folder,
                     final_physical_activities_output_folder,
+                    timezone,
                 )
 
                 logger.info(f"Standardized physical activities for {patient_id}")
@@ -463,6 +465,7 @@ def worker(
                     patient_id,
                     physical_activity_calories_jsons_output_folder,
                     final_physical_activity_calories_output_folder,
+                    timezone,
                 )
                 logger.info(f"Standardized physical activity calories for {patient_id}")
                 with contextlib.suppress(Exception):
@@ -524,6 +527,7 @@ def worker(
                     patient_id,
                     respiratory_rate_jsons_output_folder,
                     final_respiratory_rate_output_folder,
+                    timezone,
                 )
 
                 logger.info(f"Standardized respiratory rate for {patient_id}")
@@ -578,6 +582,7 @@ def worker(
                     patient_id,
                     sleep_stages_jsons_output_folder,
                     final_sleep_stages_output_folder,
+                    timezone,
                 )
 
                 logger.info(f"Standardized sleep stages for {patient_id}")
@@ -629,6 +634,7 @@ def worker(
                     patient_id,
                     stress_jsons_output_folder,
                     final_stress_output_folder,
+                    timezone,
                 )
 
                 logger.info(f"Standardized stress for {patient_id}")
