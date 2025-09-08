@@ -884,7 +884,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         )
 
     # dev - only process a random 10 files
-    file_paths = random.sample(file_paths, 20)
+    file_paths = random.sample(file_paths, 10)
 
     total_files = len(file_paths)
 
