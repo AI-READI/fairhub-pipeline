@@ -12,6 +12,7 @@ import garmin.standard_respiratory_rate as garmin_standardize_respiratory_rate
 import garmin.standard_sleep_stages as garmin_standardize_sleep_stages
 import garmin.standard_stress as garmin_standardize_stress
 import garmin.metadata as garmin_metadata
+from garmin.garmin_sanity import sanity_check_garmin_file
 
 
 import argparse
@@ -109,7 +110,7 @@ def worker(
         workflow_input_files = [patient_folder_path]
 
         # get the file name from the path
-        file_name = patient_folder_path.split("/")[-1]
+        file_name = os.path.basename(patient_folder_path)
 
         # download the file to the temp folder
         input_file_client = file_system_client.get_file_client(
@@ -204,7 +205,7 @@ def worker(
 
                 workflow_input_files.append(patient_file_path)
 
-                original_file_name = patient_file_path.split("/")[-1]
+                original_file_name = os.path.basename(patient_file_path)
                 original_file_name_only = original_file_name.split(".")[0]
 
                 converted_output_folder_path = os.path.join(
@@ -685,13 +686,17 @@ def worker(
 
             logger.info(f"Uploading {total_output_files} output files for {patient_id}")
 
+            summary_list = []
+
             for idx3, file in enumerate(output_files):
                 log_idx = idx3 + 1
 
                 f_path = file["file_to_upload"]
-                f_name = f_path.split("/")[-1]
+                f_name = os.path.basename(f_path)
 
                 output_file_path = file["uploaded_file_path"]
+
+                logger.debug(f"Sanity checking {f_name}")
 
                 logger.debug(
                     f"Uploading {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
@@ -702,6 +707,15 @@ def worker(
                     if not os.path.exists(f_path):
                         logger.error(f"File {f_path} does not exist")
                         continue
+
+                    summary = sanity_check_garmin_file(f_path, logger)
+
+                    summary_list.append(
+                        {
+                            "file_name": f_name,
+                            "summary": summary,
+                        }
+                    )
 
                     # Check if the file already exists in the output folder
                     output_file_client = file_system_client.get_file_client(
@@ -733,6 +747,8 @@ def worker(
 
                 patient_folder["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
+
+            file_processor.add_additional_data(patient_folder_path, summary_list)
 
             file_processor.confirm_output_files(
                 patient_folder_path,
@@ -835,7 +851,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     for path in paths:
         t = str(path.name)
 
-        file_name = t.split("/")[-1]
+        file_name = os.path.basename(t)
 
         # Check if the file name is in the format FIT-patientID.zip
         if not file_name.endswith(".zip"):
@@ -967,9 +983,13 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         for item in manual_input_folder_contents:
             item_path = str(item.name)
 
-            file_name = item_path.split("/")[-1]
+            file_name = os.path.basename(item_path)
 
-            clipped_path = item_path.split(f"{manual_input_folder}/")[-1]
+            # Remove the manual input folder prefix from the path
+            if item_path.startswith(f"{manual_input_folder}/"):
+                clipped_path = item_path[len(f"{manual_input_folder}/") :]
+            else:
+                clipped_path = os.path.basename(item_path)
 
             manual_input_file_client = file_system_client.get_file_client(
                 file_path=item_path

@@ -14,6 +14,7 @@ Usage:
 from datetime import datetime
 import json
 from typing import Any, Dict, List, Tuple, Optional
+import contextlib
 
 
 def _parse_iso8601(s: Any) -> Optional[datetime]:
@@ -72,14 +73,12 @@ def _extract_fields(rec: Dict[str, Any]) -> Dict[str, Any]:
             "transmitter_time_value": None,
         }
 
-    # fcgm nested time fields
-    try:
+    # fcgm nested time field
+    with contextlib.suppress(Exception):
         etf = rec.get("effective_time_frame") or {}
         ti = etf.get("time_interval") or {}
         start = ti.get("start_date_time", start)
         end = ti.get("end_date_time", end)
-    except Exception:
-        pass
 
     # flat time fields fallback
     start = rec.get("start_date", start)
@@ -87,10 +86,7 @@ def _extract_fields(rec: Dict[str, Any]) -> Dict[str, Any]:
 
     # glucose, handle flat numeric or nested {"value": ...}
     bg = rec.get("blood_glucose")
-    if isinstance(bg, dict):
-        glucose_value = bg.get("value")
-    else:
-        glucose_value = bg
+    glucose_value = bg.get("value") if isinstance(bg, dict) else bg
 
     # ids and metadata
     uuid = rec.get("uuid")
@@ -99,10 +95,7 @@ def _extract_fields(rec: Dict[str, Any]) -> Dict[str, Any]:
     transmitter_id = rec.get("transmitter_id")
 
     tt = rec.get("transmitter_time")
-    if isinstance(tt, dict):
-        transmitter_time_value = tt.get("value")
-    else:
-        transmitter_time_value = tt
+    transmitter_time_value = tt.get("value") if isinstance(tt, dict) else tt
 
     return {
         "start": start,
@@ -176,7 +169,7 @@ def sanity_check_cgm_file(
     summary["total_records"] = len(records)
 
     if not records:
-        logger.warning(f"[SANITY CHECK] No records found in {file_path}")
+        logger.warn(f"[SANITY CHECK] No records found in {file_path}")
         return summary
 
     # 1) date ordering and 2) negative glucose
@@ -205,16 +198,13 @@ def sanity_check_cgm_file(
                     )
 
         # Negative glucose
-        try:
+        with contextlib.suppress(Exception):
             if f["glucose_value"] is not None and float(f["glucose_value"]) < 0:
                 summary["negative_glucose_cnt"] += 1
                 if summary["negative_glucose_cnt"] <= max_log_examples:
                     logger.error(
                         f"[SANITY CHECK] Negative blood_glucose at index {idx} in {file_path}: {f['glucose_value']}"
                     )
-        except Exception:
-            # Non numeric value
-            pass
 
     if summary["bad_date_cnt"]:
         logger.error(

@@ -178,6 +178,10 @@ class Logwatch:
                 json={"level": "warning", "message": message, "type": "text"},
             )
 
+    # Alias for warn
+    def warning(self, message: str):
+        self.warn(message)
+
     def critical(self, message: str):
         """Send a critical message to the logwatch server"""
         if self.print:
