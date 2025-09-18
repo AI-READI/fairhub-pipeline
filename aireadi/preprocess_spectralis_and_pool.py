@@ -39,11 +39,12 @@ def main():  # sourcery skip: low-code-quality
         with open(completed_folders_file, "r") as f:
             completed_folders = json.load(f)
 
+    destination_directory = f"{project_name}/pooled-data/{device}"
+
     for site_name in site_names:
         print(f"Processing spectralis data for {site_name}")
 
         source_directory = f"{project_name}/{site_name}/{site_name}_{device}"
-        destination_directory = f"{project_name}/pooled-data/{device}"
 
         source_folder_paths = source_service_client.get_paths(
             path=source_directory, recursive=False
@@ -110,7 +111,7 @@ def main():  # sourcery skip: low-code-quality
             print(f"Running executable for folder {folder_name}")
 
             input_dir = temp_source_folder_path
-            output_dir = output_folder_path
+            output_dir = os.path.join(output_folder_path, "converted")
 
             try:
                 subprocess.call([dicom_executable_location, input_dir, output_dir])
@@ -132,52 +133,33 @@ def main():  # sourcery skip: low-code-quality
 
                 continue
 
-            # Create the zip files
-            # Read the contents of the output folder
-            # Zip only the directories in the output folder and not the files
-            # Each directory in the output folder is a separate file
+            # Create a zip file of the folder
+            zip_file_path = os.path.join(temp_output_folder_path, f"{folder_name}.zip")
 
-            for dir_path, dir_name, file_list in os.walk(output_dir):
-                for dir_name in dir_name:
-                    output_dir_path = os.path.join(output_dir, dir_name)
-                    zip_file_base_name = f"{folder_name}.zip"
+            print(f"Creating zip file {zip_file_path}")
 
-                    print(f"Creating zip file {zip_file_base_name}")
+            with zipfile.ZipFile(file=zip_file_path, mode="w") as archive:
+                for dir_path, dir_name, file_list in os.walk(output_dir):
+                    for file in file_list:
+                        file_path = os.path.join(dir_path, file)
+                        archive_path = os.path.relpath(file_path, output_dir)
+                        archive.write(filename=file_path, arcname=archive_path)
 
-                    with zipfile.ZipFile(
-                        file=zip_file_base_name,
-                        mode="w",
-                        compression=zipfile.ZIP_DEFLATED,
-                    ) as archive:
-                        for sub_folder_dir_path, dir_name, file_list in os.walk(
-                            output_dir_path
-                        ):
-                            for file in file_list:
-                                file_path = os.path.join(sub_folder_dir_path, file)
-                                archive_path = os.path.relpath(
-                                    file_path, output_dir_path
-                                )
-                                archive.write(filename=file_path, arcname=archive_path)
+            # Upload the zip file to the destination container
+            print(f"Uploading zip file {zip_file_path}")
 
-                    # Upload the zip file to the destination container
-                    print(f"Uploading zip file {zip_file_base_name}")
+            zip_file_base_name = os.path.basename(zip_file_path)
 
-                    destination_container_client = (
-                        destination_service_client.get_file_client(
-                            file_path=f"{destination_directory}/{zip_file_base_name}"
-                        )
-                    )
+            destination_file_path = f"{destination_directory}/{zip_file_base_name}"
 
-                    with open(file=zip_file_base_name, mode="rb") as f:
-                        destination_container_client.upload_data(f, overwrite=True)
+            destination_container_client = destination_service_client.get_file_client(
+                file_path=destination_file_path
+            )
 
-                    # Clean up
-                    print("Cleaning up")
-                    os.remove(zip_file_base_name)
-                    shutil.rmtree(output_dir_path)
+            with open(file=zip_file_path, mode="rb") as f:
+                destination_container_client.upload_data(f, overwrite=True)
 
             # Clean up
-            print("Cleaning up")
             shutil.rmtree(temp_output_folder_path)
             shutil.rmtree(temp_source_folder_path)
 
