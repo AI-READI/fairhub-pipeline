@@ -1,4 +1,4 @@
-"""Process spectralis data files and pool data into a .zip file"""
+"""Process spectralis data files and zip data preserving folder structure"""
 
 import subprocess
 import os
@@ -154,7 +154,10 @@ def main():  # sourcery skip: low-code-quality
                         ):
                             for file in file_list:
                                 file_path = os.path.join(sub_folder_dir_path, file)
-                                archive.write(filename=file_path, arcname=file)
+                                archive_path = os.path.relpath(
+                                    file_path, output_dir_path
+                                )
+                                archive.write(filename=file_path, arcname=archive_path)
 
                     # Upload the zip file to the destination container
                     print(f"Uploading zip file {zip_file_base_name}")
