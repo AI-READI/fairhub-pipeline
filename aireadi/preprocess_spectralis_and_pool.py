@@ -12,7 +12,7 @@ import config
 
 # Spectralis DICOM converter executable path
 dicom_executable_location = os.path.abspath(
-    "C:\\Users\\sanjay\\Downloads\\dicom-converter\\SP-X_DICOM_Converter.exe"
+    "C:\\Users\\b2aiUsr\\Downloads\\spx-dicom-converter\\SP-X_DICOM_Converter.exe"
 )
 
 completed_folders_file = "completed_folders_spectralis.json"
