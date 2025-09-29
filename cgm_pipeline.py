@@ -335,8 +335,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
-    # Create the output folder
-    file_system_client.create_directory(processed_data_output_folder)
 
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_output_folder)
@@ -344,9 +342,8 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_qc_folder)
 
-    # This part is for testing processing all files, and disables should_process logic. It is going to be removed soon
-    with contextlib.suppress(Exception):
-        file_system_client.delete_file(f"{dependency_folder}/file_map.json")
+    # Create the output folder
+    file_system_client.create_directory(processed_data_output_folder)
 
     file_paths = []
     participant_filter_list = []
