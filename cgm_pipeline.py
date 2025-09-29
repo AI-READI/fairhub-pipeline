@@ -327,6 +327,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
     participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csv"
+    manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
 
     logger = logging.Logwatch("cgm", print=True)
 
@@ -342,8 +343,8 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     with contextlib.suppress(Exception):
         file_system_client.delete_directory(processed_data_qc_folder)
 
-    # Create the output folder
-    file_system_client.create_directory(processed_data_output_folder)
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(manifest_folder)
 
     file_paths = []
     participant_filter_list = []
@@ -429,7 +430,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     # Create a temporary folder on the local machine
     pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
     # Write the manifest to a file
-    manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
 
     manifest_file_path = os.path.join(meta_temp_folder_path, "manifest_cgm_v2.tsv")
     manifest.write_tsv(manifest_file_path)
