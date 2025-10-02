@@ -323,11 +323,11 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     input_folder = f"{study_id}/pooled-data/CGM"
     dependency_folder = f"{study_id}/dependency/CGM"
-    processed_data_output_folder = f"{study_id}/pooled-data/CGM-processed"
-    processed_data_qc_folder = f"{study_id}/pooled-data/CGM-qc"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM2-processed"
+    processed_data_qc_folder = f"{study_id}/pooled-data/CGM2-qc"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
     participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csv"
-    manifest_folder = f"{study_id}/pooled-data/CGM-manifest"
+    manifest_folder = f"{study_id}/pooled-data/CGM2-manifest"
 
     logger = logging.Logwatch("cgm", print=True)
 
