@@ -95,29 +95,32 @@ def worker(
 
             logger.debug(f"Downloading {file_name} to {download_path}")
 
-            # Get file size for progress tracking
-            file_properties = input_file_client.get_file_properties()
-            file_size = file_properties.size
-
-            logger.info(f"Starting download of {file_name} ({file_size:,} bytes)")
-
             with open(file=download_path, mode="wb") as f:
-                # Download with tqdm progress bar
-                download_stream = input_file_client.download_file()
+                f.write(input_file_client.download_file().readall())
 
-                # Create progress bar with file size and rate info
-                with tqdm(
-                    total=file_size,
-                    unit="B",
-                    unit_scale=True,
-                    unit_divisor=1024,
-                    desc=f"Downloading {file_name}",
-                    ncols=100,
-                    leave=False,
-                ) as pbar:
-                    for chunk in download_stream.chunks():
-                        f.write(chunk)
-                        pbar.update(len(chunk))
+            # Get file size for progress tracking
+            # file_properties = input_file_client.get_file_properties()
+            # file_size = file_properties.size
+
+            # logger.info(f"Starting download of {file_name} ({file_size:,} bytes)")
+
+            # with open(file=download_path, mode="wb") as f:
+            #     # Download with tqdm progress bar
+            #     download_stream = input_file_client.download_file()
+
+            #     # Create progress bar with file size and rate info
+            #     with tqdm(
+            #         total=file_size,
+            #         unit="B",
+            #         unit_scale=True,
+            #         unit_divisor=1024,
+            #         desc=f"Downloading {file_name}",
+            #         ncols=100,
+            #         leave=False,
+            #     ) as pbar:
+            #         for chunk in download_stream.chunks():
+            #             f.write(chunk)
+            #             pbar.update(len(chunk))
 
             logger.info(f"Downloaded {file_name} to {download_path}")
 
