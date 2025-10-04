@@ -584,6 +584,7 @@ protocol_mapping = {
     "spectralis_ppol_mac_hr_oct_small": "spectralis ppol mac hr oct",
     "spectralis_ppol_mac_hr_retinal_photography": "spectralis ppol mac hr oct",
     "spectralis_ppol_mac_hr_retinal_photography_small": "spectralis ppol mac hr oct",
+    "spectralis_mac_20x20_hs_octa": "spectralis mac 20x20 hs octa",
     "flio": "fluorescence lifetime imaging ophthalmoscopy",
 }
 
