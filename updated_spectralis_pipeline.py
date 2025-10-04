@@ -20,7 +20,8 @@ from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
 from functools import partial
 from multiprocessing.pool import ThreadPool
-from tqdm import tqdm
+
+# from tqdm import tqdm
 
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
@@ -333,7 +334,7 @@ def worker(
                         )
 
                         with open(f"{full_file_path}", "rb") as data:
-                            # output_file_client.upload_data(data, overwrite=True)
+                            output_file_client.upload_data(data, overwrite=True)
                             logger.info(f"Uploaded {combined_file_name}")
                     except Exception:
                         outputs_uploaded = False
@@ -595,7 +596,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 if __name__ == "__main__":
     sys_args = sys.argv
 
-    workers = 1
+    workers = 4
 
     parser = argparse.ArgumentParser(description="Process spectralis data files")
     parser.add_argument(
