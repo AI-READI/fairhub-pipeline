@@ -30,6 +30,10 @@ for file in ${FOLDER_PATH}DEX-*.csv; do ID=$(basename "$file" .csv | cut -d '-' 
 done
 """
 
+"""
+IMPORTANT: COPY THE RAW DATA FROM THE PRODUCTION 'xx-pilot' CONTAINER TO THE POOLED-DATA 'CGM' CONTAINER
+"""
+
 
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 

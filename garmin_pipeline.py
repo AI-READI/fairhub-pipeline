@@ -23,7 +23,6 @@ import contextlib
 import time
 from traceback import format_exc
 import sys
-import random
 
 import azure.storage.filedatalake as azurelake
 import config
@@ -64,6 +63,10 @@ for file in "$FitnessTracker_Path"/FitnessTracker-*/Garmin/Activity/*.fit \
         cd - || exit
     fi
 done
+"""
+
+"""
+IMPORTANT: COPY THE RAW DATA FROM THE PRODUCTION 'xx-pilot' CONTAINER TO THE POOLED-DATA 'FitnessTracker' CONTAINER
 """
 
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
