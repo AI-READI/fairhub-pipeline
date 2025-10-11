@@ -62,9 +62,6 @@ def worker(
     #     file_system_name="stage-1-container",
     # )
 
-    # Only do 100 files for testing
-    file_paths = file_paths[:100]
-
     total_files = len(file_paths)
     time_estimator = TimeEstimator(total_files)
 
@@ -193,9 +190,9 @@ def worker(
                     temp_conversion_output_folder_path, original_file_name_only
                 )
 
-                logger.debug(
-                    f"Converting {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
-                )
+                # logger.debug(
+                #     f"Converting {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
+                # )
 
                 if file_modality == "Sleep":
                     try:
@@ -203,9 +200,9 @@ def worker(
                             patient_file_path, converted_output_folder_path
                         )
 
-                        logger.info(
-                            f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
-                        )
+                        # logger.info(
+                        #     f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
+                        # )
 
                     except Exception:
                         logger.error(
@@ -226,9 +223,9 @@ def worker(
                             patient_file_path, converted_output_folder_path
                         )
 
-                        logger.info(
-                            f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
-                        )
+                        # logger.info(
+                        #     f"Converted {file_modality}/{original_file_name} - ({file_idx}/{total_patient_files})"
+                        # )
 
                     except Exception:
                         logger.error(
@@ -801,6 +798,9 @@ def pipeline_local(
                 "patient_id": patient_id,
             }
         )
+
+    # Only do 100 files for testing
+    file_paths = file_paths[:100]
 
     total_files = len(file_paths)
     logger.info(f"Found {total_files} files to process in {input_folder}")
