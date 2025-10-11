@@ -31,6 +31,7 @@ import garmin.standard_sleep_stages as garmin_standardize_sleep_stages
 import garmin.standard_stress as garmin_standardize_stress
 import garmin.metadata as garmin_metadata
 from garmin.garmin_sanity import sanity_check_garmin_file
+from garmin.garmin_deduplicate import deduplicate_garmin_zip
 
 
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
@@ -60,6 +61,9 @@ def worker(
     #     config.AZURE_STORAGE_CONNECTION_STRING,
     #     file_system_name="stage-1-container",
     # )
+
+    # Only do 100 files for testing
+    file_paths = file_paths[:100]
 
     total_files = len(file_paths)
     time_estimator = TimeEstimator(total_files)
@@ -111,6 +115,20 @@ def worker(
             shutil.copy2(patient_folder_path, download_path)
 
             logger.info(f"Copied {patient_folder_path} to {download_path}")
+
+            # Deduplicate Monitor FIT files in the ZIP before unzipping
+            logger.info(f"Deduplicating Monitor FIT files in {download_path}")
+            try:
+                success = deduplicate_garmin_zip(download_path, logger)
+                if success:
+                    logger.info(f"Successfully deduplicated {download_path}")
+                else:
+                    logger.warning(
+                        f"Deduplication failed for {download_path}, continuing with original file"
+                    )
+            except Exception as e:
+                logger.error(f"Error during deduplication of {download_path}: {e}")
+                logger.warning("Continuing with original file")
 
             logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
 
@@ -926,7 +944,7 @@ def pipeline_local(
 if __name__ == "__main__":
     sys_args = sys.argv
 
-    workers = 10
+    workers = 8
 
     parser = argparse.ArgumentParser(description="Process garmin data files locally")
     parser.add_argument(
