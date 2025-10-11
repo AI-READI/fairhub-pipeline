@@ -185,6 +185,11 @@ def main():
                 f"\nNo missing files found! All files in {old_container_name}{old_folder_path} are also present in {new_container_name}{new_folder_path} (relative comparison)."
             )
 
+        # print missing IDs
+        print("\nMissing IDs:")
+        for file_path in sorted_missing:
+            print(file_path.split("/")[-2])
+
         # Show summary
         total_time = time.time() - start_time
         end_datetime = datetime.now()

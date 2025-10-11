@@ -271,6 +271,119 @@ def deduplicate_garmin_zip(zip_path: str, logger=None) -> bool:
     return process_zip_in_place(Path(zip_path), logger)
 
 
+def deduplicate_and_extract_garmin_zip(
+    zip_path: str, extract_to: str = None, logger=None
+) -> str:
+    """
+    Extract a Garmin ZIP file, deduplicate Monitor FIT files, and return the unzipped folder path.
+
+    This function extracts the ZIP file to a temporary or specified directory,
+    removes duplicate Monitor FIT files (keeping ...00000, deleting ...00001-...00009),
+    and returns the path to the extracted folder.
+
+    Args:
+        zip_path: Path to the ZIP file to process
+        extract_to: Optional directory to extract to. If None, creates a temporary directory.
+        logger: Optional logger object for logging messages
+
+    Returns:
+        str: Path to the extracted and deduplicated folder
+
+    Raises:
+        Exception: If extraction or deduplication fails
+    """
+    import tempfile
+    import shutil
+
+    def get_log_funcs(logger):
+        """Get logging functions from logger or use print as fallback."""
+        return (logger.info if logger else print, logger.error if logger else print)
+
+    log_func, error_func = get_log_funcs(logger)
+
+    zip_path_obj = Path(zip_path)
+    if not zip_path_obj.exists():
+        raise FileNotFoundError(f"ZIP file not found: {zip_path}")
+
+    # Determine extraction directory
+    if (
+        extract_dir := (
+            Path(extract_to)
+            if extract_to is not None
+            else Path(tempfile.mkdtemp(prefix="garmin_dedup_"))
+        )
+    ) and extract_to is not None:
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        cleanup_temp = False
+    else:
+        cleanup_temp = True
+
+    try:
+        log_func(f"Extracting {zip_path_obj.name} to {extract_dir}")
+
+        # Extract the ZIP file
+        with zipfile.ZipFile(zip_path_obj, "r") as zf:
+            zf.extractall(extract_dir)
+
+        log_func(f"Successfully extracted to {extract_dir}")
+
+        # Find and deduplicate Monitor FIT files in the extracted directory
+        monitor_fit_files = []
+        for root, dirs, files in os.walk(extract_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, extract_dir)
+                norm_path = normalize_zip_path(rel_path)
+
+                if is_monitor_fit(norm_path):
+                    d, f = split_dir_file(norm_path)
+                    monitor_fit_files.append((d, f))
+
+        if monitor_fit_files:
+            log_func(f"Found {len(monitor_fit_files)} Monitor FIT files to process")
+
+            # Plan deletions
+            victims = set(plan_deletions(monitor_fit_files))
+
+            if victims:
+                log_func(f"Removing {len(victims)} duplicate files")
+
+                # Delete duplicate files
+                for victim_path in victims:
+                    full_victim_path = extract_dir / victim_path
+                    if full_victim_path.exists():
+                        # Log what we're keeping
+                        d, f = split_dir_file(victim_path)
+                        k = key_if_copy_suffix(f)
+                        if k:
+                            base, _ = k
+                            keep_stem = f"{base}0"
+                            ext = f.rsplit(".", 1)[-1]
+                            keep_file = (
+                                f"{d}/{keep_stem}.{ext}" if d else f"{keep_stem}.{ext}"
+                            )
+                            log_func(f"DELETE: {victim_path} -> KEEP: {keep_file}")
+
+                        full_victim_path.unlink()
+                        log_func(f"Deleted: {victim_path}")
+                    else:
+                        log_func(f"Warning: Expected file not found: {victim_path}")
+            else:
+                log_func("No duplicate files found to remove")
+        else:
+            log_func("No Monitor FIT files found")
+
+        log_func(f"Deduplication complete. Extracted folder: {extract_dir}")
+        return str(extract_dir)
+
+    except Exception as e:
+        error_func(f"Error during extraction and deduplication: {e}")
+        # Clean up temporary directory if we created it
+        if cleanup_temp and extract_dir.exists():
+            shutil.rmtree(extract_dir, ignore_errors=True)
+        raise
+
+
 def main():
     """
     Main function for command-line usage.
