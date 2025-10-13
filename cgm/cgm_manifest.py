@@ -161,7 +161,7 @@ class CGMManifest:
         # Write the data to a TSV file
         with open(file_path, "w") as f:
             f.write(
-                "participant_id\tglucose_filepath\tglucose_level_record_count\taverage_glucose_level_mg_dl\tglucose_sensor_sampling_duration_days\tglucose_sensor_id\tmanufacturer\tmanufacturer_model_name\n"
+                "person_id\tglucose_filepath\tglucose_level_record_count\taverage_glucose_level_mg_dl\tglucose_sensor_sampling_duration_days\tglucose_sensor_id\tmanufacturer\tmanufacturer_model_name\n"
             )
             for line in self.output_data:
                 f.write("\t".join(map(str, line)) + "\n")
