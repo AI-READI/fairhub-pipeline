@@ -13,6 +13,7 @@ import garmin.standard_sleep_stages as garmin_standardize_sleep_stages
 import garmin.standard_stress as garmin_standardize_stress
 import garmin.metadata as garmin_metadata
 from garmin.garmin_sanity import sanity_check_garmin_file
+from garmin.garmin_deduplicate import deduplicate_and_extract_garmin_zip
 
 
 import argparse
@@ -152,12 +153,25 @@ def worker(
 
             logger.info(f"Downloaded {file_name} to {download_path}")
 
-            logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
-
-            with zipfile.ZipFile(download_path, "r") as zip_ref:
-                zip_ref.extractall(temp_input_folder)
-
-            logger.info(f"Unzipped {download_path} to {temp_input_folder}")
+            # Extract and deduplicate the zip file directly to temp folder
+            logger.info(f"Extracting and deduplicating {download_path}")
+            try:
+                extracted_folder = deduplicate_and_extract_garmin_zip(
+                    download_path, extract_to=temp_input_folder, logger=logger
+                )
+                logger.info(
+                    f"Successfully extracted and deduplicated to {extracted_folder}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Error during extraction and deduplication of {download_path}: {e}"
+                )
+                # Fallback to original extraction method
+                logger.warning("Falling back to original extraction method")
+                logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
+                with zipfile.ZipFile(download_path, "r") as zip_ref:
+                    zip_ref.extractall(temp_input_folder)
+                logger.info(f"Unzipped {download_path} to {temp_input_folder}")
 
             # Delete the downloaded file
             os.remove(download_path)
