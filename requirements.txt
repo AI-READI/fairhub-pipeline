@@ -45,4 +45,4 @@ faker
 poethepoet
 
 # Database
-psycopg2-binary
+# psycopg2-binary

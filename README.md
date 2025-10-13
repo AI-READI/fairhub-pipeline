@@ -16,21 +16,23 @@ If you would like to update the api, please follow the instructions below.
 1. Create a local virtual environment and activate it:
 
    ```bash
+   uv self update
+   uv python install 3.14t
+   uv pip install -r requirements.txt
+   ```
+
+   If you are using pyenv, you can create a virtual environment with:
+
+   ```bash
    python -m venv .venv
    source .venv/bin/activate # linux
    .venv\Scripts\activate # windows
    ```
 
-   If you are using Anaconda, you can create a virtual environment with:
-
-   ```bash
-   conda create -n fairhub-pipeline-dev-env python=3.11
-   conda activate fairhub-pipeline-dev-env
-   ```
-
 2. Install the dependencies:
 
    ```bash
+   uv pip install -r requirements.txt
    pip install -r requirements.txt
    ```
 
@@ -69,6 +71,12 @@ If you would like to update the api, please follow the instructions below.
    ```
 
    This runs `func start` with the `--python` flag.
+
+7. To run code with Python GIL disabled, run:
+
+   ```bash
+   python -X gil=0 .\garmin_pipeline_local.py
+   ```
 
 ## License
 

@@ -552,30 +552,30 @@ def convert(
             for record_data in message_records:
                 csv_file.write("\t" + str(record_data) + "\n")
 
-    plot_csv_data(
-        respiration_rate_csv_path,
-        "respiration_rate(breaths/min)",
-        "datetime",
-        ignore_condition=("respiration_rate(breaths/min)", 0, "<="),
-    )
-    plot_csv_data(
-        spo2_csv_path,
-        "spo2 (per minute)",
-        "datetime",
-        ignore_condition=("spo2 (per minute)", 0, "<="),
-    )
-    plot_csv_data(
-        heart_rate_csv_path,
-        "heart_rate (bpm)",
-        "datetime",
-        ignore_condition=("heart_rate (bpm)", 0, "<="),
-    )
-    plot_csv_data(
-        stress_level_csv_path,
-        "stress_value (per minute)",
-        "datetime",
-        ignore_condition=("stress_value (per minute)", 0, "<="),
-    )
+    # plot_csv_data(
+    #     respiration_rate_csv_path,
+    #     "respiration_rate(breaths/min)",
+    #     "datetime",
+    #     ignore_condition=("respiration_rate(breaths/min)", 0, "<="),
+    # )
+    # plot_csv_data(
+    #     spo2_csv_path,
+    #     "spo2 (per minute)",
+    #     "datetime",
+    #     ignore_condition=("spo2 (per minute)", 0, "<="),
+    # )
+    # plot_csv_data(
+    #     heart_rate_csv_path,
+    #     "heart_rate (bpm)",
+    #     "datetime",
+    #     ignore_condition=("heart_rate (bpm)", 0, "<="),
+    # )
+    # plot_csv_data(
+    #     stress_level_csv_path,
+    #     "stress_value (per minute)",
+    #     "datetime",
+    #     ignore_condition=("stress_value (per minute)", 0, "<="),
+    # )
 
 
 # def main():

@@ -13,9 +13,9 @@ dicom_executable_location = os.path.abspath(
 def main():  # sourcery skip: low-code-quality
     """dev - test the executable"""
 
-    data_source_dir = "C:\\Users\\sanjay\\Downloads\\UW_Spectralis_20231204-20231208"
+    data_source_dir = "C:\\Users\\sanjay\\Downloads\\UW_Spectralis_20240326-20240401"
     output_dir = (
-        "C:\\Users\\sanjay\\Downloads\\UW_Spectralis_20231204-20231208_CONVERTED"
+        "C:\\Users\\sanjay\\Downloads\\UW_Spectralis_20240326-20240401_CONVERTED"
     )
 
     # delete the output dir if it exists
