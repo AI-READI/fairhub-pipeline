@@ -31,7 +31,7 @@ import garmin.standard_sleep_stages as garmin_standardize_sleep_stages
 import garmin.standard_stress as garmin_standardize_stress
 import garmin.metadata as garmin_metadata
 from garmin.garmin_sanity import sanity_check_garmin_file
-from garmin.garmin_deduplicate import deduplicate_and_extract_garmin_zip
+from garmin.garmin_deduplicate_parallel import deduplicate_and_extract_garmin_zip
 
 
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
