@@ -15,6 +15,7 @@ import azure.storage.filedatalake as azurelake  # type: ignore
 import time
 from datetime import datetime
 import os
+from tqdm import tqdm
 
 
 def get_all_files_from_azure(service_client, container_name, folder_path="/"):
@@ -50,7 +51,7 @@ def get_all_files_from_azure(service_client, container_name, folder_path="/"):
         normalized_folder_path = "/"
 
     # Iterate through all file paths
-    for file_path in file_paths:
+    for file_path in tqdm(file_paths, desc=f"Scanning {container_name}", unit="file"):
         file_name = os.path.basename(file_path.name)
 
         # if file_name has no extension, it is probably a folder
@@ -58,10 +59,6 @@ def get_all_files_from_azure(service_client, container_name, folder_path="/"):
             continue
 
         total_files_processed += 1
-
-        # Show progress every 1000 files or for the first few files
-        if total_files_processed <= 10 or total_files_processed % 1000 == 0:
-            print(f"\rProcessed {total_files_processed:,} files...", end="", flush=True)
 
         # Make file path relative to folder_path
         full_path = file_path.name.lstrip("/")
@@ -176,7 +173,9 @@ def main():
             sorted_missing = sorted(missing_files)
 
             # Show all files in table format
-            for i, file_path in enumerate(sorted_missing, 1):
+            for i, file_path in enumerate(
+                tqdm(sorted_missing, desc="Displaying missing files", leave=False), 1
+            ):
                 print(f"{i:<4} {file_path}")
 
             print("-" * 80)
