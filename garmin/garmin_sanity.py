@@ -100,7 +100,7 @@ def _extract_time_fields(
     """
     Extract start/end datetimes (UTC) from nested shapes like:
       effective_time_frame.time_interval.{start_date_time,end_date_time}
-      sleep_stage_time_frame.time_interval.{start_date_time,end_date_time}
+      effective_time_frame.time_interval.{start_date_time,end_date_time}
       effective_time_frame.date_time (instantaneous)
       ...and the usual Garmin epoch/ISO keys.
     """
