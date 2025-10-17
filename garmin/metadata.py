@@ -194,20 +194,20 @@ class GarminManifest:
                                 sleep_data = data["body"]["sleep"]
                                 sleep_sorted = sorted(
                                     sleep_data,
-                                    key=lambda x: x["sleep_stage_time_frame"][
+                                    key=lambda x: x["effective_time_frame"][
                                         "time_interval"
                                     ]["start_date_time"],
                                 )
                                 total_sleep_duration = 0
                                 for item in sleep_sorted:
                                     start_time = datetime.strptime(
-                                        item["sleep_stage_time_frame"]["time_interval"][
+                                        item["effective_time_frame"]["time_interval"][
                                             "start_date_time"
                                         ],
                                         "%Y-%m-%dT%H:%M:%SZ",
                                     )
                                     end_time = datetime.strptime(
-                                        item["sleep_stage_time_frame"]["time_interval"][
+                                        item["effective_time_frame"]["time_interval"][
                                             "end_date_time"
                                         ],
                                         "%Y-%m-%dT%H:%M:%SZ",

@@ -26,7 +26,7 @@ def merge_json_files(file_paths, outdir, ptname):
 
     # Sort the combined_body_sleep list by date_time
     combined_body_sleep.sort(
-        key=lambda x: x["sleep_stage_time_frame"]["time_interval"]["start_date_time"]
+        key=lambda x: x["effective_time_frame"]["time_interval"]["start_date_time"]
     )
 
     # Create the combined dictionary
@@ -108,7 +108,7 @@ def standardize_sleep_stages(
 
                     sleep_stage_entry = {
                         "sleep_stage_state": stage,
-                        "sleep_stage_time_frame": {
+                        "effective_time_frame": {
                             "time_interval": {
                                 "start_date_time": start_time.strftime(
                                     "%Y-%m-%dT%H:%M:%SZ"
@@ -125,7 +125,7 @@ def standardize_sleep_stages(
                 # Sort the sleep entries based on start_date_time as datetime objects
                 json_output["body"]["sleep"].sort(
                     key=lambda x: datetime.strptime(
-                        x["sleep_stage_time_frame"]["time_interval"]["start_date_time"],
+                        x["effective_time_frame"]["time_interval"]["start_date_time"],
                         "%Y-%m-%dT%H:%M:%SZ",
                     )
                 )
