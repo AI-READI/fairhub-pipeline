@@ -1318,7 +1318,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 if __name__ == "__main__":
     sys_args = sys.argv
 
-    workers = 8
+    workers = 15
 
     parser = argparse.ArgumentParser(description="Process garmin data files")
     parser.add_argument(
