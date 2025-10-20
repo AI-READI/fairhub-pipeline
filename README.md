@@ -17,6 +17,7 @@ If you would like to update the api, please follow the instructions below.
 
    ```bash
    uv self update
+   uv venv
    uv python install 3.14t
    uv pip install -r requirements.txt
    ```

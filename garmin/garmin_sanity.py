@@ -100,7 +100,7 @@ def _extract_time_fields(
     """
     Extract start/end datetimes (UTC) from nested shapes like:
       effective_time_frame.time_interval.{start_date_time,end_date_time}
-      sleep_stage_time_frame.time_interval.{start_date_time,end_date_time}
+      effective_time_frame.time_interval.{start_date_time,end_date_time}
       effective_time_frame.date_time (instantaneous)
       ...and the usual Garmin epoch/ISO keys.
     """
@@ -242,7 +242,7 @@ def _make_key(rec: Dict[str, Any]) -> Tuple[Any, ...] | str:
 
 
 def sanity_check_garmin_file(
-    file_path: str, logger, max_log_examples: int = 50
+    file_path: str, max_log_examples: int = 50
 ) -> Dict[str, int]:
     """
     Checks:
@@ -272,14 +272,14 @@ def sanity_check_garmin_file(
         with open(file_path, "r") as f:
             data = json.load(f)
     except Exception as e:
-        logger.error(f"[SANITY CHECK] Failed to read {file_path}: {e}")
+        print(f"[SANITY CHECK] Failed to read {file_path}: {e}")
         return summary
 
     records = _iter_records(data)
     summary["total_records"] = len(records)
 
     if not records:
-        logger.warning(f"[SANITY CHECK] No records found in {file_path}")
+        print(f"[SANITY CHECK] No records found in {file_path}")
         return summary
 
     # 1) start_date > end_date
@@ -288,12 +288,12 @@ def sanity_check_garmin_file(
         if dt_s is not None and dt_e is not None and dt_s > dt_e:
             summary["bad_date_cnt"] += 1
             if summary["bad_date_cnt"] <= max_log_examples:
-                logger.error(
+                print(
                     f"[SANITY CHECK] start > end at index {idx} in {file_path}: {dt_s.isoformat()} > {dt_e.isoformat()}"
                 )
 
     if summary["bad_date_cnt"]:
-        logger.error(
+        print(
             f"[SANITY CHECK] Total records with start_date > end_date: {summary['bad_date_cnt']}"
         )
 
@@ -304,14 +304,14 @@ def sanity_check_garmin_file(
                 if v < 0:
                     summary["negative_value_cnt"] += 1
                     if summary["negative_value_cnt"] <= max_log_examples:
-                        logger.error(
+                        print(
                             f"[SANITY CHECK] Negative value at index {idx} in {file_path}: {v} "
                             f"(record snippet: {json.dumps(rec, sort_keys=True)[:300]})"
                         )
                     break  # count each record once
 
     if summary["negative_value_cnt"]:
-        logger.error(
+        print(
             f"[SANITY CHECK] Total records with negative values: {summary['negative_value_cnt']}"
         )
 
@@ -328,7 +328,7 @@ def sanity_check_garmin_file(
     )
 
     if duplicate_groups:
-        logger.error(
+        print(
             f"[SANITY CHECK] Duplicate records detected: {summary['total_duplicate_records']} duplicates across {summary['duplicate_groups']} groups"
         )
         # Print example groups (indices) up to max_log_examples
@@ -336,7 +336,7 @@ def sanity_check_garmin_file(
         for _, idxs in duplicate_groups:
             if logged >= max_log_examples:
                 break
-            logger.error(f"[SANITY CHECK] Duplicate group indices: {idxs}")
+            print(f"[SANITY CHECK] Duplicate group indices: {idxs}")
             logged += 1
 
     return summary

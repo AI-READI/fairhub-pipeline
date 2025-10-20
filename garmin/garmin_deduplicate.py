@@ -205,6 +205,95 @@ def process_zip_in_place(zip_path: Path, logger=None) -> bool:
                 tmp_zip.unlink()
 
 
+def deduplicate_garmin_folder(folder_path: str, logger=None) -> bool:
+    """
+    Clean Garmin Monitor FIT files in a folder.
+
+    This function processes a folder directly to remove duplicate Monitor FIT files
+    (keeping ...00000, deleting ...00001-...00009) without involving ZIP files.
+
+    Args:
+        folder_path: Path to the folder to process
+        logger: Optional logger object for logging messages
+
+    Returns:
+        bool: True if processing was successful, False otherwise
+    """
+    log_func = logger.info if logger else print
+    error_func = logger.error if logger else print
+
+    folder_path_obj = Path(folder_path)
+    if not folder_path_obj.exists():
+        error_func(f"Folder not found: {folder_path}")
+        return False
+
+    if not folder_path_obj.is_dir():
+        error_func(f"Path is not a directory: {folder_path}")
+        return False
+
+    try:
+        log_func(f"Processing folder: {folder_path}")
+
+        # Find all Monitor FIT files in the folder
+        monitor_fit_files = []
+        for root, dirs, files in os.walk(folder_path_obj):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, folder_path_obj)
+                norm_path = normalize_zip_path(rel_path)
+
+                if is_monitor_fit(norm_path):
+                    d, f = split_dir_file(norm_path)
+                    monitor_fit_files.append((d, f))
+
+        if not monitor_fit_files:
+            log_func("No Monitor FIT files found in folder")
+            return True
+
+        log_func(f"Found {len(monitor_fit_files)} Monitor FIT files to process")
+
+        # Plan deletions
+        victims = set(plan_deletions(monitor_fit_files))
+
+        if not victims:
+            log_func(
+                "No copy-suffix groups (…0000[0-9]) needing cleanup; nothing to delete."
+            )
+            return True
+
+        log_func(f"Removing {len(victims)} duplicate files")
+
+        # Delete duplicate files
+        deleted_count = 0
+        for victim_path in victims:
+            full_victim_path = folder_path_obj / victim_path
+            if full_victim_path.exists():
+                # Log what we're keeping
+                d, f = split_dir_file(victim_path)
+                k = key_if_copy_suffix(f)
+                if k:
+                    base, _ = k
+                    keep_stem = f"{base}0"
+                    ext = f.rsplit(".", 1)[-1]
+                    keep_file = f"{d}/{keep_stem}.{ext}" if d else f"{keep_stem}.{ext}"
+                    log_func(f"DELETE: {victim_path} -> KEEP: {keep_file}")
+
+                full_victim_path.unlink()
+                deleted_count += 1
+                log_func(f"Deleted: {victim_path}")
+            else:
+                log_func(f"Warning: Expected file not found: {victim_path}")
+
+        log_func(
+            f"Successfully removed {deleted_count} duplicate files from {folder_path}"
+        )
+        return True
+
+    except Exception as e:
+        error_func(f"Failed to process folder {folder_path}: {e}")
+        return False
+
+
 def deduplicate_garmin_zip(zip_path: str, logger=None) -> bool:
     """
     Clean Garmin Monitor FIT files in a single ZIP archive.

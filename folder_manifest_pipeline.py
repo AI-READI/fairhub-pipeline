@@ -1,39 +1,32 @@
 """Create a file manifest for the folder"""
 
-# import os
 import tempfile
 import azure.storage.filedatalake as azurelake
 import config
 import utils.logwatch as logging
+from tqdm import tqdm
 
 from utils.time_estimator import TimeEstimator
 
 # import hashlib
 
 
-def pipeline(study_id: str):  # sourcery skip: low-code-quality
-    """Create a file manifest for the folder
-    Args:
-        study_id (str): the study id
-    """
-
-    if study_id is None or not study_id:
-        raise ValueError("study_id is required")
-
+def pipeline():  # sourcery skip: low-code-quality
+    """Create a file manifest for the folder"""
     FAST_FOLDER_CHECK = True
 
-    source_folder = f"{study_id}/dataset"
+    source_folder = "/"
     # source_folder = f"{study_id}/completed/cardiac_ecg"
 
-    destination_file = f"{study_id}/s/file-manifest.tsv"
+    destination_file = "/s/file-manifest.tsv"
     # destination_file = f"{study_id}/completed/file-manifest.tsv"
 
     logger = logging.Logwatch("drain", print=True)
 
     # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
-        config.AZURE_STORAGE_CONNECTION_STRING,
-        file_system_name="stage-1-container",
+        config.AZURE_STORAGE_PRODUCTION_DANGEROUS_CONNECTION_STRING,
+        file_system_name="stage-final-container",
     )
 
     file_paths = []
@@ -43,17 +36,14 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     paths = file_system_client.get_paths(path=source_folder, recursive=True)
 
     for path in paths:
-        t = str(path.name)
+        file_path = str(path.name)
 
-        relative_file_path = t.split(source_folder)[1]
-        relative_file_path = relative_file_path.lstrip("/")
-
-        file_name = t.split("/")[-1]
+        file_name = file_path.split("/")[-1]
 
         data_file_count += 1
 
         if data_file_count % 1000 == 0:
-            logger.debug(
+            print(
                 f"Found at least {data_file_count} files in the {source_folder} folder"
             )
 
@@ -63,23 +53,20 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
             extension = file_name.split(".")[-1]
 
             if length == 1 or extension is None:
-                logger.noPrintTrace(
-                    f"Skipping {file_name} - Seems to be a folder (FFC)"
-                )
+                # print(f"Skipping {file_name} - Seems to be a folder (FFC)")
                 continue
 
-        file_client = file_system_client.get_file_client(file_path=path)
+        file_client = file_system_client.get_file_client(file_path=file_path)
         file_properties = file_client.get_file_properties()
         file_metadata = file_properties.metadata
 
         if file_metadata.get("hdi_isfolder"):
-            logger.noPrintTrace(f"Skipping {t} - Seems to be a folder (Full)")
+            print(f"Skipping {file_path} - Seems to be a folder (Full)")
             continue
 
         file_paths.append(
             {
-                "file_path": t,
-                "relative_file_path": relative_file_path,
+                "file_path": file_path,
                 "file_name": file_name,
                 "md5_checksum": 0,
             }
@@ -95,10 +82,9 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
     # with tempfile.TemporaryDirectory(
     #     prefix="folder_manifest_download_pipeline_"
     # ) as temp_folder_path:
-    for file_item in file_paths:
+    for file_item in tqdm(file_paths, desc="Processing files"):
         path = file_item["file_path"]
         file_name = file_item["file_name"]
-        relative_file_path = file_item["relative_file_path"]
 
         # download_path = os.path.join(temp_folder_path, file_name)
 
@@ -116,7 +102,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
         # logger.noPrintTrace(f"Downloaded {file_name} to {download_path}")
 
-        file_item["manifest_file_path"] = f"dataset/{relative_file_path}"
+        file_item["manifest_file_path"] = f"{path}"
 
         logger.noPrintTime(time_estimator.step())
         # os.remove(download_path)
@@ -130,7 +116,7 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
         with open(manifest_file_path, "w") as f:
             f.write("file_name\tmd5_checksum\tfile_path\n")
 
-            for file_item in file_paths:
+            for file_item in tqdm(file_paths, desc="Writing manifest"):
                 f.write(
                     f"{file_item['file_name']}\t{file_item['md5_checksum']}\t{file_item['manifest_file_path']}\n"
                 )
@@ -149,4 +135,4 @@ def pipeline(study_id: str):  # sourcery skip: low-code-quality
 
 
 if __name__ == "__main__":
-    pipeline("AI-READI")
+    pipeline()
