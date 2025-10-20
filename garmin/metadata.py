@@ -379,7 +379,7 @@ class GarminManifest:
         # Define the required column order
 
         headers = [
-            "participant_id",
+            "person_id",
             "wrist_worn_on",
             "dominant_hand",
             "heartrate_filepath",
