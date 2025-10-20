@@ -115,7 +115,6 @@ def progress_monitor(progress_file, total_files, start_time, stop_event):
 
 def worker(
     processed_data_output_folder,
-    manifest,
     file_paths: list,
     worker_id: int,
     progress_file=None,
@@ -135,10 +134,12 @@ def worker(
 
     # Create local instances of shared objects for this worker process
     local_workflow_dependencies = deps.WorkflowFileDependencies()
+    local_manifest = garmin_metadata.GarminManifest(processed_data_output_folder)
 
     # Results to return from this worker process
     worker_results = {
         "dependencies": [],
+        "manifest_data": {},
         "file_processor_updates": [],
         "processed_files": [],
     }
@@ -353,11 +354,11 @@ def worker(
                     shutil.rmtree(heart_rate_jsons_output_folder)
 
                 logger.debug(f"Generating manifest for heart rate for {patient_id}")
-                manifest.process_heart_rate(final_heart_rate_output_folder)
+                local_manifest.process_heart_rate(final_heart_rate_output_folder)
                 logger.info(f"Generated manifest for heart rate for {patient_id}")
 
                 logger.debug(f"Calculating sensor sampling duration for {patient_id}")
-                manifest.calculate_sensor_sampling_duration(
+                local_manifest.calculate_sensor_sampling_duration(
                     final_heart_rate_output_folder
                 )
                 logger.info(f"Calculated sensor sampling duration for {patient_id}")
@@ -418,7 +419,7 @@ def worker(
                 logger.debug(
                     f"Generating manifest for oxygen saturation for {patient_id}"
                 )
-                manifest.process_oxygen_saturation(
+                local_manifest.process_oxygen_saturation(
                     final_oxygen_saturation_output_folder
                 )
                 logger.info(
@@ -485,7 +486,7 @@ def worker(
                 logger.debug(
                     f"Generating manifest for physical activities for {patient_id}"
                 )
-                manifest.process_activity(final_physical_activities_output_folder)
+                local_manifest.process_activity(final_physical_activities_output_folder)
                 logger.info(
                     f"Generated manifest for physical activities for {patient_id}"
                 )
@@ -553,7 +554,7 @@ def worker(
                 logger.debug(
                     f"Generating manifest for physical activity calories for {patient_id}"
                 )
-                manifest.process_calories(
+                local_manifest.process_calories(
                     final_physical_activity_calories_output_folder
                 )
                 logger.info(
@@ -622,7 +623,9 @@ def worker(
                 logger.debug(
                     f"Generating manifest for respiratory rate for {patient_id}"
                 )
-                manifest.process_respiratory_rate(final_respiratory_rate_output_folder)
+                local_manifest.process_respiratory_rate(
+                    final_respiratory_rate_output_folder
+                )
                 logger.info(f"Generated manifest for respiratory rate for {patient_id}")
 
                 # list the contents of the final respiratory rate folder
@@ -681,7 +684,7 @@ def worker(
                     shutil.rmtree(sleep_stages_jsons_output_folder)
 
                 logger.debug(f"Generating manifest for sleep stages for {patient_id}")
-                manifest.process_sleep(final_sleep_stages_output_folder)
+                local_manifest.process_sleep(final_sleep_stages_output_folder)
                 logger.info(f"Generated manifest for sleep stages for {patient_id}")
 
                 for root, dirs, files in os.walk(final_sleep_stages_output_folder):
@@ -739,7 +742,7 @@ def worker(
                     shutil.rmtree(stress_jsons_output_folder)
 
                 logger.debug(f"Generating manifest for stress for {patient_id}")
-                manifest.process_stress(final_stress_output_folder)
+                local_manifest.process_stress(final_stress_output_folder)
                 logger.info(f"Generated manifest for stress for {patient_id}")
 
                 # list the contents of the final stress folder
@@ -900,6 +903,7 @@ def worker(
 
     # Return results from this worker process
     worker_results["dependencies"] = local_workflow_dependencies.dependencies
+    worker_results["manifest_data"] = local_manifest.participants_data
     return worker_results
 
 
@@ -1041,7 +1045,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     # dev - only process a random 8 files
     # import random
 
-    # file_paths = random.sample(file_paths, 20)
+    # file_paths = random.sample(file_paths, 16)
 
     total_files = len(file_paths)
 
@@ -1084,7 +1088,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     pipe = partial(
         worker,
         processed_data_output_folder,
-        manifest,
     )
 
     # Start progress monitoring
@@ -1119,6 +1122,11 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
                 dep["input_files"], dep["output_files"]
             )
 
+        # Merge manifest data from workers
+        for participant_id, participant_data in result["manifest_data"].items():
+            manifest.participants_data[participant_id] = participant_data
+            logger.debug(f"Merged manifest data for participant {participant_id}")
+
         # Update file processor with results from workers
         for file_info in result["processed_files"]:
             file_processor.add_entry(
@@ -1139,8 +1147,11 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
                     file_info["input_last_modified"],
                 )
 
-    # Note: Manifest data is now shared across all worker processes
+    # Note: Manifest data is now merged from all worker processes
     # and will be written by the main process after all workers complete
+    logger.info(
+        f"Total participants in merged manifest: {len(manifest.participants_data)}"
+    )
 
     # Print final summary
     total_elapsed_time = time.time() - start_time
