@@ -74,11 +74,11 @@ def get_dcm_files(folder_path):
 
     # Walk through all directories and subdirectories
     for root, _, files in tqdm(os.walk(folder_path), desc="Scanning directories"):
-        for file in files:
-            # exclude hidden/system files and ensure .dcm extension
-            if not file.startswith(".") and file.lower().endswith(".dcm"):
-                dcm_files.append(os.path.join(root, file))
-
+        dcm_files.extend(
+            os.path.join(root, file)
+            for file in files
+            if not file.startswith(".") and file.lower().endswith(".dcm")
+        )
     logger.info(f"Found {len(dcm_files)} DICOM files")
     return dcm_files
 
@@ -99,14 +99,15 @@ def get_json_flow_files(root_folder):
     matches = []
 
     for root, _, files in tqdm(os.walk(root_folder), desc="Scanning for flow files"):
-        for file in files:
+        matches.extend(
+            os.path.join(root, file)
+            for file in files
             if (
                 file.endswith(".json")
                 and not file.startswith(".")
                 and "flow" in file.lower()
-            ):
-                matches.append(os.path.join(root, file))
-
+            )
+        )
     logger.info(f"Found {len(matches)} flow JSON files")
     return matches
 
@@ -128,14 +129,15 @@ def get_json_enface_files(root_folder):
     logger.info(f"Searching for enface JSON files in: {root_folder}")
 
     for root, _, files in tqdm(os.walk(root_folder), desc="Scanning for enface files"):
-        for file in files:
+        matches.extend(
+            os.path.join(root, file)
+            for file in files
             if (
                 file.endswith(".json")
                 and not file.startswith(".")
                 and "enface" in file.lower()
-            ):
-                matches.append(os.path.join(root, file))
-
+            )
+        )
     return matches
 
 
@@ -157,14 +159,15 @@ def get_json_segmentation_files(root_folder):
     for root, _, files in tqdm(
         os.walk(root_folder), desc="Scanning for segmentation files"
     ):
-        for file in files:
+        matches.extend(
+            os.path.join(root, file)
+            for file in files
             if (
                 file.endswith(".json")
                 and not file.startswith(".")
                 and "segmentation" in file.lower()
-            ):
-                matches.append(os.path.join(root, file))
-
+            )
+        )
     return matches
 
 
@@ -1028,9 +1031,7 @@ def main():
         fpath = os.path.join(retinal_photography_metadata_folder, fname)
         with open(fpath, "r") as f:
             data = json.load(f)
-        for _, meta in data.items():
-            rows.append(meta)
-
+        rows.extend(meta for _, meta in data.items())
     df = pd.DataFrame(rows)
     output_folder = os.path.join(output_manifest_folder, "retinal_photography")
     os.makedirs(output_folder, exist_ok=True)
@@ -1061,9 +1062,7 @@ def main():
         fpath = os.path.join(retinal_oct_metadata_folder, fname)
         with open(fpath, "r") as f:
             data = json.load(f)
-        for _, meta in data.items():
-            rows.append(meta)
-
+        rows.extend(meta for _, meta in data.items())
     df = pd.DataFrame(rows)
     output_folder = os.path.join(output_manifest_folder, "retinal_oct")
     os.makedirs(output_folder, exist_ok=True)
