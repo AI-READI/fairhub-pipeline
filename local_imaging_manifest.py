@@ -14,6 +14,9 @@ import logging
 from tqdm import tqdm
 import pandas as pd
 
+# Configure tqdm to prevent formatting issues
+tqdm.pandas(desc="Processing")
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -73,7 +76,9 @@ def get_dcm_files(folder_path):
     logger.info(f"Scanning for DICOM files in: {folder_path}")
 
     # Walk through all directories and subdirectories
-    for root, _, files in tqdm(os.walk(folder_path), desc="Scanning directories"):
+    for root, _, files in tqdm(
+        os.walk(folder_path), desc="Scanning directories", leave=False
+    ):
         dcm_files.extend(
             os.path.join(root, file)
             for file in files
@@ -98,7 +103,9 @@ def get_json_flow_files(root_folder):
     """
     matches = []
 
-    for root, _, files in tqdm(os.walk(root_folder), desc="Scanning for flow files"):
+    for root, _, files in tqdm(
+        os.walk(root_folder), desc="Scanning for flow files", leave=False
+    ):
         matches.extend(
             os.path.join(root, file)
             for file in files
@@ -126,9 +133,10 @@ def get_json_enface_files(root_folder):
         list: List of full paths to matching JSON files
     """
     matches = []
-    logger.info(f"Searching for enface JSON files in: {root_folder}")
 
-    for root, _, files in tqdm(os.walk(root_folder), desc="Scanning for enface files"):
+    for root, _, files in tqdm(
+        os.walk(root_folder), desc="Scanning for enface files", leave=False
+    ):
         matches.extend(
             os.path.join(root, file)
             for file in files
@@ -157,7 +165,7 @@ def get_json_segmentation_files(root_folder):
     matches = []
 
     for root, _, files in tqdm(
-        os.walk(root_folder), desc="Scanning for segmentation files"
+        os.walk(root_folder), desc="Scanning for segmentation files", leave=False
     ):
         matches.extend(
             os.path.join(root, file)
@@ -199,7 +207,9 @@ def save_retinal_photography_metadata_in_json(retinal_photography_folder):
     logger.info(f"Output metadata folder: {output_folder}")
 
     # Process each DICOM file
-    for ir_file in tqdm(files, desc="Processing retinal photography files"):
+    for ir_file in tqdm(
+        files, desc="Processing retinal photography files", unit="file"
+    ):
         try:
             # Read DICOM file and extract metadata
             dicom_data = pydicom.dcmread(ir_file)
@@ -324,7 +334,7 @@ def save_retinal_oct_metadata_in_json(
     logger.info(f"Output metadata folder: {output_folder}")
 
     # Process each OCT DICOM file
-    for oct_file in tqdm(files, desc="Processing retinal OCT files"):
+    for oct_file in tqdm(files, desc="Processing retinal OCT files", unit="file"):
         try:
             # Read DICOM file
             dicom_data = pydicom.dcmread(oct_file)
@@ -409,7 +419,7 @@ def save_octa_metadata_in_json(retinal_octa_folder):
     logger.info(f"Output metadata folder: {output_folder}")
 
     # Process each OCTA DICOM file
-    for f in tqdm(files, desc="Processing retinal OCTA files"):
+    for f in tqdm(files, desc="Processing retinal OCTA files", unit="file"):
 
         try:
             # Read DICOM file to determine type
@@ -645,7 +655,9 @@ def make_octa_manifest(
     manifest_rows = []
 
     # Process each flow file and create manifest entries
-    for flow in tqdm(flow_json_files, desc="Creating OCTA manifest entries"):
+    for flow in tqdm(
+        flow_json_files, desc="Creating OCTA manifest entries", unit="file"
+    ):
 
         try:
             # Load flow cube metadata
@@ -679,10 +691,6 @@ def make_octa_manifest(
             # Find associated enface files that reference this flow cube
             enface_json_files = get_json_enface_files(folder)
             matching_enface_files = []
-
-            logger.debug(
-                f"Searching for enface files matching flow cube UID: {flow_cube_sop_instance_uid}"
-            )
 
             for enface_file in enface_json_files:
                 with open(enface_file, "r") as f:
@@ -999,8 +1007,12 @@ def main():
     logger.info("Starting local imaging manifest pipeline")
 
     # Configuration - Update these paths as needed
-    input_folder = r"C:\Users\sanjay\Downloads\Spectralis-processed"
-    output_manifest_folder = r"C:\Users\sanjay\Downloads\Spectralis-manifests"
+    input_folder = os.path.join(
+        os.path.expanduser("~"), "Downloads", "Spectralis-processed"
+    )
+    output_manifest_folder = os.path.join(
+        os.path.expanduser("~"), "Downloads", "Spectralis-manifests"
+    )
 
     # Validate input folder exists
     if not os.path.exists(input_folder):
@@ -1025,6 +1037,7 @@ def main():
     for fname in tqdm(
         os.listdir(retinal_photography_metadata_folder),
         desc="Loading photography metadata",
+        unit="file",
     ):
         if fname.startswith(".") or not fname.endswith(".json"):
             continue
@@ -1055,7 +1068,9 @@ def main():
     logger.info("Creating retinal OCT manifest...")
     rows = []
     for fname in tqdm(
-        os.listdir(retinal_oct_metadata_folder), desc="Loading OCT metadata"
+        os.listdir(retinal_oct_metadata_folder),
+        desc="Loading OCT metadata",
+        unit="file",
     ):
         if fname.startswith(".") or not fname.endswith(".json"):
             continue
