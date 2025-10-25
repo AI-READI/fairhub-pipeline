@@ -134,9 +134,7 @@ def get_json_enface_files(root_folder):
     """
     matches = []
 
-    for root, _, files in tqdm(
-        os.walk(root_folder), desc="Scanning for enface files", leave=False
-    ):
+    for root, _, files in os.walk(root_folder):
         matches.extend(
             os.path.join(root, file)
             for file in files
@@ -164,9 +162,7 @@ def get_json_segmentation_files(root_folder):
     """
     matches = []
 
-    for root, _, files in tqdm(
-        os.walk(root_folder), desc="Scanning for segmentation files", leave=False
-    ):
+    for root, _, files in os.walk(root_folder):
         matches.extend(
             os.path.join(root, file)
             for file in files
