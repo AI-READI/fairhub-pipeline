@@ -7,7 +7,7 @@ output_folder = os.path.join(current_directory, "output")
 os.makedirs(output_folder, exist_ok=True)
 output_file = os.path.join(
     output_folder,
-    f"fdfdf{os.path.basename(input_file)}"
+    f"{os.path.basename(input_file)}"
 )
 with open(participants_id_list, newline="", encoding="utf-8") as f:
     reader = csv.DictReader(f, delimiter="\t")
