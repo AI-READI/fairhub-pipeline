@@ -2,11 +2,14 @@
 
 import azure.storage.filedatalake as azurelake
 from uuid import uuid4
+from tqdm import tqdm
+import os
+import tempfile
 
 import config
 
 
-def pipeline():
+def pipeline():  # sourcery skip: use-itertools-product
     """Create a mini dataset based on a list of prespecified IDs"""
 
     source_folders = [
@@ -29,7 +32,7 @@ def pipeline():
         "retinal_octa/segmentation/topcon_maestro2",
         "retinal_octa/segmentation/topcon_triton",
         "retinal_octa/segmentation/zeiss_cirrus",
-        "retinal_photography/cfp/icare_eidon"
+        "retinal_photography/cfp/icare_eidon",
         "retinal_photography/cfp/optomed_aurora"
         "retinal_photography/cfp/topcon_maestro2",
         "retinal_photography/cfp/topcon_triton",
@@ -60,12 +63,12 @@ def pipeline():
     ]
 
     participant_ids = [
-        "1099",
-        "1205",
-        "4531",
-        "4303",
-        "7166",
-        "7352",
+        "1400",
+        # "1205",
+        # "4531",
+        # "4403",
+        # "7166",
+        # "7352",
     ]
 
     # Create the file system clients
@@ -83,7 +86,7 @@ def pipeline():
         config.AZURE_STORAGE_PRODUCTION_DANGEROUS_CONNECTION_STRING,
         file_system_name=new_container_name,
     )
-    # new_container_client.create_file_system()
+    new_container_client.create_file_system()
 
     file_paths = []
     errors = []
@@ -135,7 +138,43 @@ def pipeline():
                     continue
 
     print(f"Found {len(file_paths)} files")
-    print(file_paths)
+
+    with tempfile.TemporaryDirectory(prefix="mini_dataset_") as temp_folder_path:
+        for file_path in tqdm(
+            file_paths, desc="Copying files", unit="file", dynamic_ncols=True
+        ):
+            try:
+                file_client = input_file_system_client.get_file_client(file_path)
+                file_name = os.path.basename(file_path)
+
+                download_path = os.path.join(temp_folder_path, file_name)
+                with open(download_path, "wb") as data:
+                    file_client.download_file().readinto(data)
+
+                with open(download_path, "rb") as data:
+                    new_file_client = new_container_client.get_file_client(
+                        file_path=file_path
+                    )
+                    new_file_client.upload_data(data, overwrite=True)
+
+                os.remove(download_path)
+            except Exception as e:
+                print(f"Error copying file {file_path}: {e}. Skipping...")
+                errors.append(f"Error copying file {file_path}: {e}. Skipping...")
+                continue
+
+    print("\n" + "-" * 100)
+    for error in errors:
+        print(error)
+    print("\n" + "-" * 100)
+
+    print(f"Total errors: {len(errors)}")
+    print(f"Total files: {len(file_paths)}")
+    print(f"Total participants: {len(participant_ids)}")
+    print(f"Total source folders: {len(source_folders)}")
+    print(f"Total manifest files: {len(manifest_file_paths)}")
+    print(f"Total new container: {new_container_name}")
+    print(f"Total new container client: {new_container_client}")
 
 
 if __name__ == "__main__":
