@@ -596,15 +596,12 @@ class ManifestValidator:
                         print(
                             f"Missing reference: {ref_uid} for row {idx} for OCTA OCT references"
                         )
-                        print(f"OCTA OCT references: {oct_uids}")
-                        print(
-                            f"OCT references: {oct_df['sop_instance_uid'].dropna().tolist()}"
-                        )
 
                 if missing_refs:
                     self.errors.append(
                         f"retinal_octa: {len(missing_refs)} rows with invalid OCT references"
                     )
+                    print(f"Missing references: {missing_refs}")
                     valid = False
                 else:
                     logger.info("✓ retinal_octa: All OCT references valid")

@@ -1,7 +1,5 @@
 """Process Fitness tracker data files"""
 
-import zipfile
-
 import garmin.Garmin_Read_Sleep as garmin_read_sleep
 import garmin.Garmin_Read_Activity as garmin_read_activity
 import garmin.standard_heart_rate as garmin_standardize_heart_rate
@@ -13,7 +11,7 @@ import garmin.standard_sleep_stages as garmin_standardize_sleep_stages
 import garmin.standard_stress as garmin_standardize_stress
 import garmin.metadata as garmin_metadata
 from garmin.garmin_sanity import sanity_check_garmin_file
-from garmin.garmin_deduplicate import deduplicate_and_extract_garmin_zip
+from garmin.garmin_deduplicate import deduplicate_garmin_folder
 
 
 import argparse
@@ -33,7 +31,9 @@ import utils.logwatch as logging
 from utils.file_map_processor import FileMapProcessor
 from utils.time_estimator import TimeEstimator
 from functools import partial
-from multiprocessing.pool import ThreadPool
+from multiprocessing.pool import Pool
+import threading
+import json
 
 """
 # Usage Instructions:
@@ -73,32 +73,86 @@ IMPORTANT: COPY THE RAW DATA FROM THE PRODUCTION 'xx-pilot' CONTAINER TO THE POO
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
 
+def progress_monitor(progress_file, total_files, start_time, stop_event):
+    """Monitor overall progress and provide periodic updates"""
+    last_progress = 0
+    while not stop_event.is_set():
+        try:
+            # Read progress from file
+            if os.path.exists(progress_file):
+                with open(progress_file, "r") as f:
+                    progress_data = json.load(f)
+                    current_progress = progress_data.get("completed", 0)
+            else:
+                current_progress = 0
+
+            if current_progress > last_progress:
+                percentage = (current_progress / total_files) * 100
+                elapsed_time = time.time() - start_time
+
+                if current_progress > 0:
+                    avg_time_per_file = elapsed_time / current_progress
+                    remaining_files = total_files - current_progress
+                    estimated_remaining_time = remaining_files * avg_time_per_file
+
+                    print(
+                        f"\n📊 Overall Progress: {current_progress}/{total_files} ({percentage:.1f}%)"
+                    )
+                    print(
+                        f"⏱️  Elapsed: {elapsed_time / 60:.1f} min | Estimated Remaining: {estimated_remaining_time / 60:.1f} min"
+                    )
+                    print(
+                        f"📈 Rate: {current_progress / elapsed_time * 60:.1f} files/min"
+                    )
+
+                last_progress = current_progress
+        except Exception:
+            # Ignore errors reading progress file
+            pass
+
+        time.sleep(3)  # Update every 3 seconds
+
+
 def worker(
-    workflow_file_dependencies,
-    file_processor,
     processed_data_output_folder,
-    manifest,
     file_paths: list,
     worker_id: int,
+    progress_file=None,
 ):  # sourcery skip: low-code-quality
     """This function handles the work done by the worker threads,
     and contains core operations: downloading, processing, and uploading files."""
+
+    # Create a local time estimator for this worker process
+    local_time_estimator = TimeEstimator(1)
 
     logger = logging.Logwatch(
         "fitness_tracker",
         print=True,
         thread_id=worker_id,
-        overall_time_estimator=overall_time_estimator,
+        overall_time_estimator=local_time_estimator,
     )
+
+    # Create local instances of shared objects for this worker process
+    local_workflow_dependencies = deps.WorkflowFileDependencies()
+    local_manifest = garmin_metadata.GarminManifest(processed_data_output_folder)
+
+    # Results to return from this worker process
+    worker_results = {
+        "dependencies": [],
+        "manifest_data": {},
+        "file_processor_updates": [],
+        "processed_files": [],
+    }
 
     # Get the list of blobs in the input folder
-    file_system_client = azurelake.FileSystemClient.from_connection_string(
-        config.AZURE_STORAGE_CONNECTION_STRING,
-        file_system_name="stage-1-container",
-    )
+    # file_system_client = azurelake.FileSystemClient.from_connection_string(
+    #     config.AZURE_STORAGE_CONNECTION_STRING,
+    #     file_system_name="stage-1-container",
+    # )
 
     total_files = len(file_paths)
-    time_estimator = TimeEstimator(total_files)
+    local_time_estimator = TimeEstimator(total_files)
+
     for patient_folder in file_paths:
         patient_id = patient_folder["patient_id"]
 
@@ -108,24 +162,24 @@ def worker(
         if patient_id.startswith("7"):
             timezone = "cst"
 
-        patient_folder_path = patient_folder["file_path"]
+        patient_folder_path = patient_folder["folder_path"]
         patient_folder_name = patient_folder["patient_folder_name"]
 
         workflow_input_files = [patient_folder_path]
 
         # get the file name from the path
-        file_name = os.path.basename(patient_folder_path)
+        # file_name = patient_folder_name
 
         # download the file to the temp folder
-        input_file_client = file_system_client.get_file_client(
-            file_path=patient_folder_path
-        )
+        # input_file_client = file_system_client.get_file_client(
+        #     file_path=patient_folder_path
+        # )
 
-        input_last_modified = input_file_client.get_file_properties().last_modified
+        # input_last_modified = input_file_client.get_file_properties().last_modified
+        input_last_modified = time.time()
 
-        should_process = file_processor.file_should_process(
-            patient_folder_path, input_last_modified
-        )
+        # For multiprocessing, we'll process all files and let the main process handle deduplication
+        should_process = True
 
         if not should_process:
             logger.debug(
@@ -133,54 +187,48 @@ def worker(
             )
             logger.debug(f"Skipping {patient_folder_path} - File has not been modified")
 
-            logger.time(time_estimator.step())
+            logger.time(local_time_estimator.step())
             continue
 
-        file_processor.add_entry(patient_folder_path, input_last_modified)
-        file_processor.clear_errors(patient_folder_path)
+        # Track file processing for results
+        file_processing_info = {
+            "patient_folder_path": patient_folder_path,
+            "input_last_modified": input_last_modified,
+            "errors": [],
+        }
 
         # Create a temporary folder on the local machine
         with tempfile.TemporaryDirectory(prefix="garmin_pipeline_") as temp_folder_path:
             temp_input_folder = os.path.join(temp_folder_path, patient_folder_name)
-            os.makedirs(temp_input_folder, exist_ok=True)
+            # os.makedirs(temp_input_folder, exist_ok=True)
 
-            download_path = os.path.join(temp_input_folder, "raw_data.zip")
+            # download_path = os.path.join(temp_input_folder, "raw_data.zip")
 
-            logger.debug(f"Downloading {file_name} to {download_path}")
+            # copy the folder to the temp folder
+            shutil.copytree(patient_folder_path, temp_input_folder)
 
-            with open(file=download_path, mode="wb") as f:
-                f.write(input_file_client.download_file().readall())
+            # logger.debug(f"Downloading {file_name} to {download_path}")
 
-            logger.info(f"Downloaded {file_name} to {download_path}")
+            # with open(file=download_path, mode="wb") as f:
+            # f.write(input_file_client.download_file().readall())
 
-            # Extract and deduplicate the zip file directly to temp folder
-            logger.info(f"Extracting and deduplicating {download_path}")
+            # logger.info(f"Downloaded {file_name} to {download_path}")
+
+            # Deduplicate the folder
+            # logger.info(f"Extracting and deduplicating {download_path}")
             try:
-                extracted_folder = deduplicate_and_extract_garmin_zip(
-                    download_path, extract_to=temp_input_folder, logger=logger
-                )
-                logger.info(
-                    f"Successfully extracted and deduplicated to {extracted_folder}"
-                )
+                deduplicate_garmin_folder(temp_input_folder, logger=logger)
+                logger.info(f"Successfully deduplicated {temp_input_folder}")
             except Exception as e:
-                logger.error(
-                    f"Error during extraction and deduplication of {download_path}: {e}"
-                )
-                # Fallback to original extraction method
-                logger.warning("Falling back to original extraction method")
-                logger.debug(f"Unzipping {download_path} to {temp_input_folder}")
-                with zipfile.ZipFile(download_path, "r") as zip_ref:
-                    zip_ref.extractall(temp_input_folder)
-                logger.info(f"Unzipped {download_path} to {temp_input_folder}")
-
-            # Delete the downloaded file
-            os.remove(download_path)
+                logger.error(f"Error during deduplication of {temp_input_folder}: {e}")
+                # Fallback to original folder structure
+                logger.warning("Falling back to original folder structure")
 
             # Create a modality list
             patient_files = []
             total_patient_files = 0
 
-            for root, dirs, files in os.walk(temp_input_folder):
+            for root, _, files in os.walk(temp_input_folder):
                 for file in files:
                     full_file_path = os.path.join(root, file)
 
@@ -252,9 +300,7 @@ def worker(
 
                         logger.error(error_exception)
 
-                        file_processor.append_errors(
-                            error_exception, patient_folder_path
-                        )
+                        file_processing_info["errors"].append(error_exception)
                         continue
                 elif file_modality in ["Activity", "Monitor"]:
                     try:
@@ -275,9 +321,7 @@ def worker(
 
                         logger.error(error_exception)
 
-                        file_processor.append_errors(
-                            error_exception, patient_folder_path
-                        )
+                        file_processing_info["errors"].append(error_exception)
                         continue
                 else:
                     logger.info(
@@ -310,17 +354,17 @@ def worker(
                     shutil.rmtree(heart_rate_jsons_output_folder)
 
                 logger.debug(f"Generating manifest for heart rate for {patient_id}")
-                manifest.process_heart_rate(final_heart_rate_output_folder)
+                local_manifest.process_heart_rate(final_heart_rate_output_folder)
                 logger.info(f"Generated manifest for heart rate for {patient_id}")
 
                 logger.debug(f"Calculating sensor sampling duration for {patient_id}")
-                manifest.calculate_sensor_sampling_duration(
+                local_manifest.calculate_sensor_sampling_duration(
                     final_heart_rate_output_folder
                 )
                 logger.info(f"Calculated sensor sampling duration for {patient_id}")
 
                 # list the contents of the final heart rate folder
-                for root, dirs, files in os.walk(final_heart_rate_output_folder):
+                for root, _, files in os.walk(final_heart_rate_output_folder):
                     for file in files:
                         file_path = os.path.join(root, file)
 
@@ -331,7 +375,13 @@ def worker(
                         output_files.append(
                             {
                                 "file_to_upload": file_path,
-                                "uploaded_file_path": f"{processed_data_output_folder}/heart_rate/garmin_vivosmart5/{patient_id}/{file}",
+                                "uploaded_file_path": os.path.join(
+                                    processed_data_output_folder,
+                                    "heart_rate",
+                                    "garmin_vivosmart5",
+                                    patient_id,
+                                    file,
+                                ),
                             }
                         )
             except Exception:
@@ -341,7 +391,7 @@ def worker(
 
                 logger.error(error_exception)
 
-                file_processor.append_errors(error_exception, patient_folder_path)
+                file_processing_info["errors"].append(error_exception)
                 continue
 
             try:
@@ -369,7 +419,7 @@ def worker(
                 logger.debug(
                     f"Generating manifest for oxygen saturation for {patient_id}"
                 )
-                manifest.process_oxygen_saturation(
+                local_manifest.process_oxygen_saturation(
                     final_oxygen_saturation_output_folder
                 )
                 logger.info(
@@ -388,7 +438,13 @@ def worker(
                         output_files.append(
                             {
                                 "file_to_upload": file_path,
-                                "uploaded_file_path": f"{processed_data_output_folder}/oxygen_saturation/garmin_vivosmart5/{patient_id}/{file}",
+                                "uploaded_file_path": os.path.join(
+                                    processed_data_output_folder,
+                                    "oxygen_saturation",
+                                    "garmin_vivosmart5",
+                                    patient_id,
+                                    file,
+                                ),
                             }
                         )
             except Exception:
@@ -400,9 +456,9 @@ def worker(
 
                 logger.error(error_exception)
 
-                file_processor.append_errors(error_exception, patient_folder_path)
+                file_processing_info["errors"].append(error_exception)
 
-                logger.time(time_estimator.step())
+                logger.time(local_time_estimator.step())
                 continue
 
             try:
@@ -430,7 +486,7 @@ def worker(
                 logger.debug(
                     f"Generating manifest for physical activities for {patient_id}"
                 )
-                manifest.process_activity(final_physical_activities_output_folder)
+                local_manifest.process_activity(final_physical_activities_output_folder)
                 logger.info(
                     f"Generated manifest for physical activities for {patient_id}"
                 )
@@ -449,7 +505,13 @@ def worker(
                         output_files.append(
                             {
                                 "file_to_upload": file_path,
-                                "uploaded_file_path": f"{processed_data_output_folder}/physical_activity/garmin_vivosmart5/{patient_id}/{file}",
+                                "uploaded_file_path": os.path.join(
+                                    processed_data_output_folder,
+                                    "physical_activity",
+                                    "garmin_vivosmart5",
+                                    patient_id,
+                                    file,
+                                ),
                             }
                         )
             except Exception:
@@ -461,9 +523,9 @@ def worker(
 
                 logger.error(error_exception)
 
-                file_processor.append_errors(error_exception, patient_folder_path)
+                file_processing_info["errors"].append(error_exception)
 
-                logger.time(time_estimator.step())
+                logger.time(local_time_estimator.step())
                 continue
 
             try:
@@ -492,7 +554,7 @@ def worker(
                 logger.debug(
                     f"Generating manifest for physical activity calories for {patient_id}"
                 )
-                manifest.process_calories(
+                local_manifest.process_calories(
                     final_physical_activity_calories_output_folder
                 )
                 logger.info(
@@ -513,7 +575,13 @@ def worker(
                         output_files.append(
                             {
                                 "file_to_upload": file_path,
-                                "uploaded_file_path": f"{processed_data_output_folder}/physical_activity_calorie/garmin_vivosmart5/{patient_id}/{file}",
+                                "uploaded_file_path": os.path.join(
+                                    processed_data_output_folder,
+                                    "physical_activity_calorie",
+                                    "garmin_vivosmart5",
+                                    patient_id,
+                                    file,
+                                ),
                             }
                         )
             except Exception:
@@ -525,9 +593,9 @@ def worker(
 
                 logger.error(error_exception)
 
-                file_processor.append_errors(error_exception, patient_folder_path)
+                file_processing_info["errors"].append(error_exception)
 
-                logger.time(time_estimator.step())
+                logger.time(local_time_estimator.step())
                 continue
 
             try:
@@ -555,7 +623,9 @@ def worker(
                 logger.debug(
                     f"Generating manifest for respiratory rate for {patient_id}"
                 )
-                manifest.process_respiratory_rate(final_respiratory_rate_output_folder)
+                local_manifest.process_respiratory_rate(
+                    final_respiratory_rate_output_folder
+                )
                 logger.info(f"Generated manifest for respiratory rate for {patient_id}")
 
                 # list the contents of the final respiratory rate folder
@@ -570,7 +640,13 @@ def worker(
                         output_files.append(
                             {
                                 "file_to_upload": file_path,
-                                "uploaded_file_path": f"{processed_data_output_folder}/respiratory_rate/garmin_vivosmart5/{patient_id}/{file}",
+                                "uploaded_file_path": os.path.join(
+                                    processed_data_output_folder,
+                                    "respiratory_rate",
+                                    "garmin_vivosmart5",
+                                    patient_id,
+                                    file,
+                                ),
                             }
                         )
             except Exception:
@@ -580,9 +656,9 @@ def worker(
 
                 logger.error(error_exception)
 
-                file_processor.append_errors(error_exception, patient_folder_path)
+                file_processing_info["errors"].append(error_exception)
 
-                logger.time(time_estimator.step())
+                logger.time(local_time_estimator.step())
                 continue
 
             try:
@@ -608,7 +684,7 @@ def worker(
                     shutil.rmtree(sleep_stages_jsons_output_folder)
 
                 logger.debug(f"Generating manifest for sleep stages for {patient_id}")
-                manifest.process_sleep(final_sleep_stages_output_folder)
+                local_manifest.process_sleep(final_sleep_stages_output_folder)
                 logger.info(f"Generated manifest for sleep stages for {patient_id}")
 
                 for root, dirs, files in os.walk(final_sleep_stages_output_folder):
@@ -622,7 +698,13 @@ def worker(
                         output_files.append(
                             {
                                 "file_to_upload": file_path,
-                                "uploaded_file_path": f"{processed_data_output_folder}/sleep/garmin_vivosmart5/{patient_id}/{file}",
+                                "uploaded_file_path": os.path.join(
+                                    processed_data_output_folder,
+                                    "sleep",
+                                    "garmin_vivosmart5",
+                                    patient_id,
+                                    file,
+                                ),
                             }
                         )
             except Exception:
@@ -632,9 +714,9 @@ def worker(
 
                 logger.error(error_exception)
 
-                file_processor.append_errors(error_exception, patient_folder_path)
+                file_processing_info["errors"].append(error_exception)
 
-                logger.time(time_estimator.step())
+                logger.time(local_time_estimator.step())
                 continue
 
             try:
@@ -660,7 +742,7 @@ def worker(
                     shutil.rmtree(stress_jsons_output_folder)
 
                 logger.debug(f"Generating manifest for stress for {patient_id}")
-                manifest.process_stress(final_stress_output_folder)
+                local_manifest.process_stress(final_stress_output_folder)
                 logger.info(f"Generated manifest for stress for {patient_id}")
 
                 # list the contents of the final stress folder
@@ -675,7 +757,13 @@ def worker(
                         output_files.append(
                             {
                                 "file_to_upload": file_path,
-                                "uploaded_file_path": f"{processed_data_output_folder}/stress/garmin_vivosmart5/{patient_id}/{file}",
+                                "uploaded_file_path": os.path.join(
+                                    processed_data_output_folder,
+                                    "stress",
+                                    "garmin_vivosmart5",
+                                    patient_id,
+                                    file,
+                                ),
                             }
                         )
             except Exception:
@@ -685,9 +773,9 @@ def worker(
 
                 logger.error(error_exception)
 
-                file_processor.append_errors(error_exception, patient_folder_path)
+                file_processing_info["errors"].append(error_exception)
 
-                logger.time(time_estimator.step())
+                logger.time(local_time_estimator.step())
                 continue
 
             patient_folder["convert_error"] = False
@@ -697,7 +785,7 @@ def worker(
 
             outputs_uploaded = True
 
-            file_processor.delete_preexisting_output_files(patient_folder_path)
+            # Note: File deletion will be handled by the main process
 
             total_output_files = len(output_files)
 
@@ -706,7 +794,7 @@ def worker(
             summary_list = []
 
             for idx3, file in enumerate(output_files):
-                log_idx = idx3 + 1
+                _ = idx3 + 1
 
                 f_path = file["file_to_upload"]
                 f_name = os.path.basename(f_path)
@@ -715,9 +803,9 @@ def worker(
 
                 logger.debug(f"Sanity checking {f_name}")
 
-                logger.debug(
-                    f"Uploading {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
-                )
+                # logger.debug(
+                #     f"Uploading {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
+                # )
 
                 try:
                     # Check if the file exists on the file system
@@ -725,7 +813,7 @@ def worker(
                         logger.error(f"File {f_path} does not exist")
                         continue
 
-                    summary = sanity_check_garmin_file(f_path, logger)
+                    summary = sanity_check_garmin_file(f_path)
 
                     summary_list.append(
                         {
@@ -735,43 +823,41 @@ def worker(
                     )
 
                     # Check if the file already exists in the output folder
-                    output_file_client = file_system_client.get_file_client(
-                        file_path=output_file_path
-                    )
+                    # output_file_client = file_system_client.get_file_client(
+                    #    file_path=output_file_path
+                    # )
 
-                    if output_file_client.exists():
+                    if os.path.exists(output_file_path):
                         logger.error(f"File {output_file_path} already exists")
-                        throw_exception = f"File {output_file_path} already exists"
-                        raise Exception(throw_exception)
+                        raise Exception(f"File {output_file_path} already exists")
 
-                    with open(f_path, "rb") as data:
-                        output_file_client.upload_data(data, overwrite=True)
+                    # Create the output folder if it doesn't exist
+                    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
 
-                        logger.info(
-                            f"Uploaded {f_name} to {output_file_path} - ({log_idx}/{total_output_files})"
-                        )
+                    # Copy the file to the output folder
+                    shutil.copy(f_path, output_file_path)
 
                 except Exception:
                     outputs_uploaded = False
-                    logger.error(f"Failed to upload {file}")
+                    logger.error(f"Failed to copy {file} to {output_file_path}")
                     error_exception = format_exc()
                     error_exception = "".join(error_exception.splitlines())
 
                     logger.error(error_exception)
 
-                    file_processor.append_errors(error_exception, patient_folder_path)
+                    file_processing_info["errors"].append(error_exception)
                     continue
 
                 patient_folder["output_files"].append(output_file_path)
                 workflow_output_files.append(output_file_path)
 
-            file_processor.add_additional_data(patient_folder_path, summary_list)
+            # Store additional data for later processing
+            file_processing_info["additional_data"] = summary_list
 
-            file_processor.confirm_output_files(
-                patient_folder_path,
-                [file["uploaded_file_path"] for file in output_files],
-                input_last_modified,
-            )
+            # Store output files info for later processing
+            file_processing_info["output_files"] = [
+                file["uploaded_file_path"] for file in output_files
+            ]
 
             if outputs_uploaded:
                 patient_folder["output_uploaded"] = True
@@ -784,11 +870,41 @@ def worker(
                     f"Failed to upload outputs of {original_file_name} to {processed_data_output_folder}"
                 )
 
-            workflow_file_dependencies.add_dependency(
+            local_workflow_dependencies.add_dependency(
                 workflow_input_files, workflow_output_files
             )
 
-            logger.time(time_estimator.step())
+            logger.time(local_time_estimator.step())
+
+            # Add processed file info to results
+            worker_results["processed_files"].append(file_processing_info)
+
+            # Update overall progress counter
+            if progress_file is not None:
+                try:
+                    # Read current progress
+                    if os.path.exists(progress_file):
+                        with open(progress_file, "r") as f:
+                            progress_data = json.load(f)
+                    else:
+                        progress_data = {"completed": 0}
+
+                    # Update progress
+                    progress_data["completed"] = progress_data.get("completed", 0) + 1
+
+                    # Write back to file
+                    with open(progress_file, "w") as f:
+                        json.dump(progress_data, f)
+
+                    logger.info(f"Completed file - Worker {worker_id}")
+                except Exception:
+                    # Ignore errors updating progress file
+                    pass
+
+    # Return results from this worker process
+    worker_results["dependencies"] = local_workflow_dependencies.dependencies
+    worker_results["manifest_data"] = local_manifest.participants_data
+    return worker_results
 
 
 def pipeline(study_id: str, workers: int = 4, args: list = None):
@@ -804,8 +920,12 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = f"{study_id}/pooled-data/FitnessTracker"
-    processed_data_output_folder = f"{study_id}/pooled-data/FitnessTracker-processed"
+    # input_folder = f"{study_id}/pooled-data/FitnessTracker"
+    input_folder = os.path.join(os.path.expanduser("~"), "Downloads", "FitnessTracker")
+    # processed_data_output_folder = f"{study_id}/pooled-data/FitnessTracker-processed"
+    processed_data_output_folder = os.path.join(
+        os.path.expanduser("~"), "Downloads", "FitnessTracker-processed"
+    )
     manifest_folder = f"{study_id}/pooled-data/FitnessTracker-manifest"
     dependency_folder = f"{study_id}/dependency/FitnessTracker"
 
@@ -826,8 +946,11 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         file_system_name="stage-1-container",
     )
 
-    with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_data_output_folder)
+    # with contextlib.suppress(Exception):
+    #     file_system_client.delete_directory(processed_data_output_folder)
+
+    if os.path.exists(processed_data_output_folder):
+        shutil.rmtree(processed_data_output_folder)
 
     with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
@@ -859,37 +982,39 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         # remove the first row
         participant_filter_list.pop(0)
 
-    paths = file_system_client.get_paths(path=input_folder)
+    # paths = file_system_client.get_paths(path=input_folder)
+    paths = os.listdir(input_folder)
 
     logger.debug(f"Getting file paths in {input_folder}")
 
     file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
 
     for path in paths:
-        t = str(path.name)
+        t = str(path)
 
-        file_name = os.path.basename(t)
+        folder_name = t
+        folder_path = os.path.join(input_folder, folder_name)
 
-        # Check if the file name is in the format FIT-patientID.zip
-        if not file_name.endswith(".zip"):
-            logger.debug(f"Skipping {file_name} because it is not a .zip file")
-            continue
-
-        if len(file_name.split("-")) != 2:
+        # Check if the folder name is in the format FIT-patientID or FitnessTracker-patientID
+        if not folder_name.startswith("FIT-") and not folder_name.startswith(
+            "FitnessTracker-"
+        ):
             logger.debug(
-                f"Skipping {file_name} because it does not have the expected format"
+                f"Skipping {folder_name} because it is not a FIT or FitnessTracker folder"
             )
             continue
 
-        cleaned_file_name = file_name.replace(".zip", "")
-
-        if file_processor.is_file_ignored(
-            cleaned_file_name, t
-        ) or file_processor.is_file_ignored(file_name, t):
-            logger.debug(f"Skipping {file_name}")
+        if len(folder_name.split("-")) != 2:
+            logger.debug(
+                f"Skipping {folder_name} because it does not have the expected format"
+            )
             continue
 
-        patient_id = cleaned_file_name.split("-")[1]
+        if file_processor.is_file_ignored(folder_name, t):
+            logger.debug(f"Skipping {folder_name}")
+            continue
+
+        patient_id = folder_name.split("-")[1].strip()
 
         # if str(patient_id) not in dev_allowed_list:
         #     print(
@@ -899,32 +1024,37 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
         if str(patient_id) not in participant_filter_list:
             print(
-                f"Participant ID {patient_id} not in the allowed list. Skipping {file_name}"
+                f"Participant ID {patient_id} not in the allowed list. Skipping {folder_name}"
             )
             continue
 
         file_paths.append(
             {
-                "file_path": t,
+                "file_name": folder_name,
+                "folder_path": folder_path,
                 "status": "failed",
                 "processed": False,
                 "convert_error": True,
                 "output_uploaded": False,
                 "output_files": [],
-                "patient_folder_name": cleaned_file_name,
+                "patient_folder_name": folder_name,
                 "patient_id": patient_id,
             }
         )
 
-    # dev - only process a random 10 files
-    # file_paths = random.sample(file_paths, 10)
+    # dev - only process a random 8 files
+    # import random
+
+    # file_paths = random.sample(file_paths, 16)
 
     total_files = len(file_paths)
 
     logger.info(f"Found {total_files} items in {input_folder}")
 
     # Create the output folder
-    file_system_client.create_directory(processed_data_output_folder)
+    # file_system_client.create_directory(processed_data_output_folder)
+    os.makedirs(processed_data_output_folder, exist_ok=True)
+
     workflow_file_dependencies = deps.WorkflowFileDependencies()
 
     # Download the redcap export file
@@ -945,23 +1075,90 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     overall_time_estimator = TimeEstimator(total_files)
 
+    # Create progress tracking file
+    progress_file = os.path.join(meta_temp_folder_path, "progress.json")
+    with open(progress_file, "w") as f:
+        json.dump({"completed": 0}, f)
+
     # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
     # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
     chunks = [file_paths[i : i + chunk_size] for i in range(0, total_files, chunk_size)]
-    args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
+    args = [(chunk, index + 1, progress_file) for index, chunk in enumerate(chunks)]
     pipe = partial(
         worker,
-        workflow_file_dependencies,
-        file_processor,
         processed_data_output_folder,
-        manifest,
     )
 
-    # Thread pool created
-    pool = ThreadPool(workers)
-    # Distributes the pipe function across the threads in the pool
-    pool.starmap(pipe, args)
+    # Start progress monitoring
+    start_time = time.time()
+    stop_event = threading.Event()
+    progress_thread = threading.Thread(
+        target=progress_monitor,
+        args=(progress_file, total_files, start_time, stop_event),
+    )
+    progress_thread.daemon = True
+    progress_thread.start()
+
+    print(f"\n🚀 Starting processing with {workers} workers for {total_files} files...")
+    print("📊 Progress updates every 10 seconds\n")
+
+    # Process pool created
+    pool = Pool(workers)
+    try:
+        # Distributes the pipe function across the processes in the pool
+        worker_results = pool.starmap(pipe, args)
+    finally:
+        pool.close()
+        pool.join()
+        stop_event.set()  # Stop progress monitoring
+        progress_thread.join(timeout=1)
+
+    # Merge results from all worker processes
+    for result in worker_results:
+        # Merge dependencies
+        for dep in result["dependencies"]:
+            workflow_file_dependencies.add_dependency(
+                dep["input_files"], dep["output_files"]
+            )
+
+        # Merge manifest data from workers
+        for participant_id, participant_data in result["manifest_data"].items():
+            manifest.participants_data[participant_id] = participant_data
+            logger.debug(f"Merged manifest data for participant {participant_id}")
+
+        # Update file processor with results from workers
+        for file_info in result["processed_files"]:
+            file_processor.add_entry(
+                file_info["patient_folder_path"],
+                file_info["input_last_modified"],
+                file_info.get("additional_data"),
+            )
+
+            # Add any errors that occurred
+            for error in file_info.get("errors", []):
+                file_processor.append_errors(error, file_info["patient_folder_path"])
+
+            # Confirm output files
+            if "output_files" in file_info:
+                file_processor.confirm_output_files(
+                    file_info["patient_folder_path"],
+                    file_info["output_files"],
+                    file_info["input_last_modified"],
+                )
+
+    # Note: Manifest data is now merged from all worker processes
+    # and will be written by the main process after all workers complete
+    logger.info(
+        f"Total participants in merged manifest: {len(manifest.participants_data)}"
+    )
+
+    # Print final summary
+    total_elapsed_time = time.time() - start_time
+    print("\n✅ Processing completed!")
+    print(f"⏱️  Total time: {total_elapsed_time / 60:.1f} minutes")
+    print(f"📈 Average rate: {total_files / total_elapsed_time * 60:.1f} files/min")
+    print(f"👥 Used {workers} worker processes")
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
@@ -1065,7 +1262,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     with open(workflow_log_file_path, mode="w") as f:
         fieldnames = [
-            "file_path",
+            "folder_path",
             "status",
             "processed",
             "convert_error",
@@ -1073,11 +1270,13 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
             "output_files",
             "patient_folder_name",
             "patient_id",
+            "file_name",
         ]
 
         writer = csv.DictWriter(f, fieldnames=fieldnames)
 
         for file_item in file_paths:
+            file_item["output_files"] = ";".join(file_item["output_files"])
             writer.writerow(file_item)
 
         writer.writeheader()
@@ -1127,7 +1326,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 if __name__ == "__main__":
     sys_args = sys.argv
 
-    workers = 1
+    workers = 15
 
     parser = argparse.ArgumentParser(description="Process garmin data files")
     parser.add_argument(
@@ -1139,4 +1338,4 @@ if __name__ == "__main__":
 
     print(f"Using {workers} workers to process garmin data files")
 
-    pipeline("AI-READI", workers, sys_args)
+    pipeline(study_id="AI-READI", workers=workers, args=sys_args)
