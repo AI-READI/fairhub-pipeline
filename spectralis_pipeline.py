@@ -1,6 +1,4 @@
-"""Process spectralis data files"""
-
-from imaging.imaging_spectralis_root import Spectralis
+"""Updated spectralis pipeline"""
 
 import argparse
 import os
@@ -9,9 +7,10 @@ import shutil
 import contextlib
 import time
 from traceback import format_exc
-import json
+import zipfile
+import pydicom
 import sys
-import imaging.imaging_utils as imaging_utils
+import spectralis.spectralis_organize_files as spectralis_organize
 import azure.storage.filedatalake as azurelake
 import config
 import utils.dependency as deps
@@ -22,6 +21,8 @@ from utils.time_estimator import TimeEstimator
 from functools import partial
 from multiprocessing.pool import ThreadPool
 
+# from tqdm import tqdm
+
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
 
@@ -29,10 +30,9 @@ def worker(
     workflow_file_dependencies,
     file_processor,
     processed_data_output_folder,
-    processed_metadata_output_folder,
     file_paths: list,
     worker_id: int,
-):  # sourcery skip: low-code-quality
+):
     """This function handles the work done by the worker threads,
     and contains core operations: downloading, processing, and uploading files."""
 
@@ -60,6 +60,31 @@ def worker(
         # get the file name from the path
         file_name = path.split("/")[-1]
 
+        if file_processor.is_file_ignored(file_name, path):
+            logger.info(f"Ignoring {file_name}")
+            continue
+
+        input_file_client = file_system_client.get_file_client(file_path=path)
+
+        input_last_modified = input_file_client.get_file_properties().last_modified
+
+        should_process = file_processor.file_should_process(path, input_last_modified)
+
+        if not should_process:
+            logger.debug(
+                f"The file {path} has not been modified since the last time it was processed",
+            )
+            logger.debug(f"Skipping {path} - File has not been modified")
+
+            logger.time(time_estimator.step())
+            continue
+
+        file_processor.add_entry(path, input_last_modified)
+
+        file_processor.clear_errors(path)
+
+        logger.debug(f"Processing {path}")
+
         # Create a temporary folder on the local machine
         with tempfile.TemporaryDirectory(
             prefix="spectralis_pipeline_"
@@ -67,207 +92,255 @@ def worker(
             step1_folder = os.path.join(temp_folder_path, "step1")
             os.makedirs(step1_folder, exist_ok=True)
 
-            if file_processor.is_file_ignored(file_name, path):
-                logger.info(f"Ignoring {file_name}")
-
-                logger.time(time_estimator.step())
-                continue
-
-            file_client = file_system_client.get_file_client(file_path=path)
-
-            file_properties = file_client.get_file_properties().metadata
-
-            # Check if item is a directory
-            if file_properties.get("hdi_isfolder"):
-                logger.debug(f"file path `{path}` is a directory. Skipping")
-
-                logger.time(time_estimator.step())
-                continue
-
-            input_last_modified = file_client.get_file_properties().last_modified
-
-            should_process = file_processor.file_should_process(
-                path, input_last_modified
-            )
-
-            if not should_process:
-                logger.debug(
-                    f"The file {path} has not been modified since the last time it was processed",
-                )
-                logger.debug(f"Skipping {path} - File has not been modified")
-
-                logger.time(time_estimator.step())
-                continue
-
-            file_processor.add_entry(path, input_last_modified)
-
-            file_processor.clear_errors(path)
-
-            logger.debug(f"Processing {path}")
-
-            batch_folder = step1_folder
-
             download_path = os.path.join(step1_folder, file_name)
 
             logger.debug(f"Downloading {file_name} to {download_path}")
 
             with open(file=download_path, mode="wb") as f:
-                f.write(file_client.download_file().readall())
+                f.write(input_file_client.download_file().readall())
+
+            # Get file size for progress tracking
+            # file_properties = input_file_client.get_file_properties()
+            # file_size = file_properties.size
+
+            # logger.info(f"Starting download of {file_name} ({file_size:,} bytes)")
+
+            # with open(file=download_path, mode="wb") as f:
+            #     # Download with tqdm progress bar
+            #     download_stream = input_file_client.download_file()
+
+            #     # Create progress bar with file size and rate info
+            #     with tqdm(
+            #         total=file_size,
+            #         unit="B",
+            #         unit_scale=True,
+            #         unit_divisor=1024,
+            #         desc=f"Downloading {file_name}",
+            #         ncols=100,
+            #         leave=False,
+            #     ) as pbar:
+            #         for chunk in download_stream.chunks():
+            #             f.write(chunk)
+            #             pbar.update(len(chunk))
 
             logger.info(f"Downloaded {file_name} to {download_path}")
 
-            spectralis_instance = Spectralis()
-
-            # Organize spectralis files by protocol
-
             step2_folder = os.path.join(temp_folder_path, "step2")
-            os.makedirs(step2_folder, exist_ok=True)
 
-            filtered_list = imaging_utils.spectralis_get_filtered_file_names(
-                batch_folder
-            )
+            if not os.path.exists(step2_folder):
+                os.makedirs(step2_folder)
 
-            logger.debug(f"Organizing {file_name}")
+            logger.debug(f"Unzipping {download_path} to {step2_folder}")
 
-            try:
-                for file_name in filtered_list:
+            with zipfile.ZipFile(download_path, "r") as zip_ref:
+                zip_ref.extractall(step2_folder)
 
-                    organize_result = spectralis_instance.organize(
-                        file_name, step2_folder
-                    )
+            logger.info(f"Unzipped {download_path} to {step2_folder}")
 
-                    file_item["organize_result"] = json.dumps(organize_result)
-            except Exception:
-                logger.error(f"Failed to organize {file_name}")
+            # go to the /DICOM directory in the step2 folder and add the .dcm extension to all the files.
+            # currently they have no extension
+            step2_dicom_dir = os.path.join(step2_folder, "DICOM")
 
-                error_exception = "".join(format_exc().splitlines())
-
-                logger.error(error_exception)
-
-                file_processor.append_errors(error_exception, path)
-
+            # Check if the step2_dicom_dir exists
+            if not os.path.exists(step2_dicom_dir):
+                logger.error(f"Step2 DICOM directory does not exist: {step2_dicom_dir}")
+                file_processor.append_errors(
+                    f"Step2 DICOM directory does not exist: {step2_dicom_dir}", path
+                )
                 logger.time(time_estimator.step())
                 continue
 
-            logger.info(f"Organized {file_name}")
+            for file in os.listdir(step2_dicom_dir):
+                if not file.endswith(".dcm"):
+                    os.rename(
+                        os.path.join(step2_dicom_dir, file),
+                        os.path.join(step2_dicom_dir, f"{file}.dcm"),
+                    )
 
-            # convert dicom files to nema compliant dicom files
-            protocols = [
-                "spectralis_onh_rc_hr_oct",
-                "spectralis_onh_rc_hr_retinal_photography",
-                "spectralis_ppol_mac_hr_oct",
-                "spectralis_ppol_mac_hr_oct_small",
-                "spectralis_ppol_mac_hr_retinal_photography",
-                "spectralis_ppol_mac_hr_retinal_photography_small",
-            ]
-
+            # process the images
             step3_folder = os.path.join(temp_folder_path, "step3")
-            os.makedirs(step3_folder, exist_ok=True)
 
-            logger.debug("Converting to nema compliant dicom files")
+            if not os.path.exists(step3_folder):
+                os.makedirs(step3_folder)
 
+            logger.info(f"Organizing images in {step2_dicom_dir}")
             try:
-                for protocol in protocols:
-                    output = f"{step3_folder}/{protocol}"
-                    if not os.path.exists(output):
-                        os.makedirs(output)
-
-                    files = imaging_utils.get_filtered_file_names(
-                        f"{step2_folder}/{protocol}"
-                    )
-
-                    for file in files:
-                        spectralis_instance.convert(file, output)
+                # organize the step2 data into step3
+                spectralis_organize.process_octa(step2_dicom_dir, step3_folder)
             except Exception:
-                logger.error(f"Failed to convert {file_name}")
-
+                logger.error(f"Failed to organize {step2_folder}")
                 error_exception = "".join(format_exc().splitlines())
-
                 logger.error(error_exception)
                 file_processor.append_errors(error_exception, path)
-
                 logger.time(time_estimator.step())
                 continue
 
-            file_item["convert_error"] = False
-            logger.info(f"Converted {file_name}")
+            logger.info(f"Organized {step2_folder} to {step3_folder}")
 
-            step4_folder = os.path.join(temp_folder_path, "step4")
-            os.makedirs(step4_folder, exist_ok=True)
+            file_item["organize_error"] = False
+            file_item["organize_result"] = "success"
 
-            metadata_folder = os.path.join(temp_folder_path, "metadata")
-            os.makedirs(metadata_folder, exist_ok=True)
+            # convert the images to nema compliant dicom files
+            logger.info(f"Cleaning up step3 folder {step3_folder}")
 
-            logger.debug("Formatting files and generating metadata")
+            file_list = []
 
             try:
-                for folder in [step3_folder]:
-                    filelist = imaging_utils.get_filtered_file_names(folder)
+                for root, dirs, files in os.walk(step3_folder):
+                    for file in files:
+                        if file.endswith(".dcm"):
+                            file_path = os.path.join(root, file)
+                            file_name = os.path.basename(file_path)
+                            file_name = file_name.split(".")[0]
 
-                    for file in filelist:
-                        if full_file_path := imaging_utils.format_file(
-                            file, step4_folder
-                        ):
-                            spectralis_instance.metadata(
-                                full_file_path, metadata_folder
+                            image_type = file_name.split("_")[1]
+
+                            ds = pydicom.dcmread(file_path)
+
+                            full_patient_id = ds.PatientID
+                            patient_id = full_patient_id.split("-")[1]
+
+                            laterality = ds.Laterality.lower()
+                            sop_instance_uid = ds.SOPInstanceUID
+
+                            ds.PatientSex = "M"
+                            ds.PatientBirthDate = ""
+                            ds.PatientName = ""
+                            ds.PatientID = patient_id
+                            ds.ProtocolName = "spectralis mac 20x20 hs octa"
+
+                            ds.save_as(file_path)
+
+                            file_list.append(
+                                {
+                                    "file_path": file_path,
+                                    "patient_id": patient_id,
+                                    "image_type": image_type,
+                                    "laterality": laterality,
+                                    "sop_instance_uid": sop_instance_uid,
+                                }
                             )
             except Exception:
-                logger.error(f"Failed to format {file_name}")
-
+                logger.error(f"Failed to clean up files in step3 folder {step3_folder}")
                 error_exception = "".join(format_exc().splitlines())
-
                 logger.error(error_exception)
                 file_processor.append_errors(error_exception, path)
-
                 logger.time(time_estimator.step())
                 continue
 
-            file_item["format_error"] = False
+            logger.info(f"Cleaned up step3 folder {step3_folder}")
 
-            # Upload the processed files to the output folder
+            file_item["convert_error"] = False
+            file_item["convert_result"] = "success"
+
+            destination_folder = os.path.join(temp_folder_path, "step4")
+
+            if not os.path.exists(destination_folder):
+                os.makedirs(destination_folder)
+
+            image_type_mapping = {
+                "enface": {
+                    "label": "enface",
+                    "path": ["retinal_octa", "enface", "heidelberg_spectralis"],
+                },
+                "heightmap": {
+                    "label": "segmentation",
+                    "path": ["retinal_octa", "segmentation", "heidelberg_spectralis"],
+                },
+                "vol": {
+                    "label": "flow_cube",
+                    "path": ["retinal_octa", "flow_cube", "heidelberg_spectralis"],
+                },
+                "op": {
+                    "label": "ir",
+                    "path": ["retinal_photography", "ir", "heidelberg_spectralis"],
+                },
+                "opt": {
+                    "label": "oct",
+                    "path": ["retinal_oct", "structural_oct", "heidelberg_spectralis"],
+                },
+            }
+
+            # Rename and copy the files to the step4 folder
+            try:
+                for file in file_list:
+                    file_path = file["file_path"]
+                    patient_id = file["patient_id"]
+                    image_type = file["image_type"]
+                    laterality = file["laterality"]
+                    sop_instance_uid = file["sop_instance_uid"]
+
+                    mapped_image_type = image_type_mapping[image_type]
+
+                    output_dir = os.path.join(
+                        destination_folder,
+                        os.path.join(*mapped_image_type["path"]),
+                        patient_id,
+                    )
+
+                    if not os.path.exists(output_dir):
+                        os.makedirs(output_dir)
+
+                    new_file_name = f"{patient_id}_spectralis_mac_20x20_hs_octa_{mapped_image_type["label"]}_{laterality}_{sop_instance_uid}.dcm"
+
+                    new_file_path = os.path.join(output_dir, new_file_name)
+
+                    print(f"Copying {file_path} to {new_file_path}")
+
+                    shutil.copy(file_path, new_file_path)
+            except Exception:
+                logger.error(f"Failed to rename and copy files to {destination_folder}")
+                error_exception = "".join(format_exc().splitlines())
+                logger.error(error_exception)
+                file_processor.append_errors(error_exception, path)
+                logger.time(time_estimator.step())
+                continue
+
+            logger.info(
+                f"Renamed and copied {len(file_list)} files to {destination_folder}"
+            )
+
+            file_item["format_error"] = False
+            file_item["format_result"] = "success"
+
+            file_item["processed"] = True
+
+            logger.debug(
+                f"Uploading outputs for {file_name} to {processed_data_output_folder}"
+            )
 
             workflow_output_files = []
 
             outputs_uploaded = True
-            upload_exception = ""
 
             file_processor.delete_preexisting_output_files(path)
 
-            logger.debug(f"Uploading outputs for {file_name}")
-
-            for root, dirs, files in os.walk(step4_folder):
+            for root, dirs, files in os.walk(destination_folder):
                 for file in files:
                     full_file_path = os.path.join(root, file)
 
-                    logger.debug(f"Found file {full_file_path}")
-
-                    f2 = full_file_path.split("/")[-5:]
-
-                    combined_file_name = "/".join(f2)
+                    combined_file_name = full_file_path.replace(destination_folder, "")
+                    combined_file_name = combined_file_name.replace("\\", "/")
 
                     output_file_path = (
-                        f"{processed_data_output_folder}/{combined_file_name}"
+                        f"{processed_data_output_folder}{combined_file_name}"
                     )
 
-                    logger.debug(f"Uploading {full_file_path} to {output_file_path}")
+                    print(f"Uploading {full_file_path} to {output_file_path}")
 
                     try:
                         output_file_client = file_system_client.get_file_client(
-                            output_file_path
+                            file_path=output_file_path
                         )
 
-                        with open(full_file_path, "rb") as f:
-                            output_file_client.upload_data(f, overwrite=True)
+                        with open(f"{full_file_path}", "rb") as data:
+                            output_file_client.upload_data(data, overwrite=True)
                             logger.info(f"Uploaded {combined_file_name}")
                     except Exception:
                         outputs_uploaded = False
-
                         logger.error(f"Failed to upload {combined_file_name}")
-
                         error_exception = "".join(format_exc().splitlines())
-
                         logger.error(error_exception)
-
                         file_processor.append_errors(error_exception, path)
                         continue
 
@@ -275,49 +348,6 @@ def worker(
                     workflow_output_files.append(output_file_path)
 
             logger.info(f"Uploaded outputs for {file_name}")
-
-            logger.debug(f"Uploading metadata for {file_name}")
-
-            for root, dirs, files in os.walk(metadata_folder):
-                for file in files:
-                    full_file_path = os.path.join(root, file)
-
-                    f2 = full_file_path.split("/")[-2:]
-
-                    combined_file_name = "/".join(f2)
-
-                    output_file_path = (
-                        f"{processed_metadata_output_folder}/{combined_file_name}"
-                    )
-
-                    try:
-                        output_file_client = file_system_client.get_file_client(
-                            file_path=output_file_path
-                        )
-
-                        logger.debug(
-                            f"Uploading {full_file_path} to {processed_metadata_output_folder}"
-                        )
-
-                        with open(full_file_path, "rb") as f:
-                            output_file_client.upload_data(f, overwrite=True)
-
-                            logger.info(
-                                f"Uploaded {file_name} to {processed_metadata_output_folder}"
-                            )
-                    except Exception:
-                        outputs_uploaded = False
-                        logger.error(f"Failed to upload {file_name}")
-
-                        error_exception = "".join(format_exc().splitlines())
-
-                        logger.error(error_exception)
-                        file_processor.append_errors(error_exception, path)
-
-                        continue
-
-                    file_item["output_files"].append(output_file_path)
-                    workflow_output_files.append(output_file_path)
 
             # Add the new output files to the file map
             file_processor.confirm_output_files(
@@ -327,14 +357,11 @@ def worker(
             if outputs_uploaded:
                 file_item["output_uploaded"] = True
                 file_item["status"] = "success"
-                logger.info(
-                    f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
-                )
+                logger.info(f"Uploaded outputs for {file_name}")
             else:
-                file_item["output_uploaded"] = upload_exception
-                logger.error(
-                    f"Failed to upload outputs of {file_name} to {processed_data_output_folder}"
-                )
+                file_item["output_uploaded"] = False
+                file_item["status"] = "failed"
+                logger.error(f"Failed to upload outputs for {file_name}")
 
             workflow_file_dependencies.add_dependency(
                 workflow_input_files, workflow_output_files
@@ -352,13 +379,12 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     global overall_time_estimator
 
-    # Process cirrus data files for a study. Args:study_id (str): the study id
+    # Process spectralis data files for a study. Args:study_id (str): the study id
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
     input_folder = f"{study_id}/pooled-data/Spectralis"
     processed_data_output_folder = f"{study_id}/pooled-data/Spectralis-processed"
-    processed_metadata_output_folder = f"{study_id}/pooled-data/Spectralis-metadata"
     dependency_folder = f"{study_id}/dependency/Spectralis"
     pipeline_workflow_log_folder = f"{study_id}/logs/Spectralis"
     ignore_file = f"{study_id}/ignore/spectralis.ignore"
@@ -366,7 +392,6 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     logger = logging.Logwatch("spectralis", print=True)
 
-    # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
@@ -376,18 +401,14 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         file_system_client.delete_directory(processed_data_output_folder)
 
     with contextlib.suppress(Exception):
-        file_system_client.delete_directory(processed_metadata_output_folder)
-
-    with contextlib.suppress(Exception):
         file_system_client.delete_file(f"{dependency_folder}/file_map.json")
 
     file_paths = []
     participant_filter_list = []
 
     # Create a temporary folder on the local machine
-    meta_temp_folder_path = tempfile.mkdtemp(prefix="spectralis_meta_")
+    meta_temp_folder_path = tempfile.mkdtemp(prefix="spectralis_pipeline_meta_")
 
-    # Get the participant filter list file
     with contextlib.suppress(Exception):
         file_client = file_system_client.get_file_client(
             file_path=participant_filter_list_file
@@ -408,66 +429,66 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         # remove the first row
         participant_filter_list.pop(0)
 
-    batch_folder_paths = file_system_client.get_paths(
-        path=input_folder, recursive=False
-    )
+    paths = file_system_client.get_paths(path=input_folder, recursive=False)
 
-    logger.debug(f"Getting batch folder paths in {input_folder}")
+    for path in paths:
+        t = str(path.name)
+        file_name = t.split("/")[-1]
 
-    for batch_folder_path in batch_folder_paths:
-        t = str(batch_folder_path.name)
-
-        batch_folder = t.split("/")[-1]
-
-        # Check if the folder name is in the format siteName_dataType_startDate-endDate
-        if len(batch_folder.split("_")) != 3:
+        # Check if the item is a zip file
+        if not file_name.endswith(".zip"):
             continue
 
-        site_name, data_type, start_date_end_date = batch_folder.split("_")
+        # get the file size
+        file_properties = file_system_client.get_file_client(
+            file_path=t
+        ).get_file_properties()
+        file_size = file_properties.size
 
-        start_date, end_date = start_date_end_date.split("-")
+        parts = file_name.split("_")
 
-        # For each batch folder, get the list of files in the /DICOM folder
+        site_name = parts[0]
+        data_type = parts[1]
+        start_date_end_date = parts[2]
 
-        dicom_folder_path = f"{input_folder}/{batch_folder}/DICOM"
-
-        logger.debug(f"Getting dicom file paths in {dicom_folder_path}")
-
-        dicom_file_paths = file_system_client.get_paths(
-            path=dicom_folder_path, recursive=True
-        )
-
-        count = 0
-
-        for dicom_file_path in dicom_file_paths:
-            count += 1
-
-            q = str(dicom_file_path.name)
-
-            file_paths.append(
-                {
-                    "file_path": q,
-                    "status": "failed",
-                    "processed": False,
-                    "batch_folder": batch_folder,
-                    "site_name": site_name,
-                    "data_type": data_type,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "organize_result": "",
-                    "organize_error": True,
-                    "convert_error": True,
-                    "format_error": True,
-                    "output_uploaded": False,
-                    "output_files": [],
-                }
+        # one folder has a `startdate-enddate- xx` format. ignore the last part if it exists
+        if len(start_date_end_date.split("-")) > 2:
+            start_date_end_date = (
+                start_date_end_date.split("-")[0]
+                + "-"
+                + start_date_end_date.split("-")[1]
             )
 
-        logger.debug(f"Added {count} items to the file map - Total: {len(file_paths)}")
+        start_date = start_date_end_date.split("-")[0]
+        end_date = start_date_end_date.split("-")[1]
+
+        file_paths.append(
+            {
+                "file_path": t,
+                "status": "failed",
+                "processed": False,
+                "site_name": site_name,
+                "data_type": data_type,
+                "start_date": start_date,
+                "end_date": end_date,
+                "organize_error": True,
+                "organize_result": "",
+                "convert_error": True,
+                "convert_result": "",
+                "format_error": False,
+                "format_result": "",
+                "output_uploaded": False,
+                "file_size": file_size,
+                "output_files": [],
+            }
+        )
 
     total_files = len(file_paths)
 
     logger.info(f"Found {len(file_paths)} items in {input_folder}")
+
+    # Create the output folder
+    file_system_client.create_directory(processed_data_output_folder)
 
     workflow_file_dependencies = deps.WorkflowFileDependencies()
     file_processor = FileMapProcessor(dependency_folder, ignore_file, args)
@@ -480,11 +501,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     chunks = [file_paths[i : i + chunk_size] for i in range(0, total_files, chunk_size)]
     args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
     pipe = partial(
-        worker,
-        workflow_file_dependencies,
-        file_processor,
-        processed_data_output_folder,
-        processed_metadata_output_folder,
+        worker, workflow_file_dependencies, file_processor, processed_data_output_folder
     )
 
     # Thread pool created
@@ -509,52 +526,69 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
     file_name = f"status_report_{timestr}.csv"
     workflow_log_file_path = os.path.join(meta_temp_folder_path, file_name)
 
-    with open(workflow_log_file_path, "w", newline="") as csvfile:
+    with open(workflow_log_file_path, mode="w") as f:
         fieldnames = [
             "file_path",
             "status",
+            "file_size",
             "processed",
-            "batch_folder",
             "site_name",
             "data_type",
             "start_date",
             "end_date",
-            "organize_result",
             "organize_error",
+            "organize_result",
             "convert_error",
+            "convert_result",
             "format_error",
+            "format_result",
             "output_uploaded",
             "output_files",
         ]
 
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=",")
+
+        for file_item in file_paths:
+            file_item["output_files"] = ";".join(file_item["output_files"])
 
         writer.writeheader()
         writer.writerows(file_paths)
 
-    # Upload the workflow log file to the pipeline_workflow_log_folder
     with open(workflow_log_file_path, mode="rb") as data:
         logger.debug(
             f"Uploading workflow log to {pipeline_workflow_log_folder}/{file_name}"
         )
 
-        output_file_client = file_system_client.get_file_client(
+        workflow_output_file_Client = file_system_client.get_file_client(
             file_path=f"{pipeline_workflow_log_folder}/{file_name}"
         )
 
-        output_file_client.upload_data(data, overwrite=True)
+        workflow_output_file_Client.upload_data(data, overwrite=True)
 
+        logger.info(
+            f"Uploaded workflow log to {pipeline_workflow_log_folder}/{file_name}"
+        )
+
+    # Write the dependencies to a file
     deps_output = workflow_file_dependencies.write_to_file(meta_temp_folder_path)
 
     json_file_path = deps_output["file_path"]
     json_file_name = deps_output["file_name"]
 
+    logger.debug(
+        f"Uploading dependencies to {dependency_folder}/file_dependencies/{json_file_name}"
+    )
+
     with open(json_file_path, "rb") as data:
-        output_file_client = file_system_client.get_file_client(
+        dependency_output_file_client = file_system_client.get_file_client(
             file_path=f"{dependency_folder}/file_dependencies/{json_file_name}"
         )
 
-        output_file_client.upload_data(data, overwrite=True)
+        dependency_output_file_client.upload_data(data, overwrite=True)
+
+        logger.info(
+            f"Uploaded dependencies to {dependency_folder}/file_dependencies/{json_file_name}"
+        )
 
     shutil.rmtree(meta_temp_folder_path)
 
@@ -562,7 +596,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 if __name__ == "__main__":
     sys_args = sys.argv
 
-    workers = 3
+    workers = 4
 
     parser = argparse.ArgumentParser(description="Process spectralis data files")
     parser.add_argument(
