@@ -57,3 +57,4 @@ dev/new_participants.tsv
 dev/participants.tsv
 
 spec/
+mini_dataset_participants.tsv
