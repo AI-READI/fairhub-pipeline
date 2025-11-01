@@ -8,6 +8,8 @@ import pydicom
 import json
 import tempfile
 import os
+import time
+from threading import Lock
 
 
 def check_file_pixel(file_path, file_system_client):
@@ -159,10 +161,31 @@ def main(thread_count=4):
         for i in range(0, len(lst), chunk_size):
             yield lst[i : i + chunk_size]
 
-    def process_file_batch(file_batch):
+    # Progress tracking for overall file processing
+    progress_lock = Lock()
+    total_files_processed = 0
+    start_time = time.time()
+
+    def format_time(seconds):
+        """Format seconds into human-readable time string."""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        if hours > 0:
+            return f"{hours}h {minutes}m {secs}s"
+        elif minutes > 0:
+            return f"{minutes}m {secs}s"
+        else:
+            return f"{secs}s"
+
+    def process_file_batch(file_batch, batch_id):
         """
         Process a batch of files and return results.
         Downloads each file, checks pixel data, and categorizes results.
+
+        Args:
+            file_batch: List of file paths to process
+            batch_id: Identifier for this batch/thread
         """
         batch_results = []
         batch_errors = []
@@ -177,10 +200,38 @@ def main(thread_count=4):
             else:
                 batch_errors.append({"file_path": file_path, "status": error_msg})
 
+            # Update overall progress (thread-safe)
+            with progress_lock:
+                nonlocal total_files_processed
+                total_files_processed += 1
+                current_total = total_files_processed
+
             # Print progress within batch every 10 files
             if (idx + 1) % 10 == 0 or (idx + 1) == batch_size:
+                # Calculate overall progress metrics
+                elapsed_time = time.time() - start_time
+                progress_pct = (current_total / len(file_paths)) * 100
+
+                # Calculate ETA
+                if current_total > 0:
+                    files_per_second = current_total / elapsed_time
+                    remaining_files = len(file_paths) - current_total
+                    eta_seconds = (
+                        remaining_files / files_per_second
+                        if files_per_second > 0
+                        else 0
+                    )
+                    eta_str = format_time(eta_seconds)
+                else:
+                    eta_str = "calculating..."
+
+                elapsed_str = format_time(elapsed_time)
+
                 print(
-                    f"  → Processed {idx + 1}/{batch_size} files in batch (valid: {len(batch_results)}, errors: {len(batch_errors)})"
+                    f"[Thread {batch_id + 1}] Processed {idx + 1}/{batch_size} files in batch "
+                    f"(valid: {len(batch_results)}, errors: {len(batch_errors)}) | "
+                    f"Overall: {current_total}/{len(file_paths)} ({progress_pct:.1f}%) | "
+                    f"Time: {elapsed_str} | ETA: {eta_str}"
                 )
 
         return batch_results, batch_errors
@@ -196,7 +247,7 @@ def main(thread_count=4):
     with ThreadPoolExecutor(max_workers=thread_count) as executor:
         # Submit all batches for processing
         future_to_batch = {
-            executor.submit(process_file_batch, batch): i
+            executor.submit(process_file_batch, batch, i): i
             for i, batch in enumerate(file_batches)
         }
 
@@ -212,13 +263,20 @@ def main(thread_count=4):
                 completed += 1
                 total_processed += len(batch_results) + len(batch_errors)
 
+                elapsed_time = time.time() - start_time
+                elapsed_str = format_time(elapsed_time)
+                progress_pct = (total_processed / len(file_paths)) * 100
+
                 print(
-                    f"✓ Completed batch {batch_idx + 1}/{len(file_batches)} "
+                    f"✓ [Thread {batch_idx + 1}] Completed batch {batch_idx + 1}/{len(file_batches)} "
                     f"({len(batch_results)} valid, {len(batch_errors)} errors) - "
-                    f"Total processed: {total_processed}/{len(file_paths)} files"
+                    f"Total processed: {total_processed}/{len(file_paths)} files ({progress_pct:.1f}%) | "
+                    f"Elapsed time: {elapsed_str}"
                 )
             except Exception as exc:
-                print(f"✗ ERROR: Batch {batch_idx} generated an exception: {exc}")
+                print(
+                    f"✗ ERROR: [Thread {batch_idx + 1}] Batch {batch_idx} generated an exception: {exc}"
+                )
 
     # Phase 3: Write results to files
     print("\n" + "=" * 80)
@@ -238,6 +296,9 @@ def main(thread_count=4):
     print("✓ errors.json written successfully")
 
     # Final summary
+    total_elapsed_time = time.time() - start_time
+    total_elapsed_str = format_time(total_elapsed_time)
+
     print("\n" + "=" * 80)
     print("PIPELINE COMPLETE")
     print("=" * 80)
@@ -247,6 +308,11 @@ def main(thread_count=4):
     if file_paths:
         success_rate = (len(qc_results) / len(file_paths)) * 100
         print(f"Success rate: {success_rate:.2f}%")
+        files_per_second = (
+            len(file_paths) / total_elapsed_time if total_elapsed_time > 0 else 0
+        )
+        print(f"Processing rate: {files_per_second:.2f} files/second")
+    print(f"Total time taken: {total_elapsed_str}")
     print("=" * 80)
 
 
