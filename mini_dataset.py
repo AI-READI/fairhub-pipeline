@@ -80,7 +80,7 @@ def pipeline():  # sourcery skip: use-itertools-product
         person_ids = list(set(person_ids))
 
         print(
-            f"Configured {len(person_ids)} participant    IDs to include in mini dataset"
+            f"Configured {len(person_ids)} participant IDs to include in mini dataset"
         )
 
     # Create the file system clients for Azure Data Lake Storage

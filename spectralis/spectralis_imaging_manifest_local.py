@@ -35,7 +35,7 @@ def get_retinal_photography_path(file):
             new_path = "/".join(parts[i:])
             break
 
-    return new_path
+    return f"/{new_path}"
 
 
 def get_retinal_oct_path(file):
@@ -47,7 +47,7 @@ def get_retinal_oct_path(file):
             new_path = "/".join(parts[i:])
             break
 
-    return new_path
+    return f"/{new_path}"
 
 
 def get_retinal_octa_path(file):
@@ -59,7 +59,7 @@ def get_retinal_octa_path(file):
             new_path = "/".join(parts[i:])
             break
 
-    return new_path
+    return f"/{new_path}"
 
 
 def get_dcm_files(folder_path):
@@ -717,10 +717,10 @@ def make_octa_manifest(
                         ]
                         associated_enface_1_segmentation_surface_1 = enface_metadata[
                             "En Face Retinal Segmentation Surface 1"
-                        ]
+                        ].capitalize()
                         associated_enface_1_segmentation_surface_2 = enface_metadata[
                             "En Face Retinal Segmentation Surface 2"
-                        ]
+                        ].capitalize()
                         associated_enface_1_sop_instance_uid = enface_metadata[
                             "sop_instance_uid"
                         ]
@@ -744,10 +744,10 @@ def make_octa_manifest(
                         ]
                         associated_enface_2_segmentation_surface_1 = enface_metadata[
                             "En Face Retinal Segmentation Surface 1"
-                        ]
+                        ].capitalize()
                         associated_enface_2_segmentation_surface_2 = enface_metadata[
                             "En Face Retinal Segmentation Surface 2"
-                        ]
+                        ].capitalize()
                         associated_enface_2_sop_instance_uid = enface_metadata[
                             "sop_instance_uid"
                         ]
@@ -784,10 +784,10 @@ def make_octa_manifest(
                         ]
                         associated_enface_4_segmentation_surface_1 = enface_metadata[
                             "En Face Retinal Segmentation Surface 1"
-                        ]
+                        ].capitalize()
                         associated_enface_4_segmentation_surface_2 = enface_metadata[
                             "En Face Retinal Segmentation Surface 2"
-                        ]
+                        ].capitalize()
                         associated_enface_4_sop_instance_uid = enface_metadata[
                             "sop_instance_uid"
                         ]

@@ -58,3 +58,4 @@ dev/participants.tsv
 
 spec/
 mini_dataset_participants.tsv
+file-manifest.tsv
