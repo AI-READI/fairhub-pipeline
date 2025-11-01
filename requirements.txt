@@ -9,7 +9,7 @@ pandas
 xmltodict
 colorama
 termcolor
-pydicom==2.4.4
+pydicom==3.0.1
 tqdm
 
 # ecg

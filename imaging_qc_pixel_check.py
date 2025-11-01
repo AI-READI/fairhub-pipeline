@@ -153,6 +153,8 @@ def main(thread_count=4):
     # Progress tracking for overall file processing
     progress_lock = Lock()
     total_files_processed = 0
+    valid_count = 0
+    error_count = 0
     start_time = time.time()
 
     def format_time(seconds):
@@ -186,8 +188,12 @@ def main(thread_count=4):
 
             # Update overall progress (thread-safe)
             with progress_lock:
-                nonlocal total_files_processed
+                nonlocal total_files_processed, valid_count, error_count
                 total_files_processed += 1
+                if status == "valid":
+                    valid_count += 1
+                else:
+                    error_count += 1
                 current_total = total_files_processed
 
                 # Print progress every 10 files
@@ -212,6 +218,7 @@ def main(thread_count=4):
 
                     print(
                         f"Progress: {current_total}/{len(file_paths)} ({progress_pct:.1f}%) | "
+                        f"Valid: {valid_count} | Errors: {error_count} | "
                         f"Time: {elapsed_str} | ETA: {eta_str}"
                     )
 
