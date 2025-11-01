@@ -150,17 +150,6 @@ def main(thread_count=4):
     qc_results = []
     errors = []
 
-    def chunk_list(lst, n):
-        """
-        Split list into n approximately equal chunks.
-        Used to distribute files across worker threads.
-        """
-        chunk_size = len(lst) // n
-        if chunk_size == 0:
-            chunk_size = 1
-        for i in range(0, len(lst), chunk_size):
-            yield lst[i : i + chunk_size]
-
     # Progress tracking for overall file processing
     progress_lock = Lock()
     total_files_processed = 0
@@ -178,20 +167,15 @@ def main(thread_count=4):
         else:
             return f"{secs}s"
 
-    def process_file_batch(file_batch, batch_id):
+    def process_file_batch(file_batch, thread_id):
         """
-        Process a batch of files and return results.
-        Downloads each file, checks pixel data, and categorizes results.
-
-        Args:
-            file_batch: List of file paths to process
-            batch_id: Identifier for this batch/thread
+        Process a batch of files assigned to this thread.
+        Files are distributed in round-robin fashion for better load balancing.
         """
         batch_results = []
         batch_errors = []
-        batch_size = len(file_batch)
 
-        for idx, file_path in enumerate(file_batch):
+        for file_path in file_batch:
             # Process each file in the batch
             _, status, error_msg = check_file_pixel(file_path, file_system_client)
 
@@ -206,40 +190,43 @@ def main(thread_count=4):
                 total_files_processed += 1
                 current_total = total_files_processed
 
-            # Print progress within batch every 10 files
-            if (idx + 1) % 10 == 0 or (idx + 1) == batch_size:
-                # Calculate overall progress metrics
-                elapsed_time = time.time() - start_time
-                progress_pct = (current_total / len(file_paths)) * 100
+                # Print progress every 10 files
+                if current_total % 10 == 0 or current_total == len(file_paths):
+                    elapsed_time = time.time() - start_time
+                    progress_pct = (current_total / len(file_paths)) * 100
 
-                # Calculate ETA
-                if current_total > 0:
-                    files_per_second = current_total / elapsed_time
-                    remaining_files = len(file_paths) - current_total
-                    eta_seconds = (
-                        remaining_files / files_per_second
-                        if files_per_second > 0
-                        else 0
+                    # Calculate ETA
+                    if current_total > 0:
+                        files_per_second = current_total / elapsed_time
+                        remaining_files = len(file_paths) - current_total
+                        eta_seconds = (
+                            remaining_files / files_per_second
+                            if files_per_second > 0
+                            else 0
+                        )
+                        eta_str = format_time(eta_seconds)
+                    else:
+                        eta_str = "calculating..."
+
+                    elapsed_str = format_time(elapsed_time)
+
+                    print(
+                        f"Progress: {current_total}/{len(file_paths)} ({progress_pct:.1f}%) | "
+                        f"Time: {elapsed_str} | ETA: {eta_str}"
                     )
-                    eta_str = format_time(eta_seconds)
-                else:
-                    eta_str = "calculating..."
-
-                elapsed_str = format_time(elapsed_time)
-
-                print(
-                    f"[Thread {batch_id + 1}] Processed {idx + 1}/{batch_size} files in batch "
-                    f"(valid: {len(batch_results)}, errors: {len(batch_errors)}) | "
-                    f"Overall: {current_total}/{len(file_paths)} ({progress_pct:.1f}%) | "
-                    f"Time: {elapsed_str} | ETA: {eta_str}"
-                )
 
         return batch_results, batch_errors
 
-    # Split files into batches for parallel processing
-    file_batches = list(chunk_list(file_paths, thread_count))
+    # Distribute files across threads in round-robin fashion
+    # Thread 0 gets files 0, thread_count, 2*thread_count, ...
+    # Thread 1 gets files 1, thread_count+1, 2*thread_count+1, ...
+    # This ensures better load balancing than sequential chunks
+    file_batches = [[] for _ in range(thread_count)]
+    for i, file_path in enumerate(file_paths):
+        file_batches[i % thread_count].append(file_path)
+
     print(
-        f"Split {len(file_paths)} files into {len(file_batches)} batches for parallel processing"
+        f"Distributed {len(file_paths)} files across {thread_count} threads (round-robin)"
     )
     print(f"Batch sizes: {[len(batch) for batch in file_batches]}")
 
@@ -252,30 +239,20 @@ def main(thread_count=4):
         }
 
         # Collect results as batches complete
-        completed = 0
-        total_processed = 0
         for future in as_completed(future_to_batch):
             batch_idx = future_to_batch[future]
             try:
                 batch_results, batch_errors = future.result()
                 qc_results.extend(batch_results)
                 errors.extend(batch_errors)
-                completed += 1
-                total_processed += len(batch_results) + len(batch_errors)
-
-                elapsed_time = time.time() - start_time
-                elapsed_str = format_time(elapsed_time)
-                progress_pct = (total_processed / len(file_paths)) * 100
 
                 print(
-                    f"✓ [Thread {batch_idx + 1}] Completed batch {batch_idx + 1}/{len(file_batches)} "
-                    f"({len(batch_results)} valid, {len(batch_errors)} errors) - "
-                    f"Total processed: {total_processed}/{len(file_paths)} files ({progress_pct:.1f}%) | "
-                    f"Elapsed time: {elapsed_str}"
+                    f"✓ [Thread {batch_idx + 1}] Completed "
+                    f"({len(batch_results)} valid, {len(batch_errors)} errors)"
                 )
             except Exception as exc:
                 print(
-                    f"✗ ERROR: [Thread {batch_idx + 1}] Batch {batch_idx} generated an exception: {exc}"
+                    f"✗ ERROR: [Thread {batch_idx + 1}] generated an exception: {exc}"
                 )
 
     # Phase 3: Write results to files
