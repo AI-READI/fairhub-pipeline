@@ -9,7 +9,11 @@ pandas
 xmltodict
 colorama
 termcolor
+pillow
 pydicom==3.0.1
+pylibjpeg
+pylibjpeg-libjpeg
+pylibjpeg-openjpeg
 tqdm
 
 # ecg

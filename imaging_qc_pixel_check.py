@@ -202,6 +202,7 @@ def main(thread_count=4):
                     progress_pct = (current_total / len(file_paths)) * 100
 
                     # Calculate ETA
+                    files_per_second = 0
                     if current_total > 0:
                         files_per_second = current_total / elapsed_time
                         remaining_files = len(file_paths) - current_total
@@ -219,6 +220,7 @@ def main(thread_count=4):
                     print(
                         f"Progress: {current_total}/{len(file_paths)} ({progress_pct:.1f}%) | "
                         f"Valid: {valid_count} | Errors: {error_count} | "
+                        f"Files per second: {files_per_second:.2f} | "
                         f"Time: {elapsed_str} | ETA: {eta_str}"
                     )
 
