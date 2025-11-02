@@ -18,7 +18,6 @@ def check_file_pixel(file_path):
     try:
         # Read DICOM file and verify pixel data can be loaded
         # Accessing pixel_array forces the pixel data to be decoded and loaded
-        # print(f"Checking file: {file_path}")
         dataset = pydicom.dcmread(file_path)
         _ = dataset.pixel_array  # force pixel data load
         return (file_path, "valid", None)
@@ -142,6 +141,7 @@ def main(thread_count=4):
 
         for file_path in file_batch:
             # Process each file in the batch
+            # print(f"Checking file: {file_path} in thread {thread_id}")
             _, status, error_msg = check_file_pixel(file_path)
 
             if status == "valid":
@@ -160,7 +160,7 @@ def main(thread_count=4):
                 current_total = total_files_processed
 
                 # Print progress every 10 files
-                if current_total % 10 == 0 or current_total == len(file_paths):
+                if current_total % 1 == 0 or current_total == len(file_paths):
                     elapsed_time = time.time() - start_time
                     progress_pct = (current_total / len(file_paths)) * 100
 
@@ -181,7 +181,7 @@ def main(thread_count=4):
                     elapsed_str = format_time(elapsed_time)
 
                     print(
-                        f"Progress: {current_total}/{len(file_paths)} ({progress_pct:.1f}%) | "
+                        f"Progress: {current_total}/{len(file_paths)} ({progress_pct:.3f}%) | "
                         f"Valid: {valid_count} | Errors: {error_count} | "
                         f"Files per second: {files_per_second:.2f} | "
                         f"Time: {elapsed_str} | ETA: {eta_str}"
