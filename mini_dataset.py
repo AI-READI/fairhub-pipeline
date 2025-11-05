@@ -86,8 +86,6 @@ def pipeline():  # sourcery skip: use-itertools-product
             f"Configured {len(person_ids)} participant IDs to include in mini dataset"
         )
 
-    person_ids = person_ids[:2]
-
     # Create the file system clients for Azure Data Lake Storage
     # Connect to the production container that contains the source data
     logger.info("Connecting to source Azure Data Lake Storage container...")
