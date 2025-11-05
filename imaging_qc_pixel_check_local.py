@@ -73,7 +73,7 @@ def main(thread_count=4):
     # Define source folders to search for DICOM files
     # Update these paths to match your local folder structure
     source_folders = [
-        r"D:\retinal_oct",
+        # r"D:\retinal_oct",
         # r"D:\retinal_octa",
         # r"D:\retinal_flio",
         # r"D:\retinal_photography",
@@ -100,6 +100,18 @@ def main(thread_count=4):
         f"\n[Step 1/3 Complete] Total files found across all folders: {len(file_paths)}"
     )
     print("=" * 80)
+
+    file_paths = []
+
+    # only process roct errors
+    with open("roct_errors_clean.json", "r") as f:
+        rocta_errors = json.load(f)
+        for error in rocta_errors:
+            file_path = error["file_path"]
+            # replace the linux path with windows path
+            file_path = file_path.replace("/", "\\")
+            new_file_path = rf"D:{file_path}"
+            file_paths.append(new_file_path)
 
     if not file_paths:
         print("WARNING: No files found! Exiting.")
