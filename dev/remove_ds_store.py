@@ -135,9 +135,9 @@ def main():
 
     scan_start = time.time()
 
-    # Get all file paths recursively from the root directory
+    # Get all file paths recursively from the YR3 directory
     file_paths = datalake_service_client.get_paths(
-        path="/",  # Start from root directory
+        path="YR3/",  # Start from YR3 directory
         recursive=True,  # Include all subdirectories
     )
 
