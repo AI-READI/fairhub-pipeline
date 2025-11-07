@@ -54,7 +54,7 @@ with open(file_manifest_tsv, "r") as file:
     reader = csv.reader(file, delimiter="\t")
     file_paths.extend(
         {
-            "path": row[2],
+            "path": row[1],
             "id_in_participants_list": None,
         }
         for row in reader
@@ -69,7 +69,14 @@ for participant_id in tqdm(participants, desc="Participants"):
         ):
             file_path = file["path"]
 
-            if f"/{participant_id}/" in file_path and f"/{header}/" in file_path:
+            # it is valid when folder paths start with /dataset/
+            # if f"/{participant_id}/" in file_path and f"/{header}/" in file_path:
+
+            # it works with the current paths
+            if (
+                file_path.startswith(f"{header}/")
+                and f"/{participant_id}/" in file_path
+            ):
                 exists[participant_id][header] = True
                 file_paths[i]["id_in_participants_list"] = True
 
@@ -80,7 +87,7 @@ with open(new_participants_tsv, "w") as file:
     writer = csv.writer(file, delimiter="\t")
 
     h = [
-        "participant_id",
+        "person_id",
         "clinical_site",
         "study_group",
         "age",

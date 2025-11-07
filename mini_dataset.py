@@ -20,56 +20,56 @@ def pipeline():  # sourcery skip: use-itertools-product
 
     # Define source folders to search for participant data
     source_folders = [
-        "cardiac_ecg/ecg_12lead/philips_tc30",
-        "environment/environmental_sensor/leelab_anura",
-        "retinal_flio/flio/heidelberg_flio",
-        "retinal_oct/structural_oct/heidelberg_spectralis",
-        "retinal_oct/structural_oct/topcon_maestro2",
-        "retinal_oct/structural_oct/topcon_triton",
-        "retinal_oct/structural_oct/zeiss_cirrus",
-        "retinal_octa/enface/heidelberg_spectralis",
-        "retinal_octa/enface/topcon_maestro2",
-        "retinal_octa/enface/topcon_triton",
-        "retinal_octa/enface/zeiss_cirrus",
-        "retinal_octa/flow_cube/heidelberg_spectralis",
-        "retinal_octa/flow_cube/topcon_maestro2",
-        "retinal_octa/flow_cube/topcon_triton",
-        "retinal_octa/flow_cube/zeiss_cirrus",
-        "retinal_octa/segmentation/heidelberg_spectralis",
-        "retinal_octa/segmentation/topcon_maestro2",
-        "retinal_octa/segmentation/topcon_triton",
-        "retinal_octa/segmentation/zeiss_cirrus",
-        "retinal_photography/cfp/icare_eidon",
-        "retinal_photography/cfp/optomed_aurora",
-        "retinal_photography/cfp/topcon_maestro2",
-        "retinal_photography/cfp/topcon_triton",
-        "retinal_photography/faf/icare_eidon",
-        "retinal_photography/ir/heidelberg_spectralis",
-        "retinal_photography/ir/icare_eidon",
-        "retinal_photography/ir/topcon_maestro2",
-        "retinal_photography/ir/zeiss_cirrus",
+        "YR3/cardiac_ecg/ecg_12lead/philips_tc30",
+        "YR3/environment/environmental_sensor/leelab_anura",
+        "YR3/retinal_flio/flio/heidelberg_flio",
+        "YR3/retinal_oct/structural_oct/heidelberg_spectralis",
+        "YR3/retinal_oct/structural_oct/topcon_maestro2",
+        "YR3/retinal_oct/structural_oct/topcon_triton",
+        "YR3/retinal_oct/structural_oct/zeiss_cirrus",
+        "YR3/retinal_octa/enface/heidelberg_spectralis",
+        "YR3/retinal_octa/enface/topcon_maestro2",
+        "YR3/retinal_octa/enface/topcon_triton",
+        "YR3/retinal_octa/enface/zeiss_cirrus",
+        "YR3/retinal_octa/flow_cube/heidelberg_spectralis",
+        "YR3/retinal_octa/flow_cube/topcon_maestro2",
+        "YR3/retinal_octa/flow_cube/topcon_triton",
+        "YR3/retinal_octa/flow_cube/zeiss_cirrus",
+        "YR3/retinal_octa/segmentation/heidelberg_spectralis",
+        "YR3/retinal_octa/segmentation/topcon_maestro2",
+        "YR3/retinal_octa/segmentation/topcon_triton",
+        "YR3/retinal_octa/segmentation/zeiss_cirrus",
+        "YR3/retinal_photography/cfp/icare_eidon",
+        "YR3/retinal_photography/cfp/optomed_aurora",
+        "YR3/retinal_photography/cfp/topcon_maestro2",
+        "YR3/retinal_photography/cfp/topcon_triton",
+        "YR3/retinal_photography/faf/icare_eidon",
+        "YR3/retinal_photography/ir/heidelberg_spectralis",
+        "YR3/retinal_photography/ir/icare_eidon",
+        "YR3/retinal_photography/ir/topcon_maestro2",
+        "YR3/retinal_photography/ir/zeiss_cirrus",
         "wearable_activity_monitor/heart_rate/garmin_vivosmart5",
-        "wearable_activity_monitor/oxygen_saturation/garmin_vivosmart5",
-        "wearable_activity_monitor/physical_activity/garmin_vivosmart5",
-        "wearable_activity_monitor/physical_activity_calorie/garmin_vivosmart5",
-        "wearable_activity_monitor/respiratory_rate/garmin_vivosmart5",
-        "wearable_activity_monitor/sleep/garmin_vivosmart5",
-        "wearable_activity_monitor/stress/garmin_vivosmart5",
-        "wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6",
+        "YR3/wearable_activity_monitor/oxygen_saturation/garmin_vivosmart5",
+        "YR3/wearable_activity_monitor/physical_activity/garmin_vivosmart5",
+        "YR3/wearable_activity_monitor/physical_activity_calorie/garmin_vivosmart5",
+        "YR3/wearable_activity_monitor/respiratory_rate/garmin_vivosmart5",
+        "YR3/wearable_activity_monitor/sleep/garmin_vivosmart5",
+        "YR3/wearable_activity_monitor/stress/garmin_vivosmart5",
+        "YR3/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6",
     ]
 
     logger.info(f"Configured {len(source_folders)} source folders to search")
 
     # Define manifest file paths for each data category
     manifest_file_paths = [
-        "cardiac_ecg/manifest.tsv",
+        "YR3/cardiac_ecg/manifest.tsv",
         "environment/manifest.tsv",
-        "retinal_flio/manifest.tsv",
-        "retinal_oct/manifest.tsv",
-        "retinal_octa/manifest.tsv",
-        "retinal_photography/manifest.tsv",
-        "wearable_activity_monitor/manifest.tsv",
-        "wearable_blood_glucose/manifest.tsv",
+        "YR3/retinal_flio/manifest.tsv",
+        "YR3/retinal_oct/manifest.tsv",
+        "YR3/retinal_octa/manifest.tsv",
+        "YR3/retinal_photography/manifest.tsv",
+        "YR3/wearable_activity_monitor/manifest.tsv",
+        "YR3/wearable_blood_glucose/manifest.tsv",
     ]
 
     logger.info(f"Configured {len(manifest_file_paths)} manifest files to process")
@@ -85,6 +85,8 @@ def pipeline():  # sourcery skip: use-itertools-product
         logger.info(
             f"Configured {len(person_ids)} participant IDs to include in mini dataset"
         )
+
+    person_ids = person_ids[:2]
 
     # Create the file system clients for Azure Data Lake Storage
     # Connect to the production container that contains the source data
