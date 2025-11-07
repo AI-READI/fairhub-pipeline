@@ -48,7 +48,7 @@ def pipeline():  # sourcery skip: use-itertools-product
         "YR3/retinal_photography/ir/icare_eidon",
         "YR3/retinal_photography/ir/topcon_maestro2",
         "YR3/retinal_photography/ir/zeiss_cirrus",
-        "wearable_activity_monitor/heart_rate/garmin_vivosmart5",
+        "YR3/wearable_activity_monitor/heart_rate/garmin_vivosmart5",
         "YR3/wearable_activity_monitor/oxygen_saturation/garmin_vivosmart5",
         "YR3/wearable_activity_monitor/physical_activity/garmin_vivosmart5",
         "YR3/wearable_activity_monitor/physical_activity_calorie/garmin_vivosmart5",
@@ -63,7 +63,7 @@ def pipeline():  # sourcery skip: use-itertools-product
     # Define manifest file paths for each data category
     manifest_file_paths = [
         "YR3/cardiac_ecg/manifest.tsv",
-        "environment/manifest.tsv",
+        "YR3/environment/manifest.tsv",
         "YR3/retinal_flio/manifest.tsv",
         "YR3/retinal_oct/manifest.tsv",
         "YR3/retinal_octa/manifest.tsv",
@@ -85,8 +85,6 @@ def pipeline():  # sourcery skip: use-itertools-product
         logger.info(
             f"Configured {len(person_ids)} participant IDs to include in mini dataset"
         )
-
-    person_ids = person_ids[:2]
 
     # Create the file system clients for Azure Data Lake Storage
     # Connect to the production container that contains the source data
