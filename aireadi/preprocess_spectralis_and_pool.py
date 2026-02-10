@@ -1,182 +1,79 @@
-"""Process spectralis data files and zip data preserving folder structure"""
+"""Process spectralis data files locally and zip output preserving folder structure."""
 
-import subprocess
 import os
-import json
-import zipfile
-import tempfile
-import azure.storage.filedatalake as azurelake  # type: ignore
 import shutil
+import subprocess
+import zipfile
 from traceback import format_exc
-import config
 
 # Spectralis DICOM converter executable path
 dicom_executable_location = os.path.abspath(
     "C:\\Users\\b2aiUsr\\Downloads\\spx-dicom-converter\\SP-X_DICOM_Converter.exe"
 )
 
-completed_folders_file = "completed_folders_spectralis.json"
+# Input folder: subfolders to process (one per subject/session)
+# Output folder: where converted zip files are written
+input_folder = os.path.abspath(r"C:\path\to\spectralis_input")
+output_folder = os.path.abspath(r"C:\path\to\spectralis_output")
 
 
-def main():  # sourcery skip: low-code-quality
-    """script downloads spectralis files to local, runs executable, then bundles output and uploads to data lake stage-1 container"""
-    project_name = "AI-READI"
-    site_names = ["UW", "UAB", "UCSD"]
-    # site_names = ["site-test"]
-    device = "Spectralis"
+def main():
+    """Process all subfolders in input_dir with the DICOM converter and write zips to output_dir."""
 
-    # create datalake clients
-    source_service_client = azurelake.FileSystemClient.from_connection_string(
-        config.AZURE_STORAGE_CONNECTION_STRING, file_system_name="raw-storage"
-    )
-    destination_service_client = azurelake.FileSystemClient.from_connection_string(
-        config.AZURE_STORAGE_CONNECTION_STRING, file_system_name="stage-1-container"
-    )
+    if not os.path.isdir(input_folder):
+        raise SystemExit(f"Input folder does not exist: {input_folder}")
 
-    completed_folders = []
+    os.makedirs(output_folder, exist_ok=True)
 
-    if os.path.exists(completed_folders_file):
-        with open(completed_folders_file, "r") as f:
-            completed_folders = json.load(f)
+    subfolders = [
+        name
+        for name in os.listdir(input_folder)
+        if os.path.isdir(os.path.join(input_folder, name))
+    ]
 
-    destination_directory = f"{project_name}/pooled-data/{device}"
+    if not subfolders:
+        print(f"No subfolders found in {input_folder}")
+        return
 
-    for site_name in site_names:
-        print(f"Processing spectralis data for {site_name}")
+    for folder_name in subfolders:
+        print(f"Processing folder {folder_name}")
 
-        source_directory = f"{project_name}/{site_name}/{site_name}_{device}"
+        source_dir = os.path.join(input_folder, folder_name)
+        temp_output_dir = None
 
-        source_folder_paths = source_service_client.get_paths(
-            path=source_directory, recursive=False
-        )
+        try:
+            temp_output_dir = os.path.join(output_folder, ".temp", folder_name)
+            os.makedirs(temp_output_dir, exist_ok=True)
+            output_dir = os.path.join(temp_output_dir, "converted")
 
-        for folder in source_folder_paths:
-            # Batch folder level here
-            full_folder_path = folder.name
-
-            # Check if folder has already been processed
-            if any(
-                folder["folder"] == full_folder_path for folder in completed_folders
-            ):
-                print(f"Folder {full_folder_path} has already been processed. Skipping")
-                continue
-
-            folder_name = os.path.basename(full_folder_path)
-
-            print(f"Processing folder {folder_name}")
-
-            source_folder_file_paths = source_service_client.get_paths(
-                path=full_folder_path, recursive=True
-            )
-
-            # Create a temporary folder on the local machine
-            temp_source_folder_path = tempfile.mkdtemp(prefix="spectralis_source_")
-
-            # Download all files in the folder
-            for file in source_folder_file_paths:
-                full_file_path = file.name
-                file_name = os.path.basename(file.name)
-
-                local_file_path = full_file_path.split(full_folder_path)[1]
-
-                temp_file_path = os.path.join(
-                    temp_source_folder_path,
-                    local_file_path.lstrip("/").replace("/", "\\"),  # Windows path
-                )
-
-                file_client = source_service_client.get_file_client(
-                    file_path=full_file_path
-                )
-
-                file_properties = file_client.get_file_properties().metadata
-
-                # Check if item is a directory
-                if file_properties.get("hdi_isfolder"):
-                    print("file path is a directory. Creating directory")
-                    print(f"Creating directory {temp_file_path}")
-                    # Create the directory
-                    os.makedirs(temp_file_path, exist_ok=True)
-                    continue
-
-                print(f"Downloading file {file_name} to {temp_file_path}")
-
-                with open(file=temp_file_path, mode="wb") as f:
-                    f.write(file_client.download_file().readall())
-
-            temp_output_folder_path = tempfile.mkdtemp(prefix="spectralis_output_")
-
-            output_folder_path = temp_output_folder_path
-
-            # Run the executable
             print(f"Running executable for folder {folder_name}")
+            subprocess.call([dicom_executable_location, source_dir, output_dir])
+        except Exception as e:
+            print(f"Command failed with error: {e}")
+            error_log = format_exc()
+            print(error_log)
+            error_log_file = os.path.join(output_folder, f"{folder_name}_error_log.txt")
+            with open(error_log_file, "w") as f:
+                f.write(error_log)
+            if temp_output_dir and os.path.isdir(temp_output_dir):
+                shutil.rmtree(temp_output_dir, ignore_errors=True)
+            continue
 
-            input_dir = temp_source_folder_path
-            output_dir = os.path.join(output_folder_path, "converted")
+        zip_path = os.path.join(output_folder, f"{folder_name}.zip")
+        print(f"Creating zip file {zip_path}")
 
-            try:
-                subprocess.call([dicom_executable_location, input_dir, output_dir])
-            except Exception as e:
-                print(f"Command failed with error: {e}")
-
-                error_log = format_exc()
-                print(f"Error log: {error_log}")
-
-                # Write to an error log file
-                error_log_file = f"{folder_name}_error_log.txt"
-                with open(error_log_file, "w") as f:
-                    f.write(error_log)
-
-                # Clean up
-                print("Cleaning up")
-                shutil.rmtree(temp_output_folder_path)
-                shutil.rmtree(temp_source_folder_path)
-
-                continue
-
-            # Create a zip file of the folder
-            zip_file_path = os.path.join(temp_output_folder_path, f"{folder_name}.zip")
-
-            print(f"Creating zip file {zip_file_path}")
-
-            with zipfile.ZipFile(file=zip_file_path, mode="w") as archive:
-                for dir_path, dir_name, file_list in os.walk(output_dir):
+        with zipfile.ZipFile(zip_path, "w") as archive:
+            if os.path.isdir(output_dir):
+                for dir_path, _dir_names, file_list in os.walk(output_dir):
                     for file in file_list:
                         file_path = os.path.join(dir_path, file)
                         archive_path = os.path.relpath(file_path, output_dir)
                         archive.write(filename=file_path, arcname=archive_path)
 
-            # Upload the zip file to the destination container
-            print(f"Uploading zip file {zip_file_path}")
+        if temp_output_dir and os.path.isdir(temp_output_dir):
+            shutil.rmtree(temp_output_dir, ignore_errors=True)
 
-            zip_file_base_name = os.path.basename(zip_file_path)
-
-            destination_file_path = f"{destination_directory}/{zip_file_base_name}"
-
-            destination_container_client = destination_service_client.get_file_client(
-                file_path=destination_file_path
-            )
-
-            with open(file=zip_file_path, mode="rb") as f:
-                destination_container_client.upload_data(f, overwrite=True)
-
-            # Clean up
-            shutil.rmtree(temp_output_folder_path)
-            shutil.rmtree(temp_source_folder_path)
-
-            # Update the completed folders list
-            completed_folders.append(
-                {
-                    "site": site_name,
-                    "device": device,
-                    "folder": full_folder_path,
-                }
-            )
-
-            # Write at the end of each loop in case of failure
-            with open(completed_folders_file, "w") as f:
-                json.dump(completed_folders, f, indent=4)
-
-            print(f"Folder {folder_name} processed successfully")
+        print(f"Folder {folder_name} processed successfully")
 
 
 if __name__ == "__main__":
