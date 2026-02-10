@@ -1,9 +1,8 @@
-"""Process spectralis data files locally and zip output preserving folder structure."""
+"""Process spectralis data files locally with the DICOM converter."""
 
 import os
 import shutil
 import subprocess
-import zipfile
 from traceback import format_exc
 
 # Spectralis DICOM converter executable path
@@ -12,13 +11,13 @@ dicom_executable_location = os.path.abspath(
 )
 
 # Input folder: subfolders to process (one per subject/session)
-# Output folder: where converted zip files are written
-input_folder = os.path.abspath(r"C:\path\to\spectralis_input")
-output_folder = os.path.abspath(r"C:\path\to\spectralis_output")
+# Output folder: where converted output is written (one subfolder per input subfolder)
+input_folder = os.path.abspath(r"G:\year3+raw\spectralis1")
+output_folder = os.path.abspath(r"G:\year3+processed\spectralis")
 
 
 def main():
-    """Process all subfolders in input_dir with the DICOM converter and write zips to output_dir."""
+    """Process all subfolders in input_folder with the DICOM converter; write output to output_folder."""
 
     if not os.path.isdir(input_folder):
         raise SystemExit(f"Input folder does not exist: {input_folder}")
@@ -42,7 +41,7 @@ def main():
         temp_output_dir = None
 
         try:
-            temp_output_dir = os.path.join(output_folder, ".temp", folder_name)
+            temp_output_dir = os.path.join(output_folder, folder_name)
             os.makedirs(temp_output_dir, exist_ok=True)
             output_dir = os.path.join(temp_output_dir, "converted")
 
@@ -58,20 +57,6 @@ def main():
             if temp_output_dir and os.path.isdir(temp_output_dir):
                 shutil.rmtree(temp_output_dir, ignore_errors=True)
             continue
-
-        zip_path = os.path.join(output_folder, f"{folder_name}.zip")
-        print(f"Creating zip file {zip_path}")
-
-        with zipfile.ZipFile(zip_path, "w") as archive:
-            if os.path.isdir(output_dir):
-                for dir_path, _dir_names, file_list in os.walk(output_dir):
-                    for file in file_list:
-                        file_path = os.path.join(dir_path, file)
-                        archive_path = os.path.relpath(file_path, output_dir)
-                        archive.write(filename=file_path, arcname=archive_path)
-
-        if temp_output_dir and os.path.isdir(temp_output_dir):
-            shutil.rmtree(temp_output_dir, ignore_errors=True)
 
         print(f"Folder {folder_name} processed successfully")
 
