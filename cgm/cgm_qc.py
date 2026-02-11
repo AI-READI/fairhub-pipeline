@@ -1,7 +1,9 @@
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 import numpy as np
 from pandas import Timestamp
-
 
 def df_max(column):
     col_list = column.tolist()
@@ -77,15 +79,15 @@ def df_hist(column, filename, save_path=None):
     ]
     arr = np.array(col_list, dtype="float32")
     counts, bins = np.histogram(arr)
-    plt.figure(" ")
-    plt.hist(arr, bins=bins)
-    plt.xlabel("Value Ranges")  # Add x-axis label
-    plt.ylabel("Frequency")  # Add y-axis label
-    plt.title("Distribution of " + column.name + " in the input file")
-    # plt.show()
+    fig = Figure()
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot(111)
+    ax.hist(arr, bins=bins)
+    ax.set_xlabel("Value Ranges")  # Add x-axis label
+    ax.set_ylabel("Frequency")  # Add y-axis label
+    ax.set_title("Distribution of " + column.name + " in the input file")
     save_path = filename + "_plot.png"
-    plt.savefig(save_path, bbox_inches="tight", dpi=300)
-    plt.close()
+    fig.savefig(save_path, bbox_inches="tight", dpi=300)
 
 
 def list_max(values):
@@ -159,11 +161,13 @@ def list_hist(values, title, filename):
     ]
     arr = np.array(values, dtype="float32")
     counts, bins = np.histogram(arr)
-    plt.figure(" ")
-    plt.hist(arr, bins=bins)
-    plt.xlabel("Value Ranges")  # Add x-axis label
-    plt.ylabel("Frequency")  # Add y-axis label
-    plt.title("Distribution of " + title + " in the output JSON file")  # Add plot title
+    fig = Figure()
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot(111)
+
+    ax.hist(arr, bins=bins)
+    ax.set_xlabel("Value Ranges")  # Add x-axis label
+    ax.set_ylabel("Frequency")  # Add y-axis label
+    ax.set_title("Distribution of " + title + " in the output JSON file")  # Add plot title
     save_path = filename + "_output_" + title.replace(" ", "_") + "_plot.png"
-    plt.savefig(save_path, bbox_inches="tight", dpi=300)
-    plt.close()
+    fig.savefig(save_path, bbox_inches="tight", dpi=300)
