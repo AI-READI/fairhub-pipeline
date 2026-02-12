@@ -7,13 +7,13 @@ from traceback import format_exc
 
 # Spectralis DICOM converter executable path
 dicom_executable_location = os.path.abspath(
-    "C:\\Users\\b2aiUsr\\Downloads\\spx-dicom-converter\\SP-X_DICOM_Converter.exe"
+    "C:\\Users\\sanjay\\Downloads\\spx-dicom-converter\\SP-X_DICOM_Converter.exe"
 )
 
 # Input folder: subfolders to process (one per subject/session)
 # Output folder: where converted output is written (one subfolder per input subfolder)
-input_folder = os.path.abspath(r"G:\year3+raw\spectralis1")
-output_folder = os.path.abspath(r"G:\year3+processed\spectralis")
+input_folder = os.path.abspath("D:\\year3+raw\\spectralis")
+output_folder = os.path.abspath("D:\\year3+pre\\spectralis")
 
 
 def main():
