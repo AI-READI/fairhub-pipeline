@@ -92,7 +92,7 @@ def worker(
 
             # go to the /DICOM directory in the step2 folder and add the .dcm extension to all the files.
             # currently they have no extension
-            step2_dicom_dir = os.path.join(step2_folder, "DICOM")
+            step2_dicom_dir = os.path.join(step2_folder, "converted", "DICOM")
 
             # Check if the step2_dicom_dir exists
             if not os.path.exists(step2_dicom_dir):
