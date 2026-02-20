@@ -571,7 +571,7 @@ if __name__ == "__main__":
     sys_args = sys.argv
 
     workers = 4
-    default_input = "G:\\year3+pre\\spectralis-s"
+    default_input = "G:\\year3+raw\\spectralis-s"
     default_output = "G:\\year3+processed\\spectralis-s"
 
     parser = argparse.ArgumentParser(
