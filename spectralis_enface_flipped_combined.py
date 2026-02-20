@@ -15,6 +15,8 @@ stage-1-container (see dev/download_folder.py, config.py).
 
 import os
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import suppress
 
 import azure.storage.filedatalake as azurelake  # type: ignore
@@ -42,6 +44,12 @@ OTHER_DEVICES = [
 
 # Process only this patient ID when set (None = all patients)
 PATIENT_ID_FILTER = None
+
+# Number of parallel workers for download/transform/upload (per device)
+MAX_WORKERS = 8
+
+# Lock so print from workers doesn't interleave
+_print_lock = threading.Lock()
 
 
 def get_file_system_client():
@@ -93,6 +101,11 @@ def list_files_in_folder(fs_client, folder_path):
     return files
 
 
+def _safe_print(msg: str) -> None:
+    with _print_lock:
+        print(msg)
+
+
 def flip_and_rotate_spectralis(input_path: str, output_path: str) -> None:
     """Load DICOM, flip horizontally and rotate 180°. Handles 2D and 3D (multi-frame)."""
     ds = pydicom.dcmread(input_path)
@@ -118,11 +131,63 @@ def flip_and_rotate_spectralis(input_path: str, output_path: str) -> None:
     ds.save_as(output_path, write_like_original=False)
 
 
+def _process_one_heidelberg_file(
+    fs_client: azurelake.FileSystemClient, patient_id: str, remote_path: str
+) -> tuple[bool, str]:
+    """Download one file, flip+rotate, upload. Returns (success, out_blob_path or error)."""
+    original_name = os.path.basename(remote_path)
+    out_name = HEIDELBERG_PREFIX + original_name
+    out_blob_path = f"{BASE_OUTPUT}/{patient_id}/{out_name}"
+
+    download_fd = tempfile.NamedTemporaryFile(
+        delete=False, suffix=".dcm", prefix="enface_dl_"
+    )
+    write_fd = tempfile.NamedTemporaryFile(
+        delete=False, suffix=".dcm", prefix="enface_out_"
+    )
+    try:
+        download_path = download_fd.name
+        write_path = write_fd.name
+    finally:
+        download_fd.close()
+        write_fd.close()
+
+    try:
+        file_client = fs_client.get_file_client(file_path=remote_path)
+        with open(download_path, "wb") as f:
+            f.write(file_client.download_file().readall())
+    except Exception as e:
+        for p in (download_path, write_path):
+            with suppress(FileNotFoundError):
+                os.unlink(p)
+        return False, f"Download failed {remote_path}: {e}"
+
+    try:
+        flip_and_rotate_spectralis(download_path, write_path)
+    except Exception as e:
+        for p in (download_path, write_path):
+            with suppress(FileNotFoundError):
+                os.unlink(p)
+        return False, f"Transform failed {remote_path}: {e}"
+
+    try:
+        out_client = fs_client.get_file_client(file_path=out_blob_path)
+        with open(write_path, "rb") as f:
+            out_client.upload_data(f.read(), overwrite=True)
+        return True, out_blob_path
+    except Exception as e:
+        return False, f"Upload failed {out_blob_path}: {e}"
+    finally:
+        for p in (download_path, write_path):
+            with suppress(FileNotFoundError):
+                os.unlink(p)
+
+
 def process_heidelberg_spectralis(fs_client):
     """
     Process heidelberg_spectralis: for each patient folder, download each image,
     flip + rotate, save as heidelberg_spectralis_<original_filename>, upload to
-    enface-flipped-combined/{patient_id}/.
+    enface-flipped-combined/{patient_id}/. Runs file tasks in parallel.
     """
     input_prefix = f"{BASE_ORIGINAL}/{HEIDELBERG_SPECTRALIS_SUBFOLDER}"
     patient_ids = list_patient_folders(fs_client, input_prefix)
@@ -136,62 +201,74 @@ def process_heidelberg_spectralis(fs_client):
             return
         print(f"  (filter: only patient {PATIENT_ID_FILTER})")
 
-    for patient_id in patient_ids:
-        patient_path = f"{input_prefix}/{patient_id}"
-        file_paths = list_files_in_folder(fs_client, patient_path)
-        for remote_path in file_paths:
-            original_name = os.path.basename(remote_path)
-            out_name = HEIDELBERG_PREFIX + original_name
-            out_blob_path = f"{BASE_OUTPUT}/{patient_id}/{out_name}"
+    tasks = [
+        (patient_id, remote_path)
+        for patient_id in patient_ids
+        for remote_path in list_files_in_folder(
+            fs_client, f"{input_prefix}/{patient_id}"
+        )
+    ]
 
-            download_fd = tempfile.NamedTemporaryFile(
-                delete=False, suffix=".dcm", prefix="enface_dl_"
-            )
-            write_fd = tempfile.NamedTemporaryFile(
-                delete=False, suffix=".dcm", prefix="enface_out_"
-            )
-            try:
-                download_path = download_fd.name
-                write_path = write_fd.name
-            finally:
-                download_fd.close()
-                write_fd.close()
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {
+            executor.submit(
+                _process_one_heidelberg_file, fs_client, patient_id, remote_path
+            ): (patient_id, remote_path)
+            for patient_id, remote_path in tasks
+        }
+        for future in as_completed(futures):
+            success, msg = future.result()
+            if success:
+                _safe_print(f"  [OK] {msg}")
+            else:
+                _safe_print(f"  [SKIP] {msg}")
 
-            try:
-                file_client = fs_client.get_file_client(file_path=remote_path)
-                with open(download_path, "wb") as f:
-                    f.write(file_client.download_file().readall())
-            except Exception as e:
-                print(f"  [SKIP] Download failed {remote_path}: {e}")
-                os.unlink(download_path)
-                os.unlink(write_path)
-                continue
 
-            try:
-                flip_and_rotate_spectralis(download_path, write_path)
-            except Exception as e:
-                print(f"  [SKIP] Transform failed {remote_path}: {e}")
-                os.unlink(download_path)
-                os.unlink(write_path)
-                continue
+def _process_one_other_file(
+    fs_client: azurelake.FileSystemClient,
+    patient_id: str,
+    remote_path: str,
+    file_prefix: str,
+) -> tuple[bool, str]:
+    """Download one file, upload with prefix. Returns (success, out_blob_path or error)."""
+    original_name = os.path.basename(remote_path)
+    out_name = file_prefix + original_name
+    out_blob_path = f"{BASE_OUTPUT}/{patient_id}/{out_name}"
 
-            try:
-                out_client = fs_client.get_file_client(file_path=out_blob_path)
-                with open(write_path, "rb") as f:
-                    out_client.upload_data(f.read(), overwrite=True)
-                print(f"  [OK] {out_blob_path}")
-            except Exception as e:
-                print(f"  [SKIP] Upload failed {out_blob_path}: {e}")
-            finally:
-                os.unlink(download_path)
-                os.unlink(write_path)
+    fd = tempfile.NamedTemporaryFile(
+        delete=False, suffix=os.path.splitext(original_name)[1] or ".bin"
+    )
+    try:
+        download_path = fd.name
+    finally:
+        fd.close()
+
+    try:
+        file_client = fs_client.get_file_client(file_path=remote_path)
+        with open(download_path, "wb") as f:
+            f.write(file_client.download_file().readall())
+    except Exception as e:
+        with suppress(FileNotFoundError):
+            os.unlink(download_path)
+        return False, f"Download failed {remote_path}: {e}"
+
+    try:
+        out_client = fs_client.get_file_client(file_path=out_blob_path)
+        with open(download_path, "rb") as f:
+            out_client.upload_data(f.read(), overwrite=True)
+        return True, out_blob_path
+    except Exception as e:
+        return False, f"Upload failed {out_blob_path}: {e}"
+    finally:
+        with suppress(FileNotFoundError):
+            os.unlink(download_path)
 
 
 def process_other_device(fs_client, subfolder_name, file_prefix):
     """
     Process one of topcon_maestro2, topcon_triton, zeiss_cirrus: for each patient,
     download each file, rename to <file_prefix><original_filename>, upload to
-    enface-flipped-combined/{patient_id}/ (no image transform).
+    enface-flipped-combined/{patient_id}/ (no image transform). Runs file tasks in parallel.
     """
     input_prefix = f"{BASE_ORIGINAL}/{subfolder_name}"
     patient_ids = list_patient_folders(fs_client, input_prefix)
@@ -205,40 +282,31 @@ def process_other_device(fs_client, subfolder_name, file_prefix):
             return
         print(f"  (filter: only patient {PATIENT_ID_FILTER})")
 
-    for patient_id in patient_ids:
-        patient_path = f"{input_prefix}/{patient_id}"
-        file_paths = list_files_in_folder(fs_client, patient_path)
-        for remote_path in file_paths:
-            original_name = os.path.basename(remote_path)
-            out_name = file_prefix + original_name
-            out_blob_path = f"{BASE_OUTPUT}/{patient_id}/{out_name}"
+    tasks = [
+        (patient_id, remote_path)
+        for patient_id in patient_ids
+        for remote_path in list_files_in_folder(
+            fs_client, f"{input_prefix}/{patient_id}"
+        )
+    ]
 
-            fd = tempfile.NamedTemporaryFile(
-                delete=False, suffix=os.path.splitext(original_name)[1] or ".bin"
-            )
-            try:
-                download_path = fd.name
-            finally:
-                fd.close()
-
-            try:
-                file_client = fs_client.get_file_client(file_path=remote_path)
-                with open(download_path, "wb") as f:
-                    f.write(file_client.download_file().readall())
-            except Exception as e:
-                print(f"  [SKIP] Download failed {remote_path}: {e}")
-                os.unlink(download_path)
-                continue
-
-            try:
-                out_client = fs_client.get_file_client(file_path=out_blob_path)
-                with open(download_path, "rb") as f:
-                    out_client.upload_data(f.read(), overwrite=True)
-                print(f"  [OK] {out_blob_path}")
-            except Exception as e:
-                print(f"  [SKIP] Upload failed {out_blob_path}: {e}")
-            finally:
-                os.unlink(download_path)
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {
+            executor.submit(
+                _process_one_other_file,
+                fs_client,
+                patient_id,
+                remote_path,
+                file_prefix,
+            ): (patient_id, remote_path)
+            for patient_id, remote_path in tasks
+        }
+        for future in as_completed(futures):
+            success, msg = future.result()
+            if success:
+                _safe_print(f"  [OK] {msg}")
+            else:
+                _safe_print(f"  [SKIP] {msg}")
 
 
 def main():
@@ -251,7 +319,7 @@ def main():
     # 2) Other devices: rename only, upload to same enface-flipped-combined folder
     for subfolder, prefix in OTHER_DEVICES:
         print(f"--- {subfolder} (rename only) ---")
-        # process_other_device(fs_client, subfolder, prefix)
+        process_other_device(fs_client, subfolder, prefix)
 
     print("Done.")
 
