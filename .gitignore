@@ -61,3 +61,5 @@ mini_dataset_participants.tsv
 file-manifest.tsv
 particpants.tsv
 viz.json
+year3_person_ids.csv
+missing_ids_report.txt

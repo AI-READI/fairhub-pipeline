@@ -3,6 +3,7 @@
 import csv
 import os
 import tempfile
+from collections import defaultdict
 import azure.storage.filedatalake as azurelake
 import config
 import utils.logwatch as logging
@@ -15,20 +16,20 @@ def process_source_folder(
     file_system_client,
     participant_ids,
 ):
-    """Process a single source folder and check if folder names match participant IDs"""
+    """Process a single source folder: find stray folder names (not on ID list) and missing IDs (on list but no folder)."""
     print(f"\n[{idx}/{total_folders}] Processing source folder: {source_folder}")
 
     # Get the list of folders in the source folder (non-recursive, immediate level only)
     folder_paths = file_system_client.get_paths(path=source_folder, recursive=False)
 
+    # Folder names present in this source folder (patient_id as name)
+    folder_names_in_source = set()
     stray_folders = []
 
     for folder_path in folder_paths:
-        # Extract folder name from the path
-        # folder_path.name is the full path, we need just the folder name
         folder_name = str(folder_path.name).split("/")[-1]
+        folder_names_in_source.add(folder_name)
 
-        # Check if folder name is in the participant IDs list
         if folder_name not in participant_ids:
             stray_folder_info = {
                 "source_folder": source_folder,
@@ -38,8 +39,15 @@ def process_source_folder(
             stray_folders.append(stray_folder_info)
             print(f"  ⚠️  Stray folder found: {folder_name} (path: {folder_path.name})")
 
-    print(f"Found {len(stray_folders)} stray folder(s) in {source_folder}")
-    return stray_folders
+    # IDs that are on the list but have no folder in this source
+    missing_ids = sorted(participant_ids - folder_names_in_source)
+
+    if missing_ids:
+        print(f"  📋 Missing IDs (on list but no folder): {len(missing_ids)}")
+    print(
+        f"Found {len(stray_folders)} stray folder(s), {len(missing_ids)} missing ID(s) in {source_folder}"
+    )
+    return stray_folders, missing_ids
 
 
 def process_manifest_file(
@@ -124,7 +132,7 @@ def pipeline():  # sourcery skip: low-code-quality
     print("=" * 80)
 
     # Read participant IDs from CSV file
-    csv_file_path = r"C:\Users\sanjay\Developer\fairhub-pipeline\ID_only_Participants for Data Release 3 through 05-01-2025.csv"
+    csv_file_path = r"C:\Users\sanjay\Developer\fairhub-pipeline\year3_person_ids.csv"
     print(f"\nReading participant IDs from: {csv_file_path}")
 
     participant_ids = set()
@@ -141,11 +149,43 @@ def pipeline():  # sourcery skip: low-code-quality
     # Define source folders to search for participant data
     # These folders represent different data types and instruments
     source_folders = [
-        "AI-READI/pooled-data/Spectralis-processed/retinal_oct/structural_oct/heidelberg_spectralis/",
-        "AI-READI/pooled-data/Spectralis-processed/retinal_octa/enface/heidelberg_spectralis",
-        "AI-READI/pooled-data/Spectralis-processed/retinal_octa/flow_cube/heidelberg_spectralis",
-        "AI-READI/pooled-data/Spectralis-processed/retinal_octa/segmentation/heidelberg_spectralis",
-        "AI-READI/pooled-data/Spectralis-processed/retinal_photography/ir/heidelberg_spectralis",
+        "AI-READI/year3+/cgm/CGM-processed/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/",
+        "AI-READI/year3+/cirrus/step4_final_structure/retinal_oct/structural_oct/zeiss_cirrus/",
+        "AI-READI/year3+/cirrus/step4_final_structure/retinal_octa/enface/zeiss_cirrus/",
+        "AI-READI/year3+/cirrus/step4_final_structure/retinal_octa/flow_cube/zeiss_cirrus/",
+        "AI-READI/year3+/cirrus/step4_final_structure/retinal_octa/segmentation/zeiss_cirrus/",
+        "AI-READI/year3+/cirrus/step4_final_structure/retinal_photography/ir/zeiss_cirrus/",
+        "AI-READI/year3+/eidon/step4_final_structure/retinal_photography/cfp/icare_eidon/",
+        "AI-READI/year3+/eidon/step4_final_structure/retinal_photography/faf/icare_eidon/",
+        "AI-READI/year3+/eidon/step4_final_structure/retinal_photography/ir/icare_eidon/",
+        "AI-READI/year3+/flio/step5_final_structure/retinal_flio/flio/heidelberg_flio/",
+        "AI-READI/year3+/garmin/Garmin-processed/heart_rate/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/oxygen_saturation/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/physical_activity/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/physical_activity_calorie/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/respiratory_rate/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/sleep/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/stress/garmin_vivosmart5/",
+        "AI-READI/year3+/maestro2/step4_final_structure/retinal_oct/structural_oct/topcon_maestro2/",
+        # "AI-READI/year3+/maestro2/step4_final_structure/retinal_oct/structural_oct/topcon_triton/",
+        "AI-READI/year3+/maestro2/step4_final_structure/retinal_octa/enface/topcon_maestro2/",
+        "AI-READI/year3+/maestro2/step4_final_structure/retinal_octa/flow_cube/topcon_maestro2/",
+        "AI-READI/year3+/maestro2/step4_final_structure/retinal_octa/segmentation/topcon_maestro2/",
+        "AI-READI/year3+/maestro2/step4_final_structure/retinal_photography/cfp/topcon_maestro2/",
+        "AI-READI/year3+/maestro2/step4_final_structure/retinal_photography/ir/topcon_maestro2/",
+        "AI-READI/year3+/optomed/step4_final_structure/retinal_photography/cfp/optomed_aurora/",
+        "AI-READI/year3+/spectralis-n/step4_final_structure/retinal_oct/structural_oct/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-n/step4_final_structure/retinal_photography/ir/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-s/retinal_oct/structural_oct/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-s/retinal_octa/enface/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-s/retinal_octa/flow_cube/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-s/retinal_octa/segmentation/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-s/retinal_photography/ir/heidelberg_spectralis/",
+        "AI-READI/year3+/triton/step4_final_structure/retinal_oct/structural_oct/topcon_triton/",
+        "AI-READI/year3+/triton/step4_final_structure/retinal_octa/enface/topcon_triton/",
+        "AI-READI/year3+/triton/step4_final_structure/retinal_octa/flow_cube/topcon_triton/",
+        "AI-READI/year3+/triton/step4_final_structure/retinal_octa/segmentation/topcon_triton/",
+        "AI-READI/year3+/triton/step4_final_structure/retinal_photography/cfp/topcon_triton/",
     ]
 
     source_files = [
@@ -171,8 +211,9 @@ def pipeline():  # sourcery skip: low-code-quality
     print("✓ Connected to Azure Data Lake Storage successfully")
     print("-" * 80)
 
-    # List to store all stray folders and person_ids found
+    # List to store all stray folders, missing IDs per source, and stray person_ids
     stray_folders = []
+    missing_ids_per_source = []  # list of {"source_folder": ..., "participant_id": ...}
     stray_person_ids = []
 
     # Process source folders sequentially
@@ -180,7 +221,7 @@ def pipeline():  # sourcery skip: low-code-quality
 
     for idx, source_folder in enumerate(source_folders, 1):
         try:
-            folder_stray_folders = process_source_folder(
+            folder_stray_folders, folder_missing_ids = process_source_folder(
                 source_folder,
                 idx,
                 len(source_folders),
@@ -188,6 +229,12 @@ def pipeline():  # sourcery skip: low-code-quality
                 participant_ids,
             )
             stray_folders.extend(folder_stray_folders)
+            missing_ids_per_source.extend(
+                [
+                    {"source_folder": source_folder, "participant_id": pid}
+                    for pid in folder_missing_ids
+                ]
+            )
         except Exception as exc:
             print(f"Source folder {source_folder} generated an exception: {exc}")
 
@@ -207,16 +254,21 @@ def pipeline():  # sourcery skip: low-code-quality
         except Exception as exc:
             print(f"Manifest file {manifest_file} generated an exception: {exc}")
 
-    # Count total stray items found
+    # Count total stray items and missing IDs
     total_stray_folders = len(stray_folders)
+    total_missing_ids = len(missing_ids_per_source)
     total_stray_person_ids = len(stray_person_ids)
     print("\n" + "=" * 80)
     print(f"Stray folder check complete: Found {total_stray_folders} stray folder(s)")
+    print(
+        f"Missing ID check complete: Found {total_missing_ids} missing ID(s) (on list but no folder)"
+    )
     print(
         f"Stray person_id check complete: Found {total_stray_person_ids} stray person_id(s)"
     )
     print("=" * 80)
     logger.info(f"Total stray folders found: {total_stray_folders}")
+    logger.info(f"Total missing IDs (per source folder): {total_missing_ids}")
     logger.info(f"Total stray person_ids found: {total_stray_person_ids}")
 
     seen_folder_names = set()
@@ -230,31 +282,67 @@ def pipeline():  # sourcery skip: low-code-quality
 
     print(f"Total unique stray folders: {unique_stray_folders}")
 
-    # Write the stray folders report to disk
-    if total_stray_folders > 0:
-        print("\nWriting stray folders report to 'stray_folders_report.tsv'...")
-        report_filename = "stray_folders_report.tsv"
-        with open(report_filename, "w", encoding="utf-8") as f:
-            # Write TSV header
-            f.write("source_folder\tfolder_path\tfolder_name\n")
+    # Group by source_folder for report: missing IDs and stray folders per source
+    missing_by_source = defaultdict(list)
+    for entry in missing_ids_per_source:
+        missing_by_source[entry["source_folder"]].append(entry["participant_id"])
+    stray_by_source = defaultdict(list)
+    for stray_folder in stray_folders:
+        stray_by_source[stray_folder["source_folder"]].append(
+            {
+                "folder_path": stray_folder["folder_path"],
+                "folder_name": stray_folder["folder_name"],
+            }
+        )
 
-            # Write each stray folder entry
-            for stray_folder in stray_folders:
-                f.write(
-                    f"{stray_folder['source_folder']}\t"
-                    f"{stray_folder['folder_path']}\t"
-                    f"{stray_folder['folder_name']}\n"
-                )
-
-        print(f"✓ Stray folders report written successfully: {report_filename}")
-        print(f"  Total entries: {total_stray_folders}")
-    else:
-        print("\n✓ No stray folders found! All folders match participant IDs.")
+    # Write combined report: grouped by source_folder, with type (MISSING_ID / STRAY_FOLDER)
+    report_filename = "missing_ids_report.txt"
+    print(f"\nWriting report to '{report_filename}' (by source_folder, with type)...")
+    with open(report_filename, "w", encoding="utf-8") as f:
+        f.write("Stray folder check report – by source_folder and type\n")
+        f.write("=" * 80 + "\n\n")
+        for source_folder in source_folders:
+            missing_list = sorted(missing_by_source.get(source_folder, []))
+            stray_list = stray_by_source.get(source_folder, [])
+            if not missing_list and not stray_list:
+                continue
+            f.write(f"SOURCE_FOLDER: {source_folder}\n")
+            f.write("-" * 80 + "\n")
+            # Type: MISSING_ID – on participant list but no folder in this source
+            f.write(
+                "  Type: MISSING_ID (on participant list but no folder in this source)\n"
+            )
+            if missing_list:
+                f.write(f"  Count: {len(missing_list)}\n")
+                # Write IDs in rows of 10 for readability
+                for i in range(0, len(missing_list), 10):
+                    chunk = missing_list[i : i + 10]
+                    f.write("    " + ", ".join(str(x) for x in chunk) + "\n")
+            else:
+                f.write("  Count: 0\n")
+                f.write("    (none)\n")
+            f.write("\n")
+            # Type: STRAY_FOLDER – folder in source but name not on participant list
+            f.write(
+                "  Type: STRAY_FOLDER (folder in source but name not on participant list)\n"
+            )
+            if stray_list:
+                f.write(f"  Count: {len(stray_list)}\n")
+                for item in stray_list:
+                    f.write(f"    folder_name: {item['folder_name']}\n")
+                    f.write(f"    folder_path: {item['folder_path']}\n")
+            else:
+                f.write("  Count: 0\n")
+                f.write("    (none)\n")
+            f.write("\n")
+        f.write("=" * 80 + "\n")
+        f.write("End of report\n")
+    print(f"✓ Report written successfully: {report_filename}")
 
     # Write the stray person_ids report to disk
     if total_stray_person_ids > 0:
-        print("\nWriting stray person_ids report to 'stray_person_ids_report.tsv'...")
-        report_filename = "stray_person_ids_report.tsv"
+        print("\nWriting stray person_ids report to 'stray_person_ids_report.txt'...")
+        report_filename = "stray_person_ids_report.txt"
         with open(report_filename, "w", encoding="utf-8") as f:
             # Write TSV header
             f.write("manifest_file\tperson_id\n")
