@@ -12,8 +12,8 @@ dicom_executable_location = os.path.abspath(
 
 # Input folder: subfolders to process (one per subject/session)
 # Output folder: where converted output is written (one subfolder per input subfolder)
-input_folder = os.path.abspath("D:\\year3+raw\\spectralis")
-output_folder = os.path.abspath("D:\\year3+pre\\spectralis")
+input_folder = os.path.abspath("D:\\year3+raw\\spectralis-s")
+output_folder = os.path.abspath("D:\\year3+pre\\spectralis-s")
 
 
 def main():

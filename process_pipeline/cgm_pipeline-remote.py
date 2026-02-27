@@ -6,7 +6,6 @@ import tempfile
 import shutil
 import argparse
 from traceback import format_exc
-from datetime import datetime
 
 import cgm.cgm as cgm
 import cgm.cgm_manifest as cgm_manifest
@@ -23,7 +22,20 @@ from functools import partial
 from multiprocessing.pool import ThreadPool
 import sys
 
-overall_time_estimator = TimeEstimator(1)
+"""
+SCRIPT_PATH=""
+FOLDER_PATH="CGM/input/UCSD-CGM/"  # Replace with the path to your CSV files
+TIME_ZONE="pst"  # Set your desired timezone here
+for file in ${FOLDER_PATH}DEX-*.csv; do ID=$(basename "$file" .csv | cut -d '-' -f 2) echo ${ID} python3 "${SCRIPT_PATH}CGM_API.py" "DEX-${ID}.csv" "DEX-${ID}.json" effective_time_frame=1,event_type=2,source_device_id=3,blood_glucose=4,transmitter_time=5,transmitter_id=6,uuid=AIREADI-${ID},timezone=${TIME_ZONE} --o foo=7,bar=8
+done
+"""
+
+"""
+IMPORTANT: COPY THE RAW DATA FROM THE PRODUCTION 'xx-pilot' CONTAINER TO THE POOLED-DATA 'CGM' CONTAINER
+"""
+
+
+overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
 
 def worker(
@@ -35,7 +47,10 @@ def worker(
     processed_data_output_folder,
     file_paths: list,
     worker_id: int,
-):
+):  # sourcery skip: low-code-quality
+    """This function handles the work done by the worker threads,
+    and contains core operations: downloading, processing, and uploading files."""
+
     logger = logging.Logwatch(
         "cgm",
         print=True,
@@ -43,7 +58,7 @@ def worker(
         overall_time_estimator=overall_time_estimator,
     )
 
-    # Azure client for QC upload only
+    # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
@@ -57,7 +72,9 @@ def worker(
 
         workflow_input_files = [path]
 
-        file_name = os.path.basename(path)
+        # get the file name from the path. It's in the format Clarity_Export_AIREADI_{id}_*.csv
+        file_name = path.split("/")[-1]
+
         file_name_only = file_name.split(".")[0]
         patient_id = "Unknown"
 
@@ -71,6 +88,7 @@ def worker(
         if file_processor.is_file_ignored(file_name, path):
             logger.info(f"Ignoring {file_name} because it is in the ignore file")
             logger.time(time_estimator.step())
+
             continue
 
         if str(patient_id) not in participant_filter_list:
@@ -79,7 +97,10 @@ def worker(
             )
             continue
 
-        input_last_modified = datetime.fromtimestamp(os.path.getmtime(path))
+        # download the file to the temp folder
+        input_file_client = file_system_client.get_file_client(file_path=path)
+
+        input_last_modified = input_file_client.get_file_properties().last_modified
 
         should_process = file_processor.file_should_process(path, input_last_modified)
 
@@ -88,20 +109,26 @@ def worker(
                 f"The file {path} has not been modified since the last time it was processed",
             )
             logger.debug(f"Skipping {path} - File has not been modified")
+
             logger.time(time_estimator.step())
+
             continue
 
         file_processor.add_entry(path, input_last_modified)
+
         file_processor.clear_errors(path)
 
+        # Create a temporary folder on the local machine
         with tempfile.TemporaryDirectory(prefix="cgm_pipeline_") as temp_folder_path:
+            # File should be downloaded as DEX_{patient_id}.csv
             download_path = os.path.join(temp_folder_path, f"DEX_{patient_id}.csv")
 
-            logger.debug(f"Copying {file_name} to {download_path}")
+            logger.debug(f"Downloading {file_name} to {download_path}")
 
-            shutil.copy(path, download_path)
+            with open(download_path, "wb") as data:
+                input_file_client.download_file().readinto(data)
 
-            logger.info(f"Copied {file_name} to {download_path}")
+            logger.info(f"Downloaded {file_name} to {download_path}")
 
             cgm_path = download_path
 
@@ -124,6 +151,7 @@ def worker(
 
             timezone = "pst"
 
+            # if patient id starts with a 7xxx(UAB), set the timezone to "cst"
             if patient_id.startswith("7"):
                 timezone = "cst"
 
@@ -157,6 +185,7 @@ def worker(
 
             logger.info(f"Converted {file_name}")
 
+            # Run sanity checks on the created JSON before any uploads or manifest work
             check_path = (
                 cgm_final_output_file_path
                 if os.path.exists(cgm_final_output_file_path)
@@ -171,7 +200,7 @@ def worker(
             file_item["processed"] = True
 
             logger.debug(
-                f"Copying outputs of {file_name} to {processed_data_output_folder}"
+                f"Uploading outputs of {file_name} to {processed_data_output_folder}"
             )
 
             output_files = [cgm_final_output_file_path]
@@ -183,55 +212,53 @@ def worker(
             file_processor.delete_preexisting_output_files(path)
 
             for file in output_files:
-                f2 = os.path.basename(file)
+                with open(file, "rb") as data:
+                    f2 = file.split("/")[-1]
 
-                output_file_path = os.path.join(
-                    processed_data_output_folder,
-                    "wearable_blood_glucose",
-                    "continuous_glucose_monitoring",
-                    "dexcom_g6",
-                    patient_id,
-                    f"{patient_id}_DEX.json"
-                )
+                    output_file_path = f"{processed_data_output_folder}/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{patient_id}_DEX.json"
 
-                logger.debug(f"Copying {f2} to {output_file_path}")
+                    logger.debug(f"Uploading {f2} to {output_file_path}")
 
-                try:
-                    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+                    try:
+                        output_blob_client = file_system_client.get_file_client(
+                            file_path=output_file_path
+                        )
 
-                    shutil.copy(file, output_file_path)
+                        output_blob_client.upload_data(data, overwrite=True)
 
-                    logger.info(f"Copied {f2} to {output_file_path}")
-                except Exception:
-                    outputs_uploaded = False
+                        logger.info(f"Uploaded {f2} to {output_file_path}")
+                    except Exception:
+                        outputs_uploaded = False
 
-                    logger.error(f"Failed to copy {file}")
+                        logger.error(f"Failed to upload {file}")
 
-                    error_exception = format_exc()
-                    error_exception = "".join(error_exception.splitlines())
+                        error_exception = format_exc()
+                        error_exception = "".join(error_exception.splitlines())
 
-                    logger.error(error_exception)
+                        logger.error(error_exception)
 
-                    file_processor.append_errors(error_exception, path)
-                    continue
+                        file_processor.append_errors(error_exception, path)
+                        continue
 
-                file_item["output_files"].append(output_file_path)
-                workflow_output_files.append(output_file_path)
+                    file_item["output_files"].append(output_file_path)
+                    workflow_output_files.append(output_file_path)
 
-                manifest_glucose_file_path = f"/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{patient_id}_DEX.json"
+                    manifest_glucose_file_path = f"/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/{patient_id}/{patient_id}_DEX.json"
 
-                logger.debug(f"Generating manifest for {f2}")
+                    logger.debug(f"Generating manifest for {f2}")
 
-                manifest.calculate_file_sampling_extent(
-                    cgm_final_output_file_path, manifest_glucose_file_path
-                )
+                    # Generate the manifest entry
+                    manifest.calculate_file_sampling_extent(
+                        cgm_final_output_file_path, manifest_glucose_file_path
+                    )
 
-                logger.info(f"Generated manifest for {f2}")
+                    logger.info(f"Generated manifest for {f2}")
 
             logger.info(
-                f"Copied the outputs of {file_name} to {processed_data_output_folder}"
+                f"Uploaded the outputs of {file_name} to {processed_data_output_folder}"
             )
 
+            # Add the new output files to the file map
             file_processor.confirm_output_files(
                 path, workflow_output_files, input_last_modified
             )
@@ -240,17 +267,18 @@ def worker(
                 file_item["output_uploaded"] = True
                 file_item["status"] = "success"
                 logger.info(
-                    f"Copied outputs of {file_name} to {processed_data_output_folder}"
+                    f"Uploaded outputs of {file_name} to {processed_data_output_folder}"
                 )
             else:
                 logger.error(
-                    f"Failed to copy outputs of {file_name} to {processed_data_output_folder})"
+                    f"Failed to upload outputs of {file_name} to {processed_data_output_folder})"
                 )
 
             workflow_file_dependencies.add_dependency(
                 workflow_input_files, workflow_output_files
             )
 
+            # upload the QC file
             logger.debug(f"Uploading QC file for {file_name}")
 
             output_qc_file_path = (
@@ -285,39 +313,50 @@ def worker(
 
 
 def pipeline(study_id: str, workers: int = 4, args: list = None):
+    """The function contains the work done by
+    the main thread, which runs only once for each operation."""
+
     if args is None:
         args = []
 
     global overall_time_estimator
 
+    # Process cgm data files for a study. Args:study_id (str): the study id
     if study_id is None or not study_id:
         raise ValueError("study_id is required")
 
-    input_folder = os.path.join(os.path.expanduser("~"), "Downloads", "CGM")
-    processed_data_output_folder = os.path.join(
-        os.path.expanduser("~"), "Downloads", "CGM-processed"
-    )
+    input_folder = f"{study_id}/pooled-data/CGM"
     dependency_folder = f"{study_id}/dependency/CGM"
+    processed_data_output_folder = f"{study_id}/pooled-data/CGM2-processed"
     processed_data_qc_folder = f"{study_id}/pooled-data/CGM2-qc"
     ignore_file = f"{study_id}/ignore/cgm.ignore"
+    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs07-01-2023through05-01-2025.csv"
     manifest_folder = f"{study_id}/pooled-data/CGM2-manifest"
-    participant_filter_list_file = f"{study_id}/dependency/PatientID/AllParticipantIDs_year_3_12-31-2025.csv"
 
     logger = logging.Logwatch("cgm", print=True)
 
+    # Get the list of blobs in the input folder
     file_system_client = azurelake.FileSystemClient.from_connection_string(
         config.AZURE_STORAGE_CONNECTION_STRING,
         file_system_name="stage-1-container",
     )
 
-    if os.path.exists(processed_data_output_folder):
-        shutil.rmtree(processed_data_output_folder)
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_output_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(processed_data_qc_folder)
+
+    with contextlib.suppress(Exception):
+        file_system_client.delete_directory(manifest_folder)
 
     file_paths = []
     participant_filter_list = []
 
+    # Create a temporary folder on the local machine
     meta_temp_folder_path = tempfile.mkdtemp(prefix="cgm_pipeline_meta_")
 
+    # Get the participant filter list file
     with contextlib.suppress(Exception):
         file_client = file_system_client.get_file_client(
             file_path=participant_filter_list_file
@@ -335,26 +374,28 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
             for row in reader:
                 participant_filter_list.append(row[0])
 
+        # remove the first row
         participant_filter_list.pop(0)
 
-        print("Participant filter loaded:", len(participant_filter_list))
+    paths = file_system_client.get_paths(path=input_folder, recursive=False)
 
-    paths = os.listdir(input_folder)
-
-    for t in paths:
+    for path in paths:
+        t = str(path.name)
 
         file_name = t.split("/")[-1]
+        # Check if the item is a csv file
         if file_name.split(".")[-1] != "csv":
             continue
 
-        file_paths.append({
-            "file_path": os.path.join(input_folder, t),
-            "status": "failed",
-            "processed": False,
-            "convert_error": True,
-            "output_uploaded": False,
-            "qc_uploaded": True,
-            "output_files": [],
+        file_paths.append(
+            {
+                "file_path": t,
+                "status": "failed",
+                "processed": False,
+                "convert_error": True,
+                "output_uploaded": False,
+                "qc_uploaded": True,
+                "output_files": [],
             }
         )
 
@@ -368,7 +409,9 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
 
     manifest = cgm_manifest.CGMManifest()
 
+    # Guarantees that all paths are considered, even if the number of items is not evenly divisible by workers.
     chunk_size = (len(file_paths) + workers - 1) // workers
+    # Comprehension that fills out and pass to worker func final 2 args: chunks and worker_id
     chunks = [file_paths[i : i + chunk_size] for i in range(0, total_files, chunk_size)]
     args = [(chunk, index + 1) for index, chunk in enumerate(chunks)]
     pipe = partial(
@@ -380,19 +423,24 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         processed_data_qc_folder,
         processed_data_output_folder,
     )
+    # Thread pool created
     pool = ThreadPool(workers)
+    # Distributes the pipe function across the threads in the pool
     pool.starmap(pipe, args)
 
     file_processor.delete_out_of_date_output_files()
     file_processor.remove_seen_flag_from_map()
 
-    pipeline_workflow_log_folder = f"{study_id}/logs/local_CGM/CGM"
+    # Create a temporary folder on the local machine
+    pipeline_workflow_log_folder = f"{study_id}/logs/CGM"
+    # Write the manifest to a file
 
     manifest_file_path = os.path.join(meta_temp_folder_path, "manifest_cgm_v2.tsv")
     manifest.write_tsv(manifest_file_path)
 
     logger.info(f"Uploading manifest file to {manifest_folder}/manifest_cgm_v2.tsv")
 
+    # Upload the manifest file
     with open(manifest_file_path, "rb") as data:
         output_blob_client = file_system_client.get_file_client(
             file_path=f"{manifest_folder}/manifest_cgm_v2.tsv"
@@ -410,6 +458,7 @@ def pipeline(study_id: str, workers: int = 4, args: list = None):
         logger.error(f"Failed to upload file map to {dependency_folder}/file_map.json")
         raise e
 
+    # Write the workflow log to a file
     timestr = time.strftime("%Y%m%d-%H%M%S")
     file_name = f"status_report_{timestr}.csv"
     workflow_log_file_path = os.path.join(meta_temp_folder_path, file_name)
