@@ -23,7 +23,7 @@ from multiprocessing.pool import ThreadPool
 # from tqdm import tqdm
 
 # Temp folder on G: drive (used instead of system temp)
-G_TEMP_DIR = "G:\\temp"
+G_TEMP_DIR = "D:\\temp"
 
 overall_time_estimator = TimeEstimator(1)  # default to 1 for now
 
@@ -273,10 +273,10 @@ def worker(
                     full_file_path = os.path.join(root, file)
 
                     combined_file_name = full_file_path.replace(destination_folder, "")
-                    combined_file_name = combined_file_name.replace("\\", "/")
+                    # combined_file_name = combined_file_name.replace("\\", "/")
                     if combined_file_name.startswith(os.sep):
                         combined_file_name = combined_file_name.lstrip(os.sep)
-                    combined_file_name = combined_file_name.replace("/", os.sep)
+                    # combined_file_name = combined_file_name.replace("/", os.sep)
 
                     output_file_path = os.path.join(
                         processed_data_output_folder, combined_file_name
@@ -571,8 +571,8 @@ if __name__ == "__main__":
     sys_args = sys.argv
 
     workers = 4
-    default_input = "G:\\year3+raw\\spectralis-s"
-    default_output = "G:\\year3+processed\\spectralis-s"
+    default_input = "D:\\year3+pre\\spectralis-s"
+    default_output = "D:\\year3+processed\\spectralis-s"
 
     parser = argparse.ArgumentParser(
         description="Process spectralis data files (local; input already unzipped)"
