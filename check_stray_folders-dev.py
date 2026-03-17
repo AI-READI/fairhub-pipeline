@@ -149,42 +149,49 @@ def pipeline():  # sourcery skip: low-code-quality
     # Define source folders to search for participant data
     # These folders represent different data types and instruments
     source_folders = [
-        # "AI-READI/year3+/cgm/CGM-processed/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/",
-        # "AI-READI/year3+/cirrus/step4_final_structure/retinal_oct/structural_oct/zeiss_cirrus/",
-        # "AI-READI/year3+/cirrus/step4_final_structure/retinal_octa/enface/zeiss_cirrus/",
-        # "AI-READI/year3+/cirrus/step4_final_structure/retinal_octa/flow_cube/zeiss_cirrus/",
-        # "AI-READI/year3+/cirrus/step4_final_structure/retinal_octa/segmentation/zeiss_cirrus/",
-        # "AI-READI/year3+/cirrus/step4_final_structure/retinal_photography/ir/zeiss_cirrus/",
-        # "AI-READI/year3+/eidon/step4_final_structure/retinal_photography/cfp/icare_eidon/",
-        # "AI-READI/year3+/eidon/step4_final_structure/retinal_photography/faf/icare_eidon/",
-        # "AI-READI/year3+/eidon/step4_final_structure/retinal_photography/ir/icare_eidon/",
-        # "AI-READI/year3+/flio/step5_final_structure/retinal_flio/flio/heidelberg_flio/",
-        # "AI-READI/year3+/garmin/Garmin-processed/heart_rate/garmin_vivosmart5/",
-        # "AI-READI/year3+/garmin/Garmin-processed/oxygen_saturation/garmin_vivosmart5/",
-        # "AI-READI/year3+/garmin/Garmin-processed/physical_activity/garmin_vivosmart5/",
-        # "AI-READI/year3+/garmin/Garmin-processed/physical_activity_calorie/garmin_vivosmart5/",
-        # "AI-READI/year3+/garmin/Garmin-processed/respiratory_rate/garmin_vivosmart5/",
-        # "AI-READI/year3+/garmin/Garmin-processed/sleep/garmin_vivosmart5/",
-        # "AI-READI/year3+/garmin/Garmin-processed/stress/garmin_vivosmart5/",
-        # "AI-READI/year3+/maestro2/step4_final_structure/retinal_oct/structural_oct/topcon_maestro2/",
-        # "AI-READI/year3+/maestro2/step4_final_structure/retinal_octa/enface/topcon_maestro2/",
-        # "AI-READI/year3+/maestro2/step4_final_structure/retinal_octa/flow_cube/topcon_maestro2/",
-        # "AI-READI/year3+/maestro2/step4_final_structure/retinal_octa/segmentation/topcon_maestro2/",
-        # "AI-READI/year3+/maestro2/step4_final_structure/retinal_photography/cfp/topcon_maestro2/",
-        # "AI-READI/year3+/maestro2/step4_final_structure/retinal_photography/ir/topcon_maestro2/",
-        # "AI-READI/year3+/optomed/step4_final_structure/retinal_photography/cfp/optomed_aurora/",
-        # "AI-READI/year3+/spectralis-n/step4_final_structure/retinal_oct/structural_oct/heidelberg_spectralis/",
-        # "AI-READI/year3+/spectralis-n/step4_final_structure/retinal_photography/ir/heidelberg_spectralis/",
+        "AI-READI/year3+/cgm/CGM-processed/wearable_blood_glucose/continuous_glucose_monitoring/dexcom_g6/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_oct/structural_oct/zeiss_cirrus/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/enface/zeiss_cirrus/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/flow_cube/zeiss_cirrus/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/segmentation/zeiss_cirrus/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/ir/zeiss_cirrus/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/cfp/icare_eidon/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/faf/icare_eidon/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/ir/icare_eidon/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_flio/flio/heidelberg_flio/",
+        "AI-READI/year3+/garmin/Garmin-processed/heart_rate/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/oxygen_saturation/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/physical_activity/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/physical_activity_calorie/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/respiratory_rate/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/sleep/garmin_vivosmart5/",
+        "AI-READI/year3+/garmin/Garmin-processed/stress/garmin_vivosmart5/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_oct/structural_oct/topcon_maestro2/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/enface/topcon_maestro2/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/flow_cube/topcon_maestro2/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/segmentation/topcon_maestro2/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/cfp/topcon_maestro2/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/ir/topcon_maestro2/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/cfp/optomed_aurora/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_oct/structural_oct/heidelberg_spectralis/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/ir/heidelberg_spectralis/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_oct/structural_oct/heidelberg_spectralis/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/enface/heidelberg_spectralis/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/flow_cube/heidelberg_spectralis/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/segmentation/heidelberg_spectralis/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/ir/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-n/step4_final_structure/retinal_oct/structural_oct/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-n/step4_final_structure/retinal_photography/ir/heidelberg_spectralis/",
         "AI-READI/year3+/spectralis-s/retinal_oct/structural_oct/heidelberg_spectralis/",
         "AI-READI/year3+/spectralis-s/retinal_octa/enface/heidelberg_spectralis/",
         "AI-READI/year3+/spectralis-s/retinal_octa/flow_cube/heidelberg_spectralis/",
         "AI-READI/year3+/spectralis-s/retinal_octa/segmentation/heidelberg_spectralis/",
         "AI-READI/year3+/spectralis-s/retinal_photography/ir/heidelberg_spectralis/",
-        # "AI-READI/year3+/triton/step4_final_structure/retinal_oct/structural_oct/topcon_triton/",
-        # "AI-READI/year3+/triton/step4_final_structure/retinal_octa/enface/topcon_triton/",
-        # "AI-READI/year3+/triton/step4_final_structure/retinal_octa/flow_cube/topcon_triton/",
-        # "AI-READI/year3+/triton/step4_final_structure/retinal_octa/segmentation/topcon_triton/",
-        # "AI-READI/year3+/triton/step4_final_structure/retinal_photography/cfp/topcon_triton/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_oct/structural_oct/topcon_triton/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/enface/topcon_triton/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/flow_cube/topcon_triton/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_octa/segmentation/topcon_triton/",
+        "AI-READI/year3+/imaging-combined-clean/retinal_photography/cfp/topcon_triton/",
     ]
 
     source_files = [
@@ -313,10 +320,8 @@ def pipeline():  # sourcery skip: low-code-quality
             )
             if missing_list:
                 f.write(f"  Count: {len(missing_list)}\n")
-                # Write IDs in rows of 10 for readability
-                for i in range(0, len(missing_list), 10):
-                    chunk = missing_list[i : i + 10]
-                    f.write("    " + ", ".join(str(x) for x in chunk) + "\n")
+                # Write IDs in one line comma separated
+                f.write("    " + ", ".join(str(x) for x in missing_list) + "\n")
             else:
                 f.write("  Count: 0\n")
                 f.write("    (none)\n")
