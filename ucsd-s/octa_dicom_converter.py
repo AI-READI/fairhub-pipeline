@@ -1,21 +1,33 @@
 """
 Spectralis DICOM Batch Converter
 ---------------------------------
-Converts all Spectralis subject/session subfolders in an input directory
-to DICOM format using the bundled SP-X_DICOM_Converter.exe.
+Converts Spectralis data to DICOM format using the bundled SP-X_DICOM_Converter.exe.
 
 Usage:
-    python preprocess_spectralis_and_pool.py <input_folder> <output_folder>
+    python octa_dicom_converter.py <input_folder> <output_folder>
 
 Arguments:
-    input_folder   Path to the folder containing one subfolder per subject/session.
-    output_folder  Path where converted output will be written (created if it doesn't exist).
+    input_folder   Parent folder containing batch folders to convert.
+                   Each batch folder is processed independently by the converter.
+    output_folder  Parent folder where converted versions of the batch folders will be
+                   written. One subfolder is created here per input batch folder.
+                   Will be created if it does not already exist.
 
-Output structure:
-    <output_folder>/
-        <subject_folder>/
-            converted/      <- DICOM files produced by the converter
-        <subject_folder>_error_log.txt  <- written only if a folder fails
+Example:
+    python octa_dicom_converter.py D:\\raw\\spectralis-s D:\\converted\\spectralis-s
+
+    Given an input like:
+        D:\\raw\\spectralis-s\\
+            batch_001\\
+            batch_002\\
+
+    Output will be written as:
+        D:\\converted\\spectralis-s\\
+            batch_001\\
+                converted\\     <- DICOM files produced by the converter
+            batch_002\\
+                converted\\
+            batch_001_error_log.txt  <- only written if that batch fails
 
 The converter executable is expected at:
     spx-dicom-converter/SP-X_DICOM_Converter.exe
@@ -46,11 +58,14 @@ def main():
     )
     parser.add_argument(
         "input_folder",
-        help="Folder containing one subfolder per subject/session to convert.",
+        help="Parent folder containing batch folders to convert.",
     )
     parser.add_argument(
         "output_folder",
-        help="Destination folder for converted output (will be created if missing).",
+        help=(
+            "Parent folder where converted versions of the batch folders will be written. "
+            "Created if it does not already exist."
+        ),
     )
     args = parser.parse_args()
 

@@ -3,28 +3,41 @@
     Spectralis DICOM Batch Converter
 
 .DESCRIPTION
-    Converts all Spectralis subject/session subfolders in an input directory
-    to DICOM format using the bundled SP-X_DICOM_Converter.exe.
+    Converts Spectralis data to DICOM format using the bundled SP-X_DICOM_Converter.exe.
+
+    InputFolder is the parent folder containing batch folders to convert.
+    Each batch folder inside is processed independently by the converter.
+
+    OutputFolder is the parent folder where converted versions of the batch folders will
+    be written. One subfolder is created here per input batch folder.
 
 .PARAMETER InputFolder
-    Path to the folder containing one subfolder per subject/session.
+    Parent folder containing batch folders to convert.
 
 .PARAMETER OutputFolder
-    Path where converted output will be written (created if it doesn't exist).
+    Parent folder where converted versions of the batch folders will be written.
+    Created if it does not already exist.
 
 .EXAMPLE
-    .\preprocess_spectralis_and_pool.ps1 -InputFolder "D:\year3+raw\spectralis-s" -OutputFolder "D:\year3+pre\spectralis-s"
+    .\octa_dicom_converter.ps1 -InputFolder "D:\raw\spectralis-s" -OutputFolder "D:\converted\spectralis-s"
+
+    Given an input like:
+        D:\raw\spectralis-s\
+            batch_001\
+            batch_002\
+
+    Output will be written as:
+        D:\converted\spectralis-s\
+            batch_001\
+                converted\     <- DICOM files produced by the converter
+            batch_002\
+                converted\
+            batch_001_error_log.txt  <- only written if that batch fails
 
 .NOTES
     The converter executable is expected at:
         spx-dicom-converter\SP-X_DICOM_Converter.exe
     relative to this script's location. Do not move this script out of its folder.
-
-    Output structure:
-        <OutputFolder>\
-            <subject_folder>\
-                converted\      <- DICOM files produced by the converter
-            <subject_folder>_error_log.txt  <- written only if a folder fails
 #>
 
 param (
