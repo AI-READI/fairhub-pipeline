@@ -42,9 +42,9 @@ octa_dicom_converter.cmd <input_folder> <output_folder>
 
 ## Arguments
 
-| Argument | Description |
-| --- | --- |
-| `input_folder` | Parent folder containing batch folders to convert. Each batch folder inside is processed independently. |
+| Argument        | Description                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `input_folder`  | Parent folder containing batch folders to convert. Each batch folder inside is processed independently.            |
 | `output_folder` | Parent folder where converted versions of the batch folders will be written. Created if it does not already exist. |
 
 ## Example
@@ -73,5 +73,3 @@ D:\converted\spectralis-s\
         converted\
     batch_001_error_log.txt  <- only written if that batch fails
 ```
-
-If a batch folder fails to convert, it is cleaned up and an error log is written. Processing continues for the remaining folders.
