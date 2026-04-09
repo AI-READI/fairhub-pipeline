@@ -3,6 +3,7 @@ obj
 csx
 .vs
 edge
+.DS_Store
 Publish
 
 *.user
@@ -63,3 +64,4 @@ particpants.tsv
 viz.json
 year3_person_ids.csv
 missing_ids_report.txt
+ucsd-s/spx-dicom-converter/
