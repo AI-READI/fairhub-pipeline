@@ -72,7 +72,3 @@ You will need the following installed on your system:
 
 This work is licensed under
 [MIT](https://opensource.org/licenses/mit). See [LICENSE](https://github.com/AI-READI/pipeline/blob/main/LICENSE) for more information.
-
-<a href="https://aireadi.org" >
-  <img src="https://www.channelfutures.com/files/2017/04/3_0.png" height="30" />
-</a>
