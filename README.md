@@ -6,35 +6,24 @@
 
 You will need the following installed on your system:
 
-- Python 3.8+
-- [Pip](https://pip.pypa.io/en/stable/)
+- [mise](https://mise.jdx.dev/) — manages Python and uv versions
 
 ### Setup
 
-If you would like to update the api, please follow the instructions below.
-
-1. Create a local virtual environment and activate it:
+1. Install project tooling (Python 3.11 + uv) via mise:
 
    ```bash
-   uv self update
-   uv venv
-   uv python install 3.14t
-   uv pip install -r requirements.txt
+   mise trust # only needed the first time
+   mise install
    ```
 
-   If you are using pyenv, you can create a virtual environment with:
-
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate # linux
-   .venv\Scripts\activate # windows
-   ```
+   mise will automatically create a virtual environment via uv (`uv_venv_auto = true`).
 
 2. Install the dependencies:
 
    ```bash
    uv pip install -r requirements.txt
-   pip install -r requirements.txt
+   uv run xxx.py  # Always use 'uv run' — never bare 'python xxx.py'
    ```
 
 3. Add your environment variables. An example is provided at `.env.example`
@@ -76,7 +65,7 @@ If you would like to update the api, please follow the instructions below.
 7. To run code with Python GIL disabled, run:
 
    ```bash
-   python -X gil=0 .\garmin_pipeline_local.py
+   uv run python -X gil=0 .\garmin_pipeline_local.py
    ```
 
 ## License
