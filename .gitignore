@@ -67,3 +67,9 @@ missing_ids_report.txt
 ucsd-s/spx-dicom-converter/
 AllParticipantIDs07-01-2023through05-01-2025.csv
 AllParticipantIDs_year_01-01-25-through-3_12-31-2025.csv
+DICOMDIR.HTM
+oct_octa_ids_report.txt
+oct_octa_ids.json
+spectralis_dicomdir_report.txt
+spectralis_dicomdir.json
+id_discrepancy_report.txt

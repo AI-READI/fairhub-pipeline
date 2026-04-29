@@ -1,6 +1,7 @@
 """Check which participant IDs are present/missing in year3 and year3+ OCT/OCTA folders."""
 
 import csv
+import json
 import azure.storage.filedatalake as azurelake
 import config
 
@@ -73,6 +74,13 @@ def load_participant_ids(csv_path):
     return ids
 
 
+def write_json(results, json_path):
+    """Write structured results to a JSON file for consumption by other scripts."""
+    data = {r["label"]: {"oct_present": r["oct_present"], "octa_present": r["octa_present"]} for r in results}
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
 def write_report(results, report_path):
     """Write presence/absence report to disk."""
     with open(report_path, "w", encoding="utf-8") as f:
@@ -130,45 +138,41 @@ def pipeline():
     print("Connected.")
 
     year3_oct_folders = [
-        "AI-READI/year3_imaging/retinal_oct/structural_oct/topcon_maestro2/",
-        "AI-READI/year3_imaging/retinal_oct/structural_oct/topcon_triton/",
-        "AI-READI/year3_imaging/retinal_oct/structural_oct/zeiss_cirrus/",
+        "AI-READI/sanjay-oct-test/heidelberg_spectralis/",
     ]
     year3_octa_folder = "AI-READI/pooled-data/Spectralis-processed/retinal_octa/enface/heidelberg_spectralis/"
 
     year3plus_oct_folders = [
-        "AI-READI/year3+/imaging-combined-clean/retinal_oct/structural_oct/topcon_maestro2/",
-        "AI-READI/year3+/imaging-combined-clean/retinal_oct/structural_oct/topcon_triton/",
-        "AI-READI/year3+/imaging-combined-clean/retinal_oct/structural_oct/zeiss_cirrus/",
+        "AI-READI/year3+/spectralis-n/step4_final_structure/retinal_oct/structural_oct/heidelberg_spectralis/",
     ]
     year3plus_octa_folder = (
         "AI-READI/year3+/spectralis-s/retinal_octa/enface/heidelberg_spectralis/"
     )
 
-    results = []
-
-    results.append(
+    results = [
         check_section(
             "YEAR 3",
             year3_oct_folders,
             year3_octa_folder,
             year3_ids,
             file_system_client,
-        )
-    )
-    results.append(
+        ),
         check_section(
             "YEAR 3+",
             year3plus_oct_folders,
             year3plus_octa_folder,
             year3plus_ids,
             file_system_client,
-        )
-    )
+        ),
+    ]
 
     report_path = "oct_octa_ids_report.txt"
     write_report(results, report_path)
     print(f"\nReport written to: {report_path}")
+
+    json_path = "oct_octa_ids.json"
+    write_json(results, json_path)
+    print(f"JSON written to:   {json_path}")
     print("=" * 80)
     print("Done.")
     print("=" * 80)
