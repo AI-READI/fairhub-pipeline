@@ -63,14 +63,26 @@ def diff_section(
 def write_diff(f, d: dict) -> None:
     f.write(f"\n{d['label']}\n")
     f.write("-" * 60 + "\n")
-    f.write(f"  In both:                   {len(d['in_both'])}\n")
-    f.write(f"  Only in {d['name_a']:<20} {len(d['only_in_a'])}\n")
+    f.write(
+        f"  In both ({len(d['in_both'])}): "
+        f"raw DICOMDIR entry exists AND processed OCTA folder exists\n"
+    )
+    f.write(
+        f"  Only in {d['name_a']} ({len(d['only_in_a'])}): "
+        f"raw data in DICOMDIR but does not exist in stage-one OCTA\n"
+    )
     if d["only_in_a"]:
         f.write("    " + ", ".join(d["only_in_a"]) + "\n")
-    f.write(f"  Only in {d['name_b']:<20} {len(d['only_in_b'])}\n")
+    f.write(
+        f"  Only in {d['name_b']} ({len(d['only_in_b'])}): "
+        f"processed OCTA exists in stage-one but no matching DICOMDIR entry in raw-storage\n"
+    )
     if d["only_in_b"]:
         f.write("    " + ", ".join(d["only_in_b"]) + "\n")
-    f.write(f"  Missing from both:         {len(d['missing_from_both'])}\n")
+    f.write(
+        f"  Missing from both ({len(d['missing_from_both'])}): "
+        f"participant has no DICOMDIR entry and no processed OCTA — completely absent\n"
+    )
     if d["missing_from_both"]:
         f.write("    " + ", ".join(d["missing_from_both"]) + "\n")
 
@@ -121,7 +133,9 @@ def pipeline() -> None:
         f.write(f"  Year 3+ participants CSV: {YEAR3PLUS_CSV}\n")
         f.write(f"\nDICOMDIR total unique IDs (all sites):  {len(all_dicomdir_ids)}\n")
         f.write(f"DICOMDIR IDs matching year3 participants:  {len(dicomdir_year3)}\n")
-        f.write(f"DICOMDIR IDs matching year3+ participants: {len(dicomdir_year3plus)}\n")
+        f.write(
+            f"DICOMDIR IDs matching year3+ participants: {len(dicomdir_year3plus)}\n"
+        )
         f.write(f"Year 3  OCTA present:      {len(year3_octa)}\n")
         f.write(f"Year 3+ OCTA present:      {len(year3plus_octa)}\n")
 

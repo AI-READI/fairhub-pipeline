@@ -12,8 +12,8 @@ def get_folder_ids(file_system_client, folder_path):
     return {str(p.name).split("/")[-1] for p in paths}
 
 
-def check_section(label, oct_folders, octa_folder, participant_ids, file_system_client):
-    """Compute present/missing IDs for one cohort's OCT (union) and OCTA (single folder)."""
+def check_section(label, oct_folders, octa_folders, participant_ids, file_system_client):
+    """Compute present/missing IDs for one cohort's OCT and OCTA (both unioned across folders)."""
     print(f"\n{'=' * 60}")
     print(f"Section: {label}")
     print(f"{'=' * 60}")
@@ -37,10 +37,13 @@ def check_section(label, oct_folders, octa_folder, participant_ids, file_system_
     print(f"  OCT present (in participant list): {len(oct_present_sorted)}")
     print(f"  OCT missing: {len(oct_missing)}")
 
-    # OCTA — single folder
-    print(f"  Fetching OCTA folder: {octa_folder}")
-    octa_ids = get_folder_ids(file_system_client, octa_folder)
-    print(f"    -> {len(octa_ids)} IDs found")
+    # OCTA — union across all folders
+    octa_ids = set()
+    for folder in octa_folders:
+        print(f"  Fetching OCTA folder: {folder}")
+        ids = get_folder_ids(file_system_client, folder)
+        print(f"    -> {len(ids)} IDs found")
+        octa_ids |= ids
 
     octa_missing = sorted(
         participant_ids - octa_ids, key=lambda x: int(x) if x.isdigit() else x
@@ -49,6 +52,7 @@ def check_section(label, oct_folders, octa_folder, participant_ids, file_system_
         octa_ids & participant_ids, key=lambda x: int(x) if x.isdigit() else x
     )
 
+    print(f"  OCTA union: {len(octa_ids)} unique IDs across all folders")
     print(f"  OCTA present (in participant list): {len(octa_present_sorted)}")
     print(f"  OCTA missing: {len(octa_missing)}")
 
@@ -76,7 +80,10 @@ def load_participant_ids(csv_path):
 
 def write_json(results, json_path):
     """Write structured results to a JSON file for consumption by other scripts."""
-    data = {r["label"]: {"oct_present": r["oct_present"], "octa_present": r["octa_present"]} for r in results}
+    data = {
+        r["label"]: {"oct_present": r["oct_present"], "octa_present": r["octa_present"]}
+        for r in results
+    }
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
@@ -140,14 +147,24 @@ def pipeline():
     year3_oct_folders = [
         "AI-READI/sanjay-oct-test/heidelberg_spectralis/",
     ]
-    year3_octa_folder = "AI-READI/pooled-data/Spectralis-processed/retinal_octa/enface/heidelberg_spectralis/"
+    year3_octa_folder = [
+        "AI-READI/pooled-data/Spectralis-processed/retinal_octa/enface/heidelberg_spectralis/",
+        "AI-READI/pooled-data/Spectralis-processed/retinal_octa/segmentation/heidelberg_spectralis/",
+        "AI-READI/pooled-data/Spectralis-processed/retinal_octa/flow_cube/heidelberg_spectralis/",
+        "AI-READI/pooled-data/Spectralis-processed/retinal_photography/ir/heidelberg_spectralis/",
+        "AI-READI/pooled-data/Spectralis-processed/retinal_oct/structural_oct/heidelberg_spectralis/",
+    ]
 
     year3plus_oct_folders = [
         "AI-READI/year3+/spectralis-n/step4_final_structure/retinal_oct/structural_oct/heidelberg_spectralis/",
     ]
-    year3plus_octa_folder = (
-        "AI-READI/year3+/spectralis-s/retinal_octa/enface/heidelberg_spectralis/"
-    )
+    year3plus_octa_folder = [
+        "AI-READI/year3+/spectralis-s/retinal_octa/enface/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-s/retinal_octa/segmentation/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-s/retinal_octa/flow_cube/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-s/retinal_photography/ir/heidelberg_spectralis/",
+        "AI-READI/year3+/spectralis-s/retinal_oct/structural_oct/heidelberg_spectralis/",
+    ]
 
     results = [
         check_section(
