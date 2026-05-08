@@ -11,6 +11,7 @@ import json
 OCT_OCTA_JSON = "oct_octa_ids.json"
 DICOMDIR_JSON = "spectralis_dicomdir.json"
 REPORT_PATH = "id_discrepancy_report.txt"
+MARKDOWN_PATH = "id_discrepancy_report.md"
 
 YEAR3_CSV = r"/Users/sanjay/Developer/fairhub-pipeline/AllParticipantIDs07-01-2023through05-01-2025.csv"
 YEAR3PLUS_CSV = r"/Users/sanjay/Developer/fairhub-pipeline/AllParticipantIDs_year_01-01-25-through-3_12-31-2025.csv"
@@ -141,6 +142,100 @@ def write_oct_only_section(
         f.write("      " + ", ".join(not_in_dicomdir) + "\n")
 
 
+def _site_counts(ids: list[str]) -> dict[str, int]:
+    sp = site_split(ids)
+    return {k: len(v) for k, v in sp.items()}
+
+
+def _fmt_row(cells: list) -> str:
+    return "| " + " | ".join(str(c) for c in cells) + " |"
+
+
+def write_markdown(
+    all_dicomdir_ids: set,
+    dicomdir_year3: set,
+    dicomdir_year3plus: set,
+    year3_oct: set,
+    year3_octa: set,
+    year3plus_oct: set,
+    year3plus_octa: set,
+    comparisons: list[dict],
+    y3_oct_only: list,
+    y3_in_dcm: list,
+    y3_not_in_dcm: list,
+    y3p_oct_only: list,
+    y3p_in_dcm: list,
+    y3p_not_in_dcm: list,
+    md_path: str = MARKDOWN_PATH,
+) -> None:
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write("# ID Discrepancy Report\n\n")
+
+        f.write("## Sources\n\n")
+        f.write(f"- OCT/OCTA data: {OCT_OCTA_JSON}\n")
+        f.write(f"- DICOMDIR data: {DICOMDIR_JSON}\n")
+        f.write(f"- Year 3 participants CSV: {YEAR3_CSV}\n")
+        f.write(f"- Year 3+ participants CSV: {YEAR3PLUS_CSV}\n\n")
+
+        f.write("## Summary Counts\n\n")
+        f.write(_fmt_row(["Metric", "Count"]) + "\n")
+        f.write(_fmt_row(["---", "---"]) + "\n")
+        for label, count in [
+            ("DICOMDIR total unique IDs (all sites)", len(all_dicomdir_ids)),
+            ("DICOMDIR IDs matching Year 3 participants", len(dicomdir_year3)),
+            ("DICOMDIR IDs matching Year 3+ participants", len(dicomdir_year3plus)),
+            ("Year 3 OCT present", len(year3_oct)),
+            ("Year 3 OCTA present", len(year3_octa)),
+            ("Year 3+ OCT present", len(year3plus_oct)),
+            ("Year 3+ OCTA present", len(year3plus_octa)),
+        ]:
+            f.write(_fmt_row([label, f"{count:,}"]) + "\n")
+        f.write("\n")
+
+        for comp in comparisons:
+            rows_data = [
+                ("In both (raw + processed)", comp["in_both"]),
+                ("Only in DICOMDIR (raw exists, no processed OCTA)", comp["only_in_a"]),
+                ("Only in OCTA stage-one (no DICOMDIR entry)", comp["only_in_b"]),
+                ("Missing from both", comp["missing_from_both"]),
+            ]
+            has_other = any(site_split(ids)["Other"] for _, ids in rows_data)
+            headers = ["Category", "Total", "UW", "UCSD", "UAB"] + (["Other"] if has_other else [])
+
+            f.write(f"## {comp['label']}\n\n")
+            f.write(_fmt_row(headers) + "\n")
+            f.write(_fmt_row(["---"] * len(headers)) + "\n")
+            for row_label, ids in rows_data:
+                sc = _site_counts(ids)
+                cells = [row_label, f"{len(ids):,}", sc["UW"], sc["UCSD"], sc["UAB"]]
+                if has_other:
+                    cells.append(sc["Other"])
+                f.write(_fmt_row(cells) + "\n")
+            f.write("\n")
+
+        for section_label, oct_only, in_dcm, not_in_dcm in [
+            ("Year 3 OCT Present but OCTA Absent", y3_oct_only, y3_in_dcm, y3_not_in_dcm),
+            ("Year 3+ OCT Present but OCTA Absent", y3p_oct_only, y3p_in_dcm, y3p_not_in_dcm),
+        ]:
+            sc_total = _site_counts(oct_only)
+            f.write(f"## {section_label}\n\n")
+            f.write(
+                f"Total: {len(oct_only):,}"
+                f" (UW={sc_total['UW']}, UCSD={sc_total['UCSD']}, UAB={sc_total['UAB']})\n\n"
+            )
+            f.write(_fmt_row(["Sub-category", "Total", "UW", "UCSD", "UAB"]) + "\n")
+            f.write(_fmt_row(["---"] * 5) + "\n")
+            for sub_label, ids in [
+                ("Raw data exists in DICOMDIR", in_dcm),
+                ("No raw DICOMDIR entry", not_in_dcm),
+            ]:
+                sc = _site_counts(ids)
+                f.write(_fmt_row([sub_label, f"{len(ids):,}", sc["UW"], sc["UCSD"], sc["UAB"]]) + "\n")
+            f.write("\n")
+
+    print(f"Markdown written to: {md_path}")
+
+
 def pipeline() -> None:
     print("=" * 80)
     print("Loading JSON outputs...")
@@ -228,6 +323,23 @@ def pipeline() -> None:
         f.write("End of report\n")
 
     print(f"Report written to: {REPORT_PATH}")
+
+    write_markdown(
+        all_dicomdir_ids,
+        dicomdir_year3,
+        dicomdir_year3plus,
+        year3_oct,
+        year3_octa,
+        year3plus_oct,
+        year3plus_octa,
+        comparisons,
+        y3_oct_only,
+        y3_in_dcm,
+        y3_not_in_dcm,
+        y3p_oct_only,
+        y3p_in_dcm,
+        y3p_not_in_dcm,
+    )
     print("=" * 80)
     print("Done.")
 
