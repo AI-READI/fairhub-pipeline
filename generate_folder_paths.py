@@ -6,8 +6,8 @@ Writes each path with the "AI-READI/adrc/Mini-Dataset/" prefix stripped off.
 import azure.storage.filedatalake as azurelake  # type: ignore
 import config
 
-container_name = "published-dataset"
-root_folder = "YR3/"
+container_name = "stage-one"
+root_folder = "AI-READI/sanjay/old-full-untouched-dataset/"
 output_file = "dataset_paths.txt"
 
 
