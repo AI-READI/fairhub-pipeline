@@ -1,4 +1,4 @@
-"""Shared helpers for Spectralis-S manifest QC scripts."""
+"""Shared helpers for merged-export manifest QC scripts."""
 
 import logging
 import os
@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pandas as pd
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 NOT_REPORTED = "Not Reported"
 
@@ -17,6 +17,14 @@ DEFAULT_ROOT = "/Volumes/Crucial X10/year4/merged"
 
 def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
+
+
+def add_file_handler(logger: logging.Logger, report_path: Path) -> None:
+    """Attach a file handler so the QC output is also written to `report_path`."""
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(report_path, mode="w")
+    handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    logger.addHandler(handler)
 
 
 def load_manifest(manifest_path: Path) -> pd.DataFrame:

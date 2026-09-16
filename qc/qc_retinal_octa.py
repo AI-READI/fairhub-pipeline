@@ -1,5 +1,5 @@
 """
-QC script for the retinal_octa manifest in a merged Spectralis-S export.
+QC script for the retinal_octa manifest in a merged export.
 
 retinal_octa is harder to validate than the other two modalities: each row fans
 out across up to 12 filepath columns, some pointing at files inside
@@ -29,6 +29,7 @@ from pathlib import Path
 from common import (
     DEFAULT_ROOT,
     NOT_REPORTED,
+    add_file_handler,
     check_duplicates,
     check_filepath_column,
     check_nulls,
@@ -113,14 +114,22 @@ def main():
     parser.add_argument(
         "--orphan-limit", type=int, default=20, help="Max orphan file paths to print"
     )
+    parser.add_argument(
+        "--report-file",
+        default=None,
+        help="Path to write the QC report to (default: <root>/retinal_octa/qc_report.txt)",
+    )
     args = parser.parse_args()
 
     root = Path(args.root)
     data_folder = root / "retinal_octa"
     manifest_path = data_folder / "manifest.tsv"
+    report_path = Path(args.report_file) if args.report_file else data_folder / "qc_report.txt"
+    add_file_handler(logger, report_path)
 
     logger.info(f"Root: {root}")
     logger.info(f"Manifest: {manifest_path}")
+    logger.info(f"Report file: {report_path}")
 
     errors = 0
 

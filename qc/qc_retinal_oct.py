@@ -1,15 +1,17 @@
 """
-QC script for the retinal_photography manifest in a merged Spectralis-S export.
+QC script for the retinal_oct manifest in a merged export.
 
 Checks:
 - manifest.tsv exists and has the expected columns
 - person_id / sop_instance_uid have no nulls, and sop_instance_uid has no duplicates
-- every 'filepath' entry in the manifest resolves to a real file on disk
-- every .dcm file under retinal_photography/ir is referenced by the manifest
-  (orphan check, run in reverse of the usual filepath check)
+- every 'filepath' entry resolves to a real file under retinal_oct/structural_oct
+- every 'reference_filepath' entry (pointing back into retinal_photography) resolves
+  to a real file
+- every .dcm file under retinal_oct/structural_oct is referenced by the manifest
+  (orphan check)
 
 Usage:
-    python qc_retinal_photography.py [--root PATH]
+    python qc_retinal_oct.py [--root PATH]
 """
 
 import argparse
@@ -19,6 +21,7 @@ from pathlib import Path
 from common import (
     DEFAULT_ROOT,
     NOT_REPORTED,
+    add_file_handler,
     check_duplicates,
     check_filepath_column,
     check_nulls,
@@ -30,41 +33,53 @@ from common import (
     print_summary,
 )
 
-logger = get_logger("qc_retinal_photography")
+logger = get_logger("qc_retinal_oct")
 
-LABEL = "retinal_photography"
+LABEL = "retinal_oct"
 
 REQUIRED_COLUMNS = [
     "person_id",
     "manufacturer",
     "manufacturers_model_name",
-    "laterality",
     "anatomic_region",
     "imaging",
+    "laterality",
     "height",
     "width",
-    "color_channel_dimension",
+    "number_of_frames",
+    "pixel_spacing",
+    "slice_thickness",
     "sop_instance_uid",
     "filepath",
+    "reference_instance_uid",
+    "reference_filepath",
 ]
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="QC the retinal_photography manifest.tsv against files on disk"
+        description="QC the retinal_oct manifest.tsv against files on disk"
     )
     parser.add_argument("--root", default=DEFAULT_ROOT, help="Path to the merged data root")
     parser.add_argument(
         "--orphan-limit", type=int, default=20, help="Max orphan file paths to print"
     )
+    parser.add_argument(
+        "--report-file",
+        default=None,
+        help="Path to write the QC report to (default: <root>/retinal_oct/qc_report.txt)",
+    )
     args = parser.parse_args()
 
     root = Path(args.root)
-    data_folder = root / "retinal_photography"
+    data_folder = root / "retinal_oct"
     manifest_path = data_folder / "manifest.tsv"
+    report_path = Path(args.report_file) if args.report_file else data_folder / "qc_report.txt"
+    add_file_handler(logger, report_path)
 
     logger.info(f"Root: {root}")
     logger.info(f"Manifest: {manifest_path}")
+    logger.info(f"Report file: {report_path}")
 
     errors = 0
 
@@ -86,20 +101,20 @@ def main():
     errors += check_nulls(df, ["person_id", "sop_instance_uid"], logger, LABEL)
     errors += check_duplicates(df, "sop_instance_uid", logger, LABEL)
 
+    # Own-folder filepath: structural_oct DICOMs.
     if "filepath" in df.columns:
         missing_files, checked = check_filepath_column(df, "filepath", root)
         log_missing_files(logger, LABEL, "filepath", missing_files, checked, args.orphan_limit)
         errors += len(missing_files)
 
-        # Reverse check: files on disk that the manifest never references.
-        ir_folder = data_folder / "ir"
-        disk_files = find_dcm_files(ir_folder)
+        structural_oct_folder = data_folder / "structural_oct"
+        disk_files = find_dcm_files(structural_oct_folder)
         disk_paths = {manifest_relative_path(root, p) for p in disk_files}
         referenced_paths = {v for v in df["filepath"].dropna() if v != NOT_REPORTED}
 
         orphans = sorted(disk_paths - referenced_paths)
         logger.info(
-            f"{LABEL}: {len(disk_files)} .dcm files on disk under {ir_folder}, "
+            f"{LABEL}: {len(disk_files)} .dcm files on disk under {structural_oct_folder}, "
             f"{len(referenced_paths)} referenced in manifest, {len(orphans)} orphaned"
         )
         if orphans:
@@ -108,6 +123,14 @@ def main():
                 logger.error(f"  Orphan file (not in manifest): {path}")
             if len(orphans) > args.orphan_limit:
                 logger.error(f"  ... and {len(orphans) - args.orphan_limit} more orphan files")
+
+    # Cross-folder reference: each OCT points back at a retinal_photography IR frame.
+    if "reference_filepath" in df.columns:
+        missing_refs, checked = check_filepath_column(df, "reference_filepath", root)
+        log_missing_files(
+            logger, LABEL, "reference_filepath", missing_refs, checked, args.orphan_limit
+        )
+        errors += len(missing_refs)
 
     print_summary(logger, LABEL, errors)
     sys.exit(0 if errors == 0 else 1)
