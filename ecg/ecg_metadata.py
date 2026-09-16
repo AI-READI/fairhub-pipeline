@@ -45,13 +45,14 @@ def extract_metadata(hea_file, extended_meta=False):
 
     with open(hea_file, "r") as f:
         for myline in f:
-            if myline[0] == "#":
-                myline_parts = myline[1:].strip().split(":")
-                if len(myline_parts) != 2:  # expected for machine_detail_description
-                    keyword = myline_parts[0]
-                    val = (" ").join(myline_parts[1:]).strip()
-                else:
-                    keyword, val = myline[1:].strip().split(":")
+            myline = myline.strip()
+            if myline.startswith("#"):
+                parts = myline[1:].strip().split(":", 1)  # machine_detail_description has more colons
+                if len(parts) == 2:
+                    keyword = parts[0].strip()
+                    val = parts[1].strip()
+                    
+                    val = val.replace(":", " ")
 
                 hea_dict[keyword] = val.strip()  # everything goes into hea_dict
                 meta_logger.debug(f"keyword: {keyword} and val: {val}")

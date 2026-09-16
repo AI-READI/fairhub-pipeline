@@ -1,9 +1,9 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 
-class DataDomain:
+class DataDomain(ABC):
     def __init__(self):
-        print("in standards init")
+        pass
 
     @abstractmethod
     def convert(self, infile, outfile, **kwargs):

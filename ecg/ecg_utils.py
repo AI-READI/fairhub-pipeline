@@ -1,10 +1,72 @@
 import logging
+from typing import Any, Optional, Union, cast
+from xml.dom.minidom import Attr, Document
 
 from defusedxml import minidom
 import xmltodict
 import hashlib
 
 utils_logger = logging.getLogger("ecg.utils")
+
+ECG_LEADS_EXPECTED = 12
+class UnsupportedXmlFileError(RuntimeError):
+    """Raised when the ECG XML file format is unsupported."""
+
+
+class MissingXmlElementError(RuntimeError):
+    """Raised when a required XML element is missing."""
+
+
+class MissingXmlAttributeError(RuntimeError):
+    """Raised when a required XML attribute is missing."""
+
+
+def get_node(xdoc: Document, tag_name: str) -> Document:
+    """Return the first matching XML node or raise if none is found."""
+    xelt = get_optional_node(xdoc, tag_name)
+    if xelt is None:
+        raise MissingXmlElementError(tag_name)
+    return xelt
+
+
+def get_optional_node(xdoc: Document, tag_name: str) -> Optional[Document]:
+    """Return the first matching XML node, or None."""
+    for xelt in xdoc.getElementsByTagName(tag_name):
+        return cast(Document, xelt)
+    return None
+
+
+def get_attr_text(xdoc: Document, attr_name: str, default: Optional[str] = None) -> str:
+    """Return text for a required attribute, or default if provided."""
+    if attr_name in xdoc.attributes:
+        return get_text(xdoc.attributes[attr_name])
+    if default is None:
+        raise MissingXmlAttributeError(attr_name)
+    return default
+
+
+def get_text(xdoc: Union[Document, Attr]) -> str:
+    """Return concatenated text-node values from a DOM node."""
+    text_chunks = []
+    for node in xdoc.childNodes:
+        if node.nodeType == node.TEXT_NODE:
+            text_chunks.append(node.data)
+    return "".join(text_chunks)
+
+
+def assert_version(elt: Document):
+    """Validate ECG document type/version against supported variants."""
+    doc_info = get_node(elt, "documentinfo")
+    doc_type = get_text(get_node(doc_info, "documenttype"))
+    doc_ver = get_text(get_node(doc_info, "documentversion"))
+    supported_doc_types = ["SierraECG", "PhilipsECG"]
+    supported_doc_versions = ["1.03", "1.04", "1.04.01", "1.04.02"]
+    if (doc_type not in supported_doc_types) or (doc_ver not in supported_doc_versions):
+        raise UnsupportedXmlFileError(
+            f"Files of type {doc_type} {doc_ver} are unsupported"
+        )
+
+    return doc_type, doc_ver
 
 
 def make_dtstamp(meta_dict):
@@ -116,6 +178,125 @@ def get_text_if_exists(element):
     return return_val
 
 
+def extract_participant_position(restingecg: dict) -> str:
+    """Extract participant position from userdefine fields with robust key handling."""
+    try:
+        userdefine = restingecg["userdefines"]["userdefine"]
+    except KeyError as ke:
+        raise KeyError("Missing userdefines.userdefine in ECG XML") from ke
+
+    userdefine_items = userdefine if isinstance(userdefine, list) else [userdefine]
+
+    # Prefer explicit Position keys, then fall back to first available value.
+    for item in userdefine_items:
+        if isinstance(item, dict):
+            name_val = str(item.get("name", "")).strip().lower()
+            if name_val == "position" and "value" in item:
+                return item["value"]
+
+    for item in userdefine_items:
+        if isinstance(item, dict) and "value" in item:
+            return item["value"]
+
+    raise KeyError("No participant position value found in userdefine fields")
+
+
+def remove_ecg_waveform_text(my_dict: dict, verbosity: int = 0):
+    """Remove parsed waveform text from ECG dictionaries for lightweight metadata handling."""
+
+    if "restingecgdata" in my_dict.keys():
+        if verbosity:
+            utils_logger.info(
+                "Main waveform length before: %s",
+                len(my_dict["restingecgdata"]["waveforms"]["parsedwaveforms"].get("#text", "")),
+            )
+        my_dict["restingecgdata"]["waveforms"]["parsedwaveforms"]["#text"] = "waveform removed"
+        
+        repbeats = my_dict["restingecgdata"]["waveforms"]["repbeats"]["repbeat"]
+        repbeat_list = repbeats if isinstance(repbeats, list) else [repbeats]
+        
+        if len(repbeat_list) != ECG_LEADS_EXPECTED:
+            utils_logger.warning(f"Expected {ECG_LEADS_EXPECTED} leads, but found {len(repbeat_list)} in restingecgdata.")
+            
+        for beat in repbeat_list:
+            if "waveform" in beat and "#text" in beat["waveform"]:
+                beat["waveform"]["#text"] = "repbeat waveform removed"
+
+    elif "waveforms" in my_dict.keys():
+        if verbosity:
+            utils_logger.info(
+                "Main waveform length before: %s",
+                len(my_dict["waveforms"]["parsedwaveforms"].get("#text", "")),
+            )
+        my_dict["waveforms"]["parsedwaveforms"]["#text"] = "waveform removed"
+        
+        repbeats = my_dict["waveforms"]["repbeats"]["repbeat"]
+        repbeat_list = repbeats if isinstance(repbeats, list) else [repbeats]
+        
+        if len(repbeat_list) != ECG_LEADS_EXPECTED:
+            utils_logger.warning(f"Expected {ECG_LEADS_EXPECTED} leads, but found {len(repbeat_list)} in waveforms.")
+            
+        for beat in repbeat_list:
+            if "waveform" in beat and "#text" in beat["waveform"]:
+                beat["waveform"]["#text"] = "repbeat waveform removed"
+
+    elif "waveforms_parsedwaveforms_#text" in my_dict.keys():
+        if verbosity:
+            utils_logger.info(
+                "Main waveform length before: %s",
+                len(my_dict.get("waveforms_parsedwaveforms_#text", "")),
+            )
+        my_dict["waveforms_parsedwaveforms_#text"] = "waveform removed"
+        
+        repbeat_keys = [k for k in my_dict.keys() if "waveform" in k and k.endswith("#text") and "repbeat" in k]
+        
+        if len(repbeat_keys) != ECG_LEADS_EXPECTED:
+            utils_logger.warning(f"Expected {ECG_LEADS_EXPECTED} leads, but found {len(repbeat_keys)} flattened repbeat waveform keys.")
+            
+        for k in repbeat_keys:
+            my_dict[k] = "repbeat waveform removed"
+
+    return my_dict
+
+
+def flatten_nested_dict(
+    input_dict: dict, separator: str = "_", prefix: str = ""
+) -> dict[str, Any]:
+    """Flatten nested dict/list structures into a single-level dictionary."""
+    output_dict = {}
+    for key, value in input_dict.items():
+        if isinstance(value, dict) and value:
+            deeper = flatten_nested_dict(value, separator, prefix + key + separator)
+            output_dict.update({key2: val2 for key2, val2 in deeper.items()})
+        elif isinstance(value, list) and value:
+            for index, sublist in enumerate(value, start=1):
+                if isinstance(sublist, dict) and sublist:
+                    deeper = flatten_nested_dict(
+                        sublist, separator, prefix + key + separator + str(index) + separator
+                    )
+                    output_dict.update({key2: val2 for key2, val2 in deeper.items()})
+                else:
+                    output_dict[prefix + key + separator + str(index)] = value
+        else:
+            output_dict[prefix + key] = value
+    return output_dict
+
+
+def extract_flattened_xml_metadata(
+    xml_file_name: str, remove_waveforms: bool = True, verbosity: int = 0
+) -> dict[str, Any]:
+    """Extract flattened metadata directly from ECG XML (no waveform conversion)."""
+    xdom = minidom.parse(xml_file_name)
+    content = xdom.documentElement.toxml()
+    ecg_full_dict = xmltodict.parse(content)
+
+    if remove_waveforms:
+        ecg_full_dict = remove_ecg_waveform_text(ecg_full_dict, verbosity=verbosity)
+
+    ecg_dict = ecg_full_dict.get("restingecgdata", {})
+    return flatten_nested_dict(ecg_dict)
+
+
 def fetch_key_metadata(ecg_file, extended_meta=False):
     """Reads an ecg .xml file and returns selected text data. No waveforms are returned or processed.
     Args:
@@ -127,6 +308,9 @@ def fetch_key_metadata(ecg_file, extended_meta=False):
         dict: structured output of text information from the *.xml; no waveforms are included
     """
     xdom = minidom.parse(ecg_file)
+    root = get_node(xdom, "restingecgdata")
+    assert_version(root)
+
     content = xdom.documentElement.toxml()  # a very long string!
     xml_dict = xmltodict.parse(content)
 
@@ -182,10 +366,11 @@ def fetch_key_metadata(ecg_file, extended_meta=False):
     key_items["data_acq_date"] = restingecg["dataacquisition"]["@date"]
     key_items["data_acq_time"] = restingecg["dataacquisition"]["@time"]
 
-    # variable items for manifest
-    key_items["participant_id"] = restingecg["patient"]["generalpatientdata"]["name"][
-        "firstname"
-    ]
+    # variable items for manifest - this is 4 digit ID
+    key_items["participant_id"] = restingecg["patient"]["generalpatientdata"]["name"]["firstname"]
+
+    # QC item
+    key_items["long_id"] = restingecg["patient"]["generalpatientdata"]["patientid"]
 
     # year of birth is omitted to avoid conflicts with OMOP data
     # dob = restingecg['patient']['generalpatientdata']['age']['dateofbirth']
@@ -194,7 +379,7 @@ def fetch_key_metadata(ecg_file, extended_meta=False):
     #     yob = 1934  # do not report age for participants over 90
     # key_items['participant_yob'] = yob
 
-    key_items["position"] = restingecg["userdefines"]["userdefine"][0]["value"]
+    key_items["position"] = extract_participant_position(restingecg)
 
     # KeyErrors with #text in some files; split into 2 parts to enable exception handling of missing #text
     # key_items['value_HR'] = restingecg['interpretations']['interpretation']['globalmeasurements']['heartrate']['#text']
