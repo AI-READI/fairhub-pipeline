@@ -10,7 +10,7 @@ LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
-NOT_REPORTED = "Not Reported"
+NOT_REPORTED = "Not reported"
 
 DEFAULT_ROOT = "/Volumes/Crucial X10/year4/merged"
 
@@ -34,9 +34,14 @@ def load_manifest(manifest_path: Path) -> pd.DataFrame:
     return pd.read_csv(manifest_path, sep="\t", dtype=str)
 
 
+# def resolve_path(root: Path, filepath: str) -> Path:
+#     """Manifest filepaths are written as root-relative paths starting with '/'."""
+#     return root / filepath.lstrip("/")
+
+
 def resolve_path(root: Path, filepath: str) -> Path:
-    """Manifest filepaths are written as root-relative paths starting with '/'."""
-    return root / filepath.lstrip("/")
+    """Manifest filepaths are root-relative; accept either separator."""
+    return root / filepath.replace("\\", "/").lstrip("/")
 
 
 def manifest_relative_path(root: Path, full_path: Path) -> str:
@@ -45,14 +50,10 @@ def manifest_relative_path(root: Path, full_path: Path) -> str:
 
 
 def check_filepath_column(df: pd.DataFrame, column: str, root: Path):
-    """Check every non-blank, non-'Not Reported' value in a filepath column exists on disk.
-
-    Returns (missing_rows, checked_count) where missing_rows is a list of (index, value).
-    """
     missing = []
     checked = 0
     for idx, value in df[column].items():
-        if pd.isna(value) or value == NOT_REPORTED:
+        if pd.isna(value) or str(value).strip().lower() in ("not reported", "not provided"):
             continue
         checked += 1
         if not resolve_path(root, value).exists():

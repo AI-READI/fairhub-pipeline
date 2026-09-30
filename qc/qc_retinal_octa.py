@@ -11,20 +11,26 @@ Checks:
 - manifest.tsv exists and has the expected columns
 - person_id / flow_cube_sop_instance_uid have no nulls, and
   flow_cube_sop_instance_uid has no duplicates
-- every non-"Not Reported" filepath in every filepath column resolves to a
+- placeholder values ("Not Reported" / "Not Provided") are reported per column,
+  and are an error in columns that must always be filled
+- numeric and categorical columns hold sensible values
+- every non-placeholder filepath in every filepath column resolves to a
   real file on disk (own-folder columns and cross-folder reference columns)
+- every cross-reference UID (photography / structural OCT) exists in the
+  matching source manifest (forward check); source UIDs never referenced by
+  octa are reported for information only (reverse check)
 - every .dcm file under retinal_octa/{flow_cube,enface,segmentation} is
   referenced by at least one of the own-folder filepath columns
   (orphan check, across all three subfolders at once since a file can only be
   distinguished by which column referenced it)
 
-Usage:
-    python qc_retinal_octa.py [--root PATH]
 """
 
 import argparse
 import sys
 from pathlib import Path
+
+import pandas as pd
 
 from common import (
     DEFAULT_ROOT,
@@ -105,12 +111,146 @@ CROSS_REFERENCE_FILEPATH_COLUMNS = [
 
 OCTA_LOCAL_SUBFOLDERS = ["flow_cube", "enface", "segmentation"]
 
+# The pipeline writes two placeholder strings, in inconsistent casing:
+# "Not Reported" / "Not reported" for values that do not apply, and
+# "Not Provided" when a lookup failed. All mean "no file here".
+PLACEHOLDER_VALUES = {"not reported", "not provided"}
+
+# Columns that must hold a real value on every row.
+MUST_BE_FILLED_COLUMNS = [
+    "flow_cube_sop_instance_uid",
+    "flow_cube_file_path",
+    "associated_segmentation_sop_instance_uid",
+    "associated_segmentation_file_path",
+    "associated_enface_1_file_path",
+    "associated_enface_2_file_path",
+    "associated_enface_3_file_path",
+    "associated_enface_4_file_path",
+]
+
+POSITIVE_INT_COLUMNS = ["flow_cube_height", "flow_cube_width", "flow_cube_number_of_frames"]
+
+VALID_LATERALITY = {"L", "R"}
+
+# Forward cross-reference checks: (uid column here, source manifest, uid column there)
+CROSS_REFERENCE_UID_CHECKS = [
+    (
+        "associated_retinal_photography_sop_instance_uid",
+        "retinal_photography",
+        "sop_instance_uid",
+    ),
+    (
+        "associated_structural_oct_sop_instance_uid",
+        "retinal_oct",
+        "sop_instance_uid",
+    ),
+]
+
+
+def is_placeholder(value):
+    return isinstance(value, str) and value.strip().lower() in PLACEHOLDER_VALUES
+
+
+def check_placeholders(df, logger, label):
+    """Report placeholder counts; error on columns that must always be filled."""
+    errors = 0
+    for column in MUST_BE_FILLED_COLUMNS:
+        if column not in df.columns:
+            continue
+        count = int(df[column].map(is_placeholder).sum())
+        if count:
+            errors += count
+            logger.error(f"{label}: '{column}' has {count} placeholder values (must always be filled)")
+        else:
+            logger.info(f"{label}: '{column}' has no placeholder values")
+    return errors
+
+
+def check_values(df, logger, label):
+    """Sanity-check categorical and numeric columns."""
+    errors = 0
+
+    if "laterality" in df.columns:
+        bad = df.loc[~df["laterality"].astype(str).str.upper().isin(VALID_LATERALITY), "laterality"]
+        if len(bad):
+            errors += len(bad)
+            logger.error(
+                f"{label}: 'laterality' has {len(bad)} unexpected values: "
+                f"{sorted(set(bad.astype(str)))[:10]}"
+            )
+        else:
+            logger.info(f"{label}: 'laterality' values all L/R")
+
+    for column in POSITIVE_INT_COLUMNS:
+        if column not in df.columns:
+            continue
+        numeric = pd.to_numeric(df[column], errors="coerce")
+        bad_count = int((numeric.isna() | (numeric <= 0)).sum())
+        if bad_count:
+            errors += bad_count
+            logger.error(f"{label}: '{column}' has {bad_count} non-positive or non-numeric values")
+        else:
+            logger.info(f"{label}: '{column}' values all positive")
+
+    for column in ["manufacturer", "manufacturers_model_name", "anatomic_region", "imaging"]:
+        if column in df.columns:
+            logger.info(f"{label}: '{column}' values: {sorted(set(df[column].dropna().astype(str)))}")
+
+    return errors
+
+
+def check_cross_reference_uids(df, root, logger, label):
+    """Forward: every referenced source UID must exist in its source manifest.
+    Reverse: source UIDs never referenced by octa are reported for info only."""
+    errors = 0
+    for uid_column, source_name, source_uid_column in CROSS_REFERENCE_UID_CHECKS:
+        if uid_column not in df.columns:
+            continue
+
+        source_manifest = root / source_name / "manifest.tsv"
+        if not source_manifest.exists():
+            logger.warning(f"{label}: {source_manifest} not found, skipping UID cross-check for '{uid_column}'")
+            continue
+
+        source_df = load_manifest(source_manifest)
+        if source_uid_column not in source_df.columns:
+            logger.warning(f"{label}: {source_name} manifest has no '{source_uid_column}', skipping")
+            continue
+
+        source_uids = set(source_df[source_uid_column].dropna().astype(str))
+        referenced = df[uid_column].dropna().astype(str)
+        referenced = set(referenced[~referenced.map(is_placeholder)])
+
+        # Forward check (error): referenced UIDs that don't exist in the source.
+        unresolved = sorted(referenced - source_uids)
+        logger.info(
+            f"{label}: '{uid_column}' -> {source_name}: {len(referenced)} referenced, "
+            f"{len(source_uids)} in source, {len(unresolved)} unresolved"
+        )
+        if unresolved:
+            errors += len(unresolved)
+            for uid in unresolved[:20]:
+                logger.error(f"  {uid_column}: UID not in {source_name} manifest: {uid}")
+            if len(unresolved) > 20:
+                logger.error(f"  ... and {len(unresolved) - 20} more unresolved")
+
+        # Reverse check (info only): source UIDs never referenced by octa.
+        never_referenced = source_uids - referenced
+        logger.info(
+            f"{label}: {len(never_referenced)} {source_name} UIDs are never referenced by octa (info only)"
+        )
+    return errors
+
 
 def main():
     parser = argparse.ArgumentParser(
         description="QC the retinal_octa manifest.tsv against files on disk"
     )
-    parser.add_argument("--root", default=DEFAULT_ROOT, help="Path to the merged data root")
+    parser.add_argument(
+        "--root",
+        default=r"F:\TRITON_TRIO\final",
+        help="Path to the merged data root",
+    )
     parser.add_argument(
         "--orphan-limit", type=int, default=20, help="Max orphan file paths to print"
     )
@@ -150,6 +290,9 @@ def main():
 
     errors += check_nulls(df, ["person_id", "flow_cube_sop_instance_uid"], logger, LABEL)
     errors += check_duplicates(df, "flow_cube_sop_instance_uid", logger, LABEL)
+    errors += check_placeholders(df, logger, LABEL)
+    errors += check_values(df, logger, LABEL)
+    errors += check_cross_reference_uids(df, root, logger, LABEL)
 
     all_filepath_columns = OCTA_LOCAL_FILEPATH_COLUMNS + CROSS_REFERENCE_FILEPATH_COLUMNS
     referenced_local_paths = set()
@@ -165,7 +308,9 @@ def main():
 
         if column in OCTA_LOCAL_FILEPATH_COLUMNS:
             referenced_local_paths.update(
-                v for v in df[column].dropna() if v != NOT_REPORTED
+                "/" + v.replace("\\", "/").lstrip("/")
+                for v in df[column].dropna()
+                if not is_placeholder(v)
             )
 
     # Orphan check across all three local subfolders at once: a file can only
