@@ -7,7 +7,7 @@ import azure.storage.filedatalake as azurelake  # type: ignore
 import config
 
 container_name = "stage-one"
-root_folder = "AI-READI/sanjay/old-full-untouched-dataset/"
+root_folder = "AI-READI/pooled-data/Spectralis-processed/"
 output_file = "dataset_paths.txt"
 
 
