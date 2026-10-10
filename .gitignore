@@ -80,3 +80,8 @@ topcon_maestro2_triton_paths_to_remove.txt
 manifest.tsv
 manifest_filtered.tsv
 cloned_phases_missing_paths.txt
+dicom_date_stats-54m171/
+Final Participant List.csv
+dicom_files-54m171.csv
+dicom_files_unique-54m171.csv
+dicom_date_stats-54m171.zip
