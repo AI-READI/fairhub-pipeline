@@ -1,19 +1,21 @@
 import logging
 
-import inspect  # may be temporary debug solution
+import inspect  # retained for stack introspection during debugging or troubleshooting
 from pathlib import Path
 import glob
 import os
+import zipfile
 import pkgutil  # to get access to the sensor_id asset file
 import io  # for io.BytesIO to read the asset file
 
 # plotting
-# import matplotlib.pyplot as plt
+# imported lazily in plot_signals2 to avoid a hard dependency at import time
 
 import pandas as pd
 from datetime import datetime, timedelta, date
 
 utils_logger = logging.getLogger("es.utils")
+utils_logger.addHandler(logging.NullHandler())
 
 # To provide a working start date and a sanity check date with 24 hr margin
 CONST_STUDY_START = "2023-07-01"
@@ -22,30 +24,169 @@ CONST_DEFAULT_VISIT = "2023-07-02"
 CONST_NUMCOLS_RAWCSV = 22  # 22 data fields in each row
 CONST_MIN_DATA_LINES = 12 * 2  # 12 rows per min, so about 2 minutes
 
-# myself = lambda: inspect.stack()[1][3]  # not permitted by Flake8
+# myself = lambda: inspect.stack()[1][3]  # intentionally left commented to avoid Flake8 warnings
 
 
 def all_same(items):
-    """Returns true if all of the items in the list are identical
+    """Returns True when all values in a list are identical.
 
-    Args: items (list), e.g. ['ver 1.2', 'ver 1.2', 'ver 2.7']
-    Returns: True or False
+    Args:
+        items (list): list of values to compare, e.g. ['ver 1.2', 'ver 1.2', 'ver 2.7']
+
+    Returns:
+        boolean: True if every item matches the first value, otherwise False.
     """
+    if not items:
+        return False
     return all(x == items[0] for x in items)
 
 
-def get_csv_list(input_path):
-    """Retrieves a sorted list of the *.csv files in a folder
+def log_msg(es_log, func_name, msg, also_print=False):
+    """Writes a development or debug message to the configured log file.
 
-    Args: input_path (string): Path to the folder that contains the *.csv files
-    Returns: a list (could be empty) of csv files
+    Args:
+        es_log (string): path to the log file.
+        func_name (string): name of the function emitting the message.
+        msg (string): message to log.
+        also_print (boolean): when True, also print the message to stdout.
+
+    Returns:
+        None
+    """
+    with open(es_log, "a") as f:
+        f.write(f"LOG {func_name}: {msg}\n")
+    if also_print:
+        print(f"LOG {func_name}: {msg}\n")
+
+
+def get_pppp_nnn(folder_name, es_log="./es_devdebug.txt", verbose=False):
+    """Extracts the participant ID and sensor ID from an ENV folder name.
+
+    Args:
+        folder_name (string): folder path or name, expected to look like ENV-pppp-nnn.
+        es_log (string): optional log file path for debug output.
+        verbose (boolean): emit additional debug output when enabled.
+
+    Returns:
+        tuple: participant ID and sensor ID as strings.
+    """
+    basefile = os.path.basename(folder_name)
+    items = basefile.split("-")
+
+    if items[0] != "ENV":
+        log_msg(es_log, "get_pppp_nnn",
+                msg=f"Folder name does not start with ENV: {folder_name}")
+    if len(items) < 3:
+        log_msg(es_log, "get_pppp_nnn",
+                msg=f"Insufficient components in folder name {folder_name}")
+        pppp = "TEMP"
+        nnn = "999"
+    else:
+        pppp = items[1]
+        nnn = items[2][:3]
+
+    return pppp, nnn
+
+
+def unzip_folder(input_zipfile, output_folder, es_log="./es_devdebug.txt", verbose=False):
+    """Extracts a zip archive into a predictable output folder.
+
+    Args:
+        input_zipfile (string): path to an input .zip file.
+        output_folder (string): destination folder to receive the extracted files.
+        es_log (string): optional log file path for debug output.
+        verbose (boolean): emit additional debug output when enabled.
+
+    Returns:
+        string or None: extracted folder path, or None if extraction failed.
+    """
+    try:
+        with zipfile.ZipFile(input_zipfile, "r") as zip_ref:
+            member_list = zip_ref.namelist()
+            for member in member_list:
+                if verbose:
+                    log_msg(es_log, "unzip_folder_zip_member", member, also_print=True)
+
+            unzipped_folder = os.path.splitext(os.path.basename(input_zipfile))[0]
+            out_folder_full = os.path.join(output_folder, unzipped_folder)
+            zip_ref.extractall(out_folder_full)
+            if os.path.isdir(out_folder_full):
+                return out_folder_full
+
+            msg = "Unable to predict unzipped folder name."
+            log_msg(es_log, "unzip_folder", msg, also_print=True)
+            return None
+    except zipfile.BadZipFile as error:
+        log_msg(es_log, "unzip_folder", error, also_print=True)
+        return None
+
+
+def get_csv_list(input_path, work_folder=None, es_log="./es_devdebug.txt", verbose=False, recur=0):
+    """Retrieves a sorted list of *.csv files from a folder or zip archive.
+
+    Args:
+        input_path (string): path to the input folder or single CSV file.
+        work_folder (string): working folder used for zip extraction.
+        es_log (string): optional log file path for debug output.
+        verbose (boolean): emit additional debug output when enabled.
+        recur (integer): recursion depth for nested zip handling.
+
+    Returns:
+        list: sorted list of CSV file paths, or an error string when the folder layout is invalid.
     """
     csv_file_list = []  # default is the empty list
 
-    if os.path.isdir(input_path):  # is a folder, so search inside for *.csv
-        csv_file_list = sorted(glob.glob(input_path + "/*.csv"))
-    elif os.path.isfile(input_path):  # single file that is a .csv
-        if input_path[-4:] == ".csv":
+    if work_folder is None:
+        work_folder = os.path.dirname(input_path) or "."
+
+    if verbose:
+        utils_logger.debug("get_csv_list recursion=%s path=%s", recur, input_path)
+
+    if input_path[-4:] == ".zip":
+        outdir = unzip_folder(input_path, work_folder, es_log=es_log, verbose=verbose)
+        msg = f"Case 1 - zip file: {input_path} unzipped to {outdir}"
+        log_msg(es_log, 'get_csv_list', msg, also_print=verbose)
+
+        if outdir is None:
+            err_msg = f'Error - zip file did not contain a folder: {input_path}'
+            log_msg(es_log, 'get_csv_list', err_msg, also_print=True)
+            return err_msg
+        else:
+            return get_csv_list(outdir, work_folder, es_log, verbose=verbose, recur=recur + 1)
+
+    p_in = Path(input_path)
+    if p_in.is_dir():  # is a folder, so search inside for *.csv
+        msg = f"Case 2 or 3 folder -  {input_path}"
+        log_msg(es_log, 'get_csv_list', msg, also_print=verbose)
+        csv_file_list = sorted([str(p) for p in p_in.glob("*.csv")])
+
+        subfolders = [f.name for f in p_in.iterdir() if f.is_dir()]
+
+        if verbose:
+            utils_logger.debug("Directory inspection: subfolders=%s files=%s", subfolders, [f.name for f in p_in.iterdir()])
+        num_csv = len(csv_file_list)
+        num_sub = len(subfolders)
+        if num_csv < 1:
+            utils_logger.debug("No csv files found at this level; subfolder_count=%s", num_sub)
+        else:
+            msg = f'Case 2 - {len(csv_file_list)} csv files at this level'
+            log_msg(es_log, 'get_csv_list', msg, also_print=verbose)
+            return csv_file_list
+        if num_sub > 0:
+            if num_sub == 1:
+                utils_logger.debug("Descending into single subfolder: %s", subfolders[0])
+                return get_csv_list(str(p_in / subfolders[0]), work_folder, es_log, verbose=verbose, recur=recur + 1)
+            else:
+                utils_logger.warning("Multiple subfolders found while scanning %s: %s", input_path, subfolders)
+                return 'error 2'
+
+        if (num_csv > 0) and (num_sub > 0):
+            utils_logger.warning("Ambiguous directory layout at %s: subfolders=%s csv_files=%s", input_path, num_sub, num_csv)
+            return 'error 3'
+    elif p_in.is_file():  # single file that is a .csv
+        if p_in.suffix.lower() == ".csv":
+            msg = f'Case 4 - single csv file: {input_path}'
+            log_msg(es_log, 'get_csv_list', msg, also_print=verbose)
             csv_file_list = [input_path]
         else:  # single file that is not *.csv
             utils_logger.info(f"Single file but not a csv: {input_path}")
@@ -56,13 +197,14 @@ def get_csv_list(input_path):
 
 
 def get_elapsed_time(date_string1, date_string2):
-    """Returns the elapsed time between 2 date strings
+    """Returns the elapsed time between two datetime strings.
 
     Args:
-        date_string1 (string): date, e.g. '2024-05-19 12:22:11'
-        date_string2 (string): date
+        date_string1 (string): first timestamp in format '%Y-%m-%d %H:%M:%S'.
+        date_string2 (string): second timestamp in format '%Y-%m-%d %H:%M:%S'.
+
     Returns:
-        datetime.timedelta between the two dates, e.g. datetime.timedelta(days=8, seconds=1331)
+        datetime.timedelta: difference between the two timestamps.
     """
 
     date_1 = datetime.strptime(date_string1, "%Y-%m-%d %H:%M:%S")
@@ -72,6 +214,13 @@ def get_elapsed_time(date_string1, date_string2):
     return elapsed_time
 
 
+def avoids_file_overwrite(flist, f1):
+    if f1 in flist:
+        return False
+    else:
+        return True
+
+
 def pipeline_get_pppp_nnn_from_foldername(s, sep="-"):
     """Extract elements pppp and nnn from folder name ENV-pppp-nnn
 
@@ -79,10 +228,9 @@ def pipeline_get_pppp_nnn_from_foldername(s, sep="-"):
         s (dict): provides 'input_path' folder name, e.g. 'ENV-9999-333'
         sep (string): Separator string, e.g. '-' or '_'
     Returns:
-        s (dict) updated with:  # ToDo better info
-            value of pppp: (participant ID, str)
-            nnn:(esID, str)
-            name of routine that set each of these
+        s (dict): updated with the participant ID and sensor ID parsed from the folder name.
+            pppp: participant ID as a string
+            nnn: sensor ID as a string
     """
     folder_name = s["t"]["input_path"]
     basefile = os.path.basename(folder_name)
@@ -385,9 +533,9 @@ def pipeline_filter_visit_dates(s):
         else:  # met or exceed max time span chop
             done_finding_gaps = True
 
-    # update number of observations
+    # Update the row count using the remaining filtered rows.
     if "r" not in list(s.keys()):
-        s["r"]["num_rows"] = 0  # ToDo: what was this trying to accomplish?
+        s["r"]["num_rows"] = 0
 
     msg = f" replacing former row count of {s['r']['num_rows']} with new count of {len(s['t']['data_list'])}"
     utils_logger.debug(msg)
@@ -496,8 +644,26 @@ def pipeline_get_sen55_from_nnn(s, esID_dict):
         s (struct): updated
     """
 
-    if s["t"]["nnn_fname"] in esID_dict.keys():
-        sen55 = esID_dict[s["t"]["nnn_fname"]]["sen55"]
+    nnn_val = s["t"]["nnn_fname"]
+    s["fname_esid"] = int(nnn_val) if str(nnn_val).isdigit() else nnn_val
+    
+    try:
+        nnn_int = int(nnn_val)
+    except ValueError:
+        nnn_int = None
+
+    matched_key = None
+    if nnn_int is not None:
+        for k in esID_dict.keys():
+            try:
+                if int(k) == nnn_int:
+                    matched_key = k
+                    break
+            except ValueError:
+                pass
+
+    if matched_key is not None:
+        sen55 = esID_dict[matched_key]["sen55"]
         s["r"]["SEN55"] = sen55
         s["qa"]["nnn_in_sensor_dict"]["ok"] = True
         s["qa"]["nnn_in_sensor_dict"]["set_by"] = inspect.stack()[0][3]
@@ -573,7 +739,7 @@ def read_files(file_list, filter_level=1):
         num_orig_data_lines += nlines
 
         # F0 - files with no data are always removed
-        if nlines == 0:  # oops... this was 2, should have been == 0
+        if nlines == 0:  # zero valid rows is the expected empty-data condition for this check
             msg = f"file {idx} is too short; remove. fname is {fname}"
             utils_logger.info(msg)
             f_err_dict["short file"] = f"{nlines} lines"
@@ -632,7 +798,7 @@ def isValidTimestring(time_string):
     dto = get_datetime_from_timestr(time_string)
     if dto is False:
         return False
-    else:  # is a datetime object, but not planning to use it; just need yes/no
+    else:  # datetime values are treated as valid if present, without additional processing
         return True
 
 
@@ -661,6 +827,13 @@ def parse_data_row(myline, last_timestr, ngood_rows, fname, err_dict):
     fields = [str(x) for x in myline.split(",")]
     tstr = fields[0]
     if not isValidTimestring(tstr):
+        lower_line = myline.lower()
+        if 'html' in lower_line:
+            err_dict['has_html'] = True
+        if 'apple' in lower_line:
+            err_dict['has_apple'] = True
+        if 'public' in lower_line:
+            err_dict['has_public'] = True
         return return_dict
 
     if last_timestr != "TBD":
@@ -676,9 +849,7 @@ def parse_data_row(myline, last_timestr, ngood_rows, fname, err_dict):
     if len(fields) != CONST_NUMCOLS_RAWCSV:
         err_msg = f"IncorrectFieldCount in {fname} at line {ngood_rows + 1}, omitting bad line."
         utils_logger.info(err_msg)
-        err_dict["IncorrectFieldCount"] = (
-            f"line {ngood_rows + 1}"  # ToDo: decide if this needs to be returned or removed
-        )
+        err_dict["IncorrectFieldCount"] = f"line {ngood_rows + 1}"
     else:  # count of fields is ok, line wasn't extremely long, line not corrupted
         # data_list.append(myline)
         return_dict["ok_to_append"] = True
@@ -718,8 +889,7 @@ def read_single_csv(fname, return_errs=True):
     err_dict = dict()
 
     fname_short = os.path.basename(fname)
-    utils_logger.debug(f"debug info for {fname}")
-    # print(f'debug info for {fname}')
+    utils_logger.debug("Reading CSV file: %s", fname)
     last_timestr = "TBD"
 
     with open(fname, "r") as f:
@@ -728,7 +898,12 @@ def read_single_csv(fname, return_errs=True):
                 myline = line.strip()
                 ngood_rows += 1
                 if len(myline) > 160:  # was 155, then found some 159
-                    print(f"Line length is {len(myline)}")  # typically 153 or less
+                    utils_logger.warning(
+                        "Extremely long data line in %s at row %s length=%s",
+                        fname,
+                        ngood_rows + 1,
+                        len(myline),
+                    )
                     err_msg = f"extreme line length {len(myline)} in {fname} at line {ngood_rows + 1}, omitting bad line."
                     utils_logger.info(err_msg)
                     err_dict["ExtremeLineLength"] = (
@@ -864,7 +1039,11 @@ def qa_header(header_list, column_dict):
     col_hdr_list = list(column_dict.values())
     column_names = "col_names_tbd"
 
-    if all_same(col_hdr_list):
+    if not col_hdr_list:
+        msg = "No column headers were found in input csv files."
+        utils_logger.error(msg)
+        utils_logger.info(column_dict)
+    elif all_same(col_hdr_list):
         msg = "All *.csv column headers match; data should align."
         utils_logger.info(msg)
         column_names = col_hdr_list[0]
@@ -873,6 +1052,146 @@ def qa_header(header_list, column_dict):
         utils_logger.error(msg)
         utils_logger.info(column_dict)
     return header_dict, column_names
+
+
+def qa_data(column_names, data_list, es_log, verbose=False):
+    """Placeholder QA hook for data rows."""
+    return data_list
+
+
+def stats2(df):
+    """Return a minimal summary of the EnvSensor dataframe for diagnostics."""
+    earliest_time = df["ts"].min()
+    latest_time = df["ts"].max()
+    tdelta = latest_time - earliest_time
+    td_hours = round((24 * tdelta.days) + tdelta.seconds / (60 * 60), 2)
+
+    stats = {
+        "shape": df.shape,
+        "columns": list(df.columns),
+        "earliest_time": earliest_time,
+        "latest_time": latest_time,
+        "tdelta": str(tdelta),
+        "td_hours": td_hours,
+        "describe": df.describe().to_dict(),
+    }
+    utils_logger.debug("Dataframe stats: %s", stats)
+    return stats
+
+
+def range_check2(df, verbose=False):
+    """Check that all data is within expected ranges."""
+    date_min_str = '2023-06-01 14:30:00'
+    date_max_str = '2029-06-01 14:30:00'
+    date_format = '%Y-%m-%d %H:%M:%S'
+
+    date_min = datetime.strptime(date_min_str, date_format)
+    date_max = datetime.strptime(date_max_str, date_format)
+    date_duration = date_max - date_min
+
+    range_qa = {'ts': {'min': date_min, 'max': date_max,
+                'duration': date_duration},
+                'lch0': {'min': 0, 'max': 200},
+                'lch1': {'min': 0, 'max': 200},
+                'lch2': {'min': 0, 'max': 200},
+                'lch3': {'min': 0, 'max': 200},
+                'lch6': {'min': 0, 'max': 200},
+                'lch7': {'min': 0, 'max': 200},
+                'lch8': {'min': 0, 'max': 200},
+                'lch9': {'min': 0, 'max': 200},
+                'lch10': {'min': 0, 'max': 200},
+                'lch11': {'min': 0, 'max': 200},
+                'pm1': {'min': 0, 'max': 200},
+                'pm2.5': {'min': 0, 'max': 200},
+                'pm4': {'min': 0, 'max': 200},
+                'pm10': {'min': 0, 'max': 200},
+                'hum': {'min': 0, 'max': 100},
+                'temp': {'min': -30, 'max': 100},
+                'voc': {'min': 0, 'max': 500},
+                'nox': {'min': 0, 'max': 200},
+                'screen': {'min': 0, 'max': 1},
+                'ff': {'min': 0, 'max': 200},
+                'inttemp': {'min': -30, 'max': 200},
+                }
+    cols = list(df.columns)
+    count_qa_issues = 0
+    qa_issue_dict = dict()
+
+    edd = df.describe()
+    for c in cols:
+        if c == 'ts':
+            if verbose:
+                utils_logger.debug("Checking timestamp range for ts column")
+            if df['ts'].min() < range_qa[c]['min']:
+                count_qa_issues += 1
+                qa_issue_dict['ts_min'] = df['ts'].min()
+            if df['ts'].max() > range_qa[c]['max']:
+                count_qa_issues += 1
+                qa_issue_dict['ts_max'] = df['ts'].max()
+            ts_dict = {'min': df['ts'].min(),
+                       'max': df['ts'].max()}
+        else:
+            if verbose:
+                print(f'checking {c} {edd.loc["min", c]} to ',
+                      f'{edd.loc["max", c]} range matches expected',
+                      f' {range_qa[c]["min"]} to {range_qa[c]["max"]}')
+            try:
+                if edd.loc['min', c] < range_qa[c]['min']:
+                    count_qa_issues += 1
+                    qa_issue_dict[f'{c}_min'] = edd.loc['min', c]
+            except (KeyError, TypeError, ValueError, IndexError) as err:
+                print(f'ERROR. Unable to check min value for {c}: {err}')
+            try:
+                if edd.loc['max', c] > range_qa[c]['max']:
+                    count_qa_issues += 1
+                    qa_issue_dict[f'{c}_max'] = edd.loc['max', c]
+            except (KeyError, TypeError, ValueError, IndexError) as err:
+                print(f'ERROR. Unable to check max value for {c}: {err}')
+    return count_qa_issues, edd, ts_dict, qa_issue_dict
+
+
+def plot_signals2(df, noplot_cols=None, plot_ht=3):
+    """Plot each EnvSensor signal column against timestamp.
+
+    Args:
+        df (pd.DataFrame): Data frame containing a `ts` column and signal columns.
+        noplot_cols (list | None): Optional columns to exclude from plotting.
+        plot_ht (int): Height in inches per subplot.
+
+    Returns:
+        matplotlib.figure.Figure: Figure containing one subplot per signal.
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    if noplot_cols is None:
+        noplot_cols = []
+
+    col_list = list(df.columns)
+    col_list.remove('ts')
+
+    for npc in noplot_cols:
+        col_list.remove(npc)
+
+    nplots = len(col_list)
+    fig, ax = plt.subplots(nplots, 1, figsize=(10, nplots * plot_ht))
+
+    for idx, c in enumerate(col_list):
+        this_ax = ax[idx]
+        _ = sns.lineplot(x='ts', y=c, data=df,
+                         ax=this_ax,
+                         label=c, marker='*',
+                         style=True,
+                         legend=False)
+        this_ax.tick_params(labelrotation=90)
+        this_ax.set_title(f'{c}')
+        this_ax.legend()
+
+    sensor = 'unknown_id'
+    fig.suptitle(f'Env sensor {sensor}')
+
+    plt.tight_layout()
+    return fig
 
 
 # Tools for working with ENV folder names, csv files, and headers; originally es_utils_pilot.py
@@ -889,7 +1208,11 @@ def get_datetime_from_fname(fname):
     Example usage:
     fdate_obj = get_datetime_from_fname('20230904112231')
     """
-    datetime_object = datetime.strptime(fname, "%Y%m%d%H%M%S")  # 4 digit Year
+    try:
+        datetime_object = datetime.strptime(fname, "%Y%m%d%H%M%S")  # 4 digit Year
+    except ValueError as e:
+        utils_logger.warning("Bad datetime in filename %s: %s", fname, e)
+        return False
     return datetime_object
 
 
@@ -901,7 +1224,7 @@ def get_datetime_from_timestr(t_str):
     try:
         datetime_object = datetime.strptime(t_str, "%Y-%m-%d %H:%M:%S")  # 4 digit Year
     except Exception as e:
-        print(f"bad timestamp {e}")
+        utils_logger.warning("Bad timestamp %s: %s", t_str, e)
         return False
 
     return datetime_object
@@ -1080,15 +1403,16 @@ def build_es_dict(build_csv=None):
         )  # creates one big binary string
         df = pd.read_csv(
             io.BytesIO(asset_data),  # separate the binary string into rows
-            skiprows=10,  # header section
+            # skiprows=10,  # header section 10 in v1, 11 in v2
             encoding="utf8",
             sep=",",
+            comment="#",  # change to using comment to skip
             dtype={"esID": int, "sen55": str},
         )
         utils_logger.info(f"Using default sensor_id asset file {asset_fname}")
     else:
         # note that this presumes there are no rows to skip
-        df = pd.read_csv(build_csv, dtype={"esID": int, "sen55": str})
+        df = pd.read_csv(build_csv, comment="#", dtype={"esID": int, "sen55": str})
         utils_logger.info(f"Read sensor ids from {build_csv}")
     utils_logger.info(f"columns: {df.columns}")
 
@@ -1159,6 +1483,13 @@ def build_visit_dict(visit_csv):
             df = pd.read_csv(
                 visit_csv, dtype={"studyid": str, "dvenvsn": str}  # participant ID pppp
             )  # env sensor ID nnn
+            
+            # Clean IDs to handle cases where they were saved as floats (e.g., "199.0" -> "199")
+            if "studyid" in df.columns:
+                df["studyid"] = df["studyid"].astype(str).str.replace(r'\.0$', '', regex=True)
+            if "dvenvsn" in df.columns:
+                df["dvenvsn"] = df["dvenvsn"].astype(str).str.replace(r'\.0$', '', regex=True)
+                
             utils_logger.info(f"Visit csv orig has columns: {df.columns}")
 
             df = df.rename(
@@ -1221,10 +1552,19 @@ def build_visit_dict(visit_csv):
                 orig_loc = v["location"]
                 new_loc = orig_loc.replace(":", " ")  # : is used in the self-doc header
                 new_loc = new_loc.replace("\t", " ")  # \t is used in the manifest.tsv
-                # new_loc = new_loc.replace('L','l')  # just for testing
+                # new_loc = new_loc.replace('L','l')  # reserved for targeted location normalization checks
                 v["location"] = new_loc
 
-        except Exception as e:  # most likely FileNotFoundError
+        except (
+            FileNotFoundError,
+            PermissionError,
+            pd.errors.EmptyDataError,
+            pd.errors.ParserError,
+            UnicodeDecodeError,
+            KeyError,
+            ValueError,
+            TypeError,
+        ) as e:
             str1 = f"{e}"
             str2 = "relying on default_dict with key 0000 only"
             utils_logger.error(
@@ -1312,7 +1652,7 @@ def read_single_csv_first_data(fname):
         fname (string): path the file to read
     Returns:
         first_timestamp_line (string): first full timestamped data line in the file
-        # ToDo: what happens if there isn't a first line of data?
+        # If there is no usable data row, the file is treated as empty for this check.
     """
     ngood_rows = 0  # total number of good rows in the file
     found_first_ts_line = -1
@@ -1367,6 +1707,7 @@ def pipeline_qa_csv_fname_to_p_visit(s):
         s (dict): updated list of csv files with any out-of-window files removed
     """
     count_out_of_window_files = 0
+    count_bad_filename = 0
     # adjust hours conservatively to leave lots of time
     visit_datetime = get_datetime_from_visit_date(
         s["t"]["p_visit"]["visit_date"], offset_hours=15
@@ -1379,13 +1720,21 @@ def pipeline_qa_csv_fname_to_p_visit(s):
     for idx, cfile in enumerate(s["t"]["file_list"]):
         fname = cfile.split("/")[-1].split(".")[0]
         fname_as_datetime = get_datetime_from_fname(fname)
-        if isInTimeWindow(fname_as_datetime, visit_datetime, return_datetime):
+        if fname_as_datetime and isInTimeWindow(fname_as_datetime, visit_datetime, return_datetime):
             pass
+        elif not fname_as_datetime:
+            msg = f"File in csv_list has invalid timestamp: {cfile}"
+            utils_logger.debug(msg)
+            count_bad_filename += 1
+            exclude_list.append(cfile)
         else:
             msg = f"File in csv_list is outside observation window: {cfile}"
             utils_logger.debug(msg)
             count_out_of_window_files += 1
             exclude_list.append(cfile)
+
+    s["badfilename_count"] = count_bad_filename
+    s["nfiles_dropoutsidewindow"] = count_out_of_window_files
 
     final_list = [x for x in s["t"]["file_list"] if x not in exclude_list]
     s["t"]["file_list"] = sorted(final_list)
@@ -1436,59 +1785,7 @@ def pipeline_qa_csv_drop_short_files_from_list(s):
             utils_logger.warning(emsg)
             drop_list.append(f)
 
-        except Exception as e:
-            emsg = f"File contains a read error in the first 4 lines and should be dropped...{f}"
-            emsg += f" e is {e}"
-            drop_list.append(f)
-            utils_logger.warning(emsg)
-
-    s["t"]["file_drops"] = drop_list
-    keep_list = [x for x in s["t"]["file_list"] if x not in drop_list]
-    msg = f"drop_short_files: orig list was {len(s['t']['file_list'])} and drop_list is {len(drop_list)}"
-    utils_logger.debug(msg)
-
-    s["t"]["file_list"] = keep_list
-    msg = f"...final list is {len(s['t']['file_list'])}"
-    utils_logger.debug(msg)
-
-    return s
-
-
-def pipeline_qa_csv_drop_short_files_from_list(s):
-    """Opens each file and confirms that it is readable and has at least 1 row of data.
-    Files that do not meet these criteria are removed from the list and reported
-    in the processing history as information. First few lines are expected to contain
-
-    ; Version: 1.2.4                        # expect 17 chars
-    ; SEN55 77.. serial number              # expect 25 chars
-    ts, ... the list of column names        # expect 109 chars
-    2024-08-08 00:00:00, ... values         # expect > 0 chars
-
-    Args:
-        s (dict): structure containing list of files to check
-    Returns:
-        s (dict): updated csv list and add to 'qa' section reflecting the result of this check
-    """
-    drop_list = list()
-    for f in s["t"]["file_list"]:
-        # failure only if < 4 lines
-        try:
-            with open(f, "r") as this_f:
-                for n in range(4):
-                    r = this_f.readline()  # can print during debugging
-                    msg = f"  line {n}: {len(r)} chars, {r}"
-                    utils_logger.debug(msg)
-            if len(r) < 21:  # expect closer to 140, but 21 will cover the timestamp
-                msg = f"File is < 4 lines, drop it. {f}"
-                utils_logger.debug(msg)
-                drop_list.append(f)
-        except UnicodeDecodeError as e:
-            emsg = f"File contains an invalid byte in the first 4 lines and should be dropped...{f}"
-            emsg += f" e is {e.reason}"
-            utils_logger.warning(emsg)
-            drop_list.append(f)
-
-        except Exception as e:
+        except OSError as e:
             emsg = f"File contains a read error in the first 4 lines and should be dropped...{f}"
             emsg += f" e is {e}"
             drop_list.append(f)

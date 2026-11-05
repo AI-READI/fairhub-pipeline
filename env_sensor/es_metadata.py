@@ -1,10 +1,17 @@
+"""Metadata extraction helpers for environmental sensor self-documenting CSV files."""
+
 import logging
-from . import es_utils
+
+try:
+    from env_sensor import es_utils
+except ImportError:
+    from . import es_utils
 
 meta_logger = logging.getLogger("es.metadata")
+meta_logger.addHandler(logging.NullHandler())
 
 
-def metadata_env_sensor(input_csv_file):
+def metadata_env_sensor(input_csv_file, outfile=None, es_logfile=None, verbose=False):
     """
     Read one environmental sensor *.csv file and retrieve only the metadata.
     Metadata will be returned as a dict() and can also be written to an output_file.
@@ -39,7 +46,7 @@ def metadata_env_sensor(input_csv_file):
         meta_dict["manufacturer"] = header_dict["environmental_sensor_manufacturer"]
         meta_dict["device"] = header_dict["environmental_sensor_device_model"]
         meta_dict["laterality"] = "none"
-        meta_dict["participant_id"] = header_dict["meta_participant_id"]
+        meta_dict["person_id"] = header_dict["meta_participant_id"]
         meta_dict["sensor_id"] = header_dict["meta_sensor_id"]
         meta_dict["sensor_location"] = header_dict["meta_sensor_location"]
         meta_dict["number_of_observations"] = header_dict["meta_number_of_observations"]
@@ -56,6 +63,8 @@ def metadata_env_sensor(input_csv_file):
 
 
 class ESManifest:
+    """Collects environmental sensor metadata entries and writes them as a TSV manifest."""
+
     def __init__(self):
         self.manifest = []
 

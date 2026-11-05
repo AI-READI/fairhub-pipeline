@@ -1,29 +1,65 @@
-import logging
+"""Conversion helpers for environmental sensor CSV files."""
 
-from pathlib import Path
-import os
+import logging
 import pkgutil
 
-from . import es_utils
+try:
+    from env_sensor import es_utils
+except ImportError:
+    from . import es_utils
 
 conv_logger = logging.getLogger("es.converter")
+conv_logger.addHandler(logging.NullHandler())
 
 
-def customize_selfdoc_header(chdr):
-    """Reads the self-documenting header template and inserts custom meta data
+def es_export_simple(fname, col_names, data_list, wora="w", verbose=False):
+    """Write out env sensor data as a csv without the extended header info."""
+    if verbose:
+        conv_logger.info(f"export_simple:: writing to {fname}")
+    with open(fname, wora) as f:
+        f.write(f"{col_names}\n")
+        for line in data_list:
+            f.write(f"{line}\n")
+
+
+def es_export(fname, col_names, data_list, header_dict, verbose=False):
+    """Write out env sensor data as an enhanced csv with self-documenting header info."""
+    if verbose:
+        conv_logger.info(f"export:: writing to {fname}")
+
+    with open(fname, "w") as f:
+        f.write("# Environmental sensor self-documenting header\n")
+        for k, v in header_dict.items():
+            f.write(f"# {k} {v}\n")
+    es_export_simple(fname, col_names, data_list, wora="a")
+
+
+def customize_selfdoc_header(chdr, header_template_file=None):
+    """Reads the self-documenting header template and inserts custom meta data.
+
     Args:
-        header_dict (dict): dictionary of custom header values to be inserted
+        chdr (dict): dictionary of custom header values to be inserted
+        header_template_file (string): optional path to a template file
     Returns:
         list of self-documenting header strings (lines)
     """
 
     # Read the header template
-    hdr_template_asset = "es_doc_header.txt"
-    asset_data = pkgutil.get_data(__name__, hdr_template_asset)
-    hdr_template_lines = asset_data.decode("utf-8").splitlines()
-    conv_logger.info(
-        f"Header template asset {hdr_template_asset} loaded with {len(hdr_template_lines)} lines."
-    )
+    if header_template_file is None:
+        hdr_template_asset = "es_doc_header.txt"
+        asset_data = pkgutil.get_data(__name__, hdr_template_asset)
+        hdr_template_lines = asset_data.decode("utf-8").splitlines()
+        conv_logger.info(
+            "Header template asset "
+            + f"{hdr_template_asset} loaded with {len(hdr_template_lines)} lines."
+        )
+    else:
+        with open(header_template_file, "r") as f:
+            hdr_template_lines = [line.rstrip("\n") for line in f]
+        conv_logger.info(
+            "Header template file "
+            + f"{header_template_file} loaded with {len(hdr_template_lines)} lines."
+        )
 
     # Customize the header lines
     hdr_line_list = list()
@@ -31,15 +67,17 @@ def customize_selfdoc_header(chdr):
 
     # Fill in the custom values for the header
     ch = {
-        "# meta_sensor_id": ": " + str(chdr["SEN55"]),  # e.g. F491437702FA6836
-        "# meta_participant_id": ": " + str(chdr["pppp"]),  # e.g. 9999
-        "# meta_sensor_location": ": " + chdr["location"],  # e.g. 'family room',
-        "# meta_number_of_observations": ": " + str(chdr["num_rows"]),  # e.g. 175000
+        "# meta_sensor_id": ": " + str(chdr["SEN55"]),
+        "# meta_participant_id": ": " + str(chdr["pppp"]),
+        "# meta_sensor_location": ": " + chdr["location"],
+        "# meta_number_of_observations": ": " + str(chdr["num_rows"]),
         "# meta_extent_of_observation_in_days": ": "
-        + str(round(observation_extent, 1)),  # e.g. 11.2
-        "# environmental_sensor_firmware_version": ": "
-        + chdr["fw_version"],  # e.g. 1.2.4
+        + str(round(observation_extent, 1)),
+        "# environmental_sensor_firmware_version": ": " + chdr["fw_version"],
     }
+    
+    if "hw_ver" in chdr:
+        ch["# environmental_sensor_hardware_version"] = ": " + str(chdr["hw_ver"])
 
     for line in hdr_template_lines:
         myline = line.strip().split(":")
@@ -54,7 +92,7 @@ def customize_selfdoc_header(chdr):
     return hdr_line_list  # return the customized header
 
 
-def pipeline_es_export(s):
+def pipeline_es_export(s, header_template_file=None):
     """Writes out env sensor data as an enhanced csv with self-documenting header info.
 
     Args:
@@ -64,7 +102,12 @@ def pipeline_es_export(s):
     Returns:
         s (dict): status, error counts, etc.
     """
-    hdr_line_list = customize_selfdoc_header(s["r"])
+    if "p_visit" in s["t"] and "hw_ver" in s["t"]["p_visit"]:
+        s["r"]["hw_ver"] = str(s["t"]["p_visit"]["hw_ver"])
+
+    hdr_line_list = customize_selfdoc_header(
+        s["r"], header_template_file=header_template_file
+    )
 
     qa_complete = True  # until proven false...
     qa_conv_issues = "QA failed checks include: "
@@ -79,13 +122,12 @@ def pipeline_es_export(s):
     if qa_complete and (s["t"]["errorCount"] == 0):
         try:
             with open(s["t"]["outfile_posixpath"], "w") as f:
-                # write header
+                # Write the self-documenting header.
                 for k in hdr_line_list:
-                    f.write(f"{k}\n")  # \n confirm this is needed
+                    f.write(f"{k}\n")
 
-                # write column names
+                # Write the column names after the header.
                 f.write(f"{s['r']['column_names']}\n")
-                # TODO: check vs template
 
                 # write rows of data
                 for line in s["t"]["data_list"]:
@@ -97,7 +139,7 @@ def pipeline_es_export(s):
                 f'Problem {e} writing the output file {s["t"]["outfile_posixpath"]}'
             )
             conv_logger.error(err_msg)
-            print(Exception)
+            conv_logger.exception("pipeline_es_export encountered an exception")
             s["conversion_success"] = False
             s["output_file"] = None
 
@@ -138,7 +180,7 @@ def create_struct_s(input_path, output_folder, filter_level):
             "num_orig_data_lines": 0,
             # 'num_final_data_lines': 0,
             # filled in as part of merging all csv files:
-            # 'fw_version_list': [],  # list of all FW versions found in the headers of raw csv files
+            # 'fw_version_list': [],  # list of all FW versions in the headers of raw csv files
             # 'sen55_list': [],  # list of all SEN55 IDs found in the headers of raw csv files
             # 'column_dict':  # is this still used
             # 'data_list': [],  # consumes a lot of memory - delete when no longer needed
@@ -178,8 +220,7 @@ def create_struct_s(input_path, output_folder, filter_level):
             "csv_fname_to_first_timestamps_checked": {"ok": "TBD", "set_by": "unknown"},
             # unclear what the next one meant, remove for now
             # 'csv_readable_lines_added_to_data_list': {'ok': 'TBD', 'set_by': 'unknown'},
-            # 'csv_data_values_in_range': {'ok': 'TBD', 'set_by': 'unknown'},  # ToDo
-            # advanced data filtering ... TBD what this may include # ToDo
+            # 'csv_data_values_in_range': {'ok': 'TBD', 'set_by': 'unknown'},
             # 'data_from_visit_demo_removed': {'ok': 'TBD', 'set_by': 'unknown'},
             # 'data_from_return_device_check_removed': {'ok': 'TBD', 'set_by': 'unknown'},
             # 'qa_complete_and_successful': {'ok': 'TBD', 'set_by': 'unknown'},
@@ -199,6 +240,7 @@ def convert_env_sensor(
     visit_file,
     filter_level=2,
     build_file=None,
+    doc_header_file=None,
     extended_conv_dict=False,
 ):
     """Reads all files in input folder, checks and combines them and exports to the output_folder.
@@ -213,6 +255,8 @@ def convert_env_sensor(
             2 - max filter - removes data prior to visit_date and after return_date
         build_file (string): Full path to a csv file with sensor ID mapped to SEN55
             Default is to use the es_sensor_id.csv included with the ES code files
+        doc_header_file (string): Full path to a self-documenting header template file
+            Default is to use es_doc_header.txt included with the ES code files
     Returns:
         dict containing status, issues, and the full path to the output_file
     """
@@ -255,6 +299,23 @@ def convert_env_sensor(
     # add to s: column_dict, data_list, col_name_list,
     # err_dict_from_read_files, fw_version_list, sen55_list
 
+    total_html_files = 0
+    total_apple_files = 0
+    total_public_files = 0
+
+    file_errors = s["t"].get("err_dict_from_read_files", {})
+    for fname, f_err in file_errors.items():
+        if f_err.get('has_html'):
+            total_html_files += 1
+        if f_err.get('has_apple'):
+            total_apple_files += 1
+        if f_err.get('has_public'):
+            total_public_files += 1
+
+    s["html_count"] = total_html_files
+    s["apple_count"] = total_apple_files
+    s["public_count"] = total_public_files
+
     # check that the raw csv files all had the same FW, SEN55 and column names
     s = es_utils.pipeline_qa_hdr_list(
         s, "fw_version_list", "fw_version", "csv_fw_versions_all_same"
@@ -276,15 +337,42 @@ def convert_env_sensor(
     # data will be in s['t']['data_list']
     s = es_utils.pipeline_filter_visit_dates(s)
 
-    # qa the measured values
-    # s = es_utils.pipeline_qa_data_ranges(s)  # ToDo: finish implementation
-    # ToDo: need to convert str to numeric to check ranges
+    if (0):  # major issue .. many lines dropped; need to remove this or fix it another way
+        # Check the values for the column "screen". Any lines with a value other than 0 or 1
+        # should be flagged as corrupt and removed.
+        if s["t"].get("data_list") and s["t"].get("col_name_list"):
+            try:
+                screen_idx = s["t"]["col_name_list"][0].index("screen")
+                filtered_data = []
+                corrupt_count = 0
+                for line in s["t"]["data_list"]:
+                    parts = line.split(",")
+                    if len(parts) > screen_idx and parts[screen_idx].strip() in ("0", "1", "0.0", "1.0"):
+                        filtered_data.append(line)
+                    else:
+                        corrupt_count += 1
+                
+                if corrupt_count > 0:
+                    s["t"]["conversion_issues"].append(
+                        f"WARNING: Removed {corrupt_count} corrupt data lines where 'screen' != 0 or 1"
+                    )
+                s["t"]["data_list"] = filtered_data
+                s["r"]["num_rows"] = len(filtered_data)
+            except ValueError:
+                s["t"]["conversion_issues"].append("WARNING: 'screen' column not found for filtering")
 
-    s = pipeline_es_export(s)
+    # QA for measured values is intentionally deferred until the range checks are implemented.
+    # The data values are still treated as strings at this stage.
 
-    # ToDo: refactor so these are correct starting as early as possible
+    s = pipeline_es_export(s, header_template_file=doc_header_file)
+
     s["participantID"] = s["r"]["pppp"]
     s["conversion_issues"] = s["t"]["conversion_issues"]
+
+    s["nfiles_start"] = s["t"].get("num_orig_files", 0)
+    s["nfiles_dropoutsidewindow"] = s.get("nfiles_dropoutsidewindow", 0)
+    final_files = len(s["t"].get("file_list", []))
+    s["nfiles_dropother"] = max(0, s["nfiles_start"] - s["nfiles_dropoutsidewindow"] - final_files)
 
     # cleanup
     if not extended_conv_dict:

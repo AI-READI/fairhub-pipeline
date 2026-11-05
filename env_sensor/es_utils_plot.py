@@ -1,23 +1,31 @@
+"""Plotting helpers for environmental sensor data quality checks."""
+
 import logging
 
 import pandas as pd
 from datetime import datetime, timedelta
 
 import matplotlib.pyplot as plt  # need to make the plots
-import matplotlib.axis as plt_axis  # to catch the class
+# import matplotlib.axis as plt_axis  # to catch the class
 import matplotlib.axes as plt_axes  # to catch the class
 import matplotlib.dates as mdates  # to use ConciseDateFormatter
 
-# Note that this set of plotting utilities
-# - does not require the ES class
-# - is tailored to work with the ES class data in a pandas dataframe
-# - is not required for conversion of the EnvSensor data
-# - may or may not be included in the production workflow to provide plots for quality checks
+# These plotting utilities operate on pandas data frames and are intended for
+# quality-control visualizations rather than for the core conversion pipeline.
 
 utils_plot_logger = logging.getLogger("es.utils_plot")
+utils_plot_logger.addHandler(logging.NullHandler())
 
 
 def read_skiprow_count_from_file(fname):
+    """Reads the header metadata from a CSV-like file and returns the skiprow count.
+
+    Args:
+        fname (string): path to the file to inspect
+
+    Returns:
+        integer: number of header lines to skip, or -1 if the file could not be parsed
+    """
     skiprows = 0
 
     with open(fname, "r") as f:
@@ -44,45 +52,37 @@ def create_spectral_plot(
     yaxis_adjusts_to_data=False,
     verbose=False,
 ):
-    """Creates a plot with one line for each band of the light spectrum
+    """Creates a spectral plot showing one line for each light band.
 
     Args:
-        df (dataframe): ES data as a pandas dataframe
-        plot_ht (integer): plot height
-        ax (matplotlib axes): subplot axes where this plot will be displayed
-        add_legend (boolean): whether to include a legend with line colors representing the spectral band
-        add_suptitle (boolean): whether to add a title for this subplot
-        yaxis_adjusts_to_data (boolean):
-            True - the y-axis zooms to the amount of data. Handy for seeing
-                data with small y-values.
-            False - forces the y-axis to use a predetermined min, max for each
-                data type. Handy when making several plots to be shown together
-                for comparison.
+        df (pandas.DataFrame): ES data as a pandas dataframe.
+        plot_ht (integer): plot height.
+        ax (matplotlib.axes.Axes): subplot axes where the plot will be displayed.
+        add_legend (boolean): whether to include the legend.
+        add_suptitle (boolean): whether to add a title for the subplot.
+        yaxis_adjusts_to_data (boolean): when True, the y-axis scales to the data range;
+            when False, the axis is constrained to a fixed range.
+        verbose (boolean): emit additional logger output when enabled.
+
     Returns:
-        figure handle - can be used to close the figure and/or save it to a file
+        matplotlib.figure.Figure: figure handle for the plot.
     """
 
-    # Unclear how sensorID was part of the df previously, but it is no longer there; replace this
-    senID = "000"  # ToDo: consider removing this completely, or passing it in if it is required
-    # senID = df["sensorID"].unique()
+    # The sensor identifier is not required for these plots and is therefore kept as a placeholder.
+    senID = "000"
 
     if verbose or add_suptitle:
         utils_plot_logger.info(f"Sensor: {senID}")
-        # print(f'Sensor: {senID}')
 
     if ax is None:
         fig, ax = plt.subplots(1, figsize=(10, plot_ht))
-    elif type(ax) is plt_axes._axes.Axes:
-        # 'matplotlib.axes._axes.Axes'
-        # print('passed in ax which is already matplotlib.axes._axes.Axes')
+    elif isinstance(ax, plt_axes.Axes):
         fig = ax.get_figure()
     else:
-        utils_plot_logger.debug(f"passed in ax which is type {type(ax)}")
-        # print(f'passed in ax which is type {type(ax)}')
+        utils_plot_logger.debug("Received a plotting axes object of type %s", type(ax))
         fig = ax.Axes.get_figure()
 
-    # print(f'fig is type {type(fig)}')
-    utils_plot_logger.debug(f"fig is type {type(fig)}")
+    utils_plot_logger.debug("Figure type: %s", type(fig))
 
     color_dict = {
         "purple": "#800080",
@@ -97,7 +97,7 @@ def create_spectral_plot(
         "gray": "#BFBFBF",
     }
 
-    chan_dict = {  # these may be wrong... only the hex colors match the named colors for sure
+    chan_dict = {  # channel-to-color mapping is retained for plotting consistency; hex values are the authoritative colors
         "lch0": {"color": "purple", "label": "415 nm"},  # f1 - 415 nm  purple
         "lch1": {"color": "navy", "label": "445 nm"},  # f2 - 445 nm  navy
         "lch2": {"color": "med blue", "label": "480 nm"},  # f3 - 480 nm  med blue
@@ -110,7 +110,7 @@ def create_spectral_plot(
         "lch10": {
             "color": "gray",
             "label": "All (no filter)",
-        },  # clear - maybe gray or dashed? Si response, non-filtered
+        },  # clear channel is shown in gray; it represents the non-filtered signal response
         "lch11": {
             "color": "brown",
             "label": "NIR 910 nm",
@@ -140,7 +140,7 @@ def create_spectral_plot(
             label=chan_dict[c]["label"],
             #  marker='*',style=True,legend=False
         )
-    # unclear if this works; the idea was to make the face solid white instead of the half-transparent default
+    # Keep the legend frame opaque to match the default white plotting background.
     utils_plot_logger.info(type(ret))
     legend = plt.legend()  # Don't need these with the plot titles
     frame = legend.get_frame()
@@ -159,26 +159,24 @@ def create_spectral_plot(
 
 
 def snapshot(df, plot_ht=4, yaxis_adjusts_to_data=False, verbose=False):
-    """Builds a set of plots to give a partial snapshot of an EnvSensor data folder
+    """Builds a multi-panel snapshot of an environmental sensor data folder.
+
     Args:
-        df (dataframe): ES data as a pandas dataframe
-        plot_ht (integer): plot height
-        yaxis_adjusts_to_data (boolean):
-            True - the y-axis zooms to the amount of data. Handy for seeing
-                data with small y-values.
-            False - forces the y-axis to use a predetermined min, max for each
-                data type. Handy when making several plots to be shown together
-                for comparison.
+        df (pandas.DataFrame): ES data as a pandas dataframe.
+        plot_ht (integer): plot height.
+        yaxis_adjusts_to_data (boolean): when True, the y-axes scale to each series;
+            when False, they use fixed ranges for comparison.
+        verbose (boolean): emit additional logger output when enabled.
+
     Returns:
-        figure handle - can be used to close the figure and/or save it to a file
+        matplotlib.figure.Figure: figure handle for the generated snapshot.
     """
     # cols = ['ts', 'lch0', 'lch1', 'lch2', 'lch3', 'lch6', 'lch7', 'lch8', 'lch9',
     #         'lch10', 'lch11', 'pm1', 'pm2.5', 'pm4', 'pm10', 'hum', 'temp', 'voc',
     #         'nox', 'screen', 'ff', 'inttemp', 'csv_name', 'pID', 'sensorID']
 
     fig, ax = plt.subplots(6, 1, figsize=(10, 4 * plot_ht))
-    utils_plot_logger.info(f"ax shape is {ax.shape}")
-    # print(f'ax shape is {ax.shape}')
+    utils_plot_logger.info("Snapshot axes shape: %s", ax.shape)
 
     fig.suptitle("Snapshot\n\n")
 
@@ -518,11 +516,11 @@ def dataplot(conv_dict, output_folder):
 
     plname = conv_dict["participantID"] + "_snapshot.png"
     plotfile_name = output_folder + "/" + plname
-    print(f"Save plot is next; output_file is {plotfile_name}")
+    utils_plot_logger.info("Saving snapshot plot to %s", plotfile_name)
     try:
         fig.savefig(plotfile_name)
         dataplot_dict["output_file"] = plotfile_name
-        print(f"Success; output_file is {plotfile_name}")
+        utils_plot_logger.info("Snapshot plot saved to %s", plotfile_name)
         plt.close()
     except Exception as e:
         utils_plot_logger.error(f"Exception {e} when writing {plotfile_name}")
@@ -538,14 +536,12 @@ def dataplot(conv_dict, output_folder):
             df, visit_date, return_date
         )  # must do here because need df
         plotfile_name2 = output_folder + "/" + pltsname
-        print(f"Save plot is next; output_file is {plotfile_name2}")
+        utils_plot_logger.info("Saving time/spectral plot to %s", plotfile_name2)
         try:
             fig2.savefig(plotfile_name2)
-            # dataplot_dict['output_file'] = plotfile_name2
-            print(f"Success; output_file is {plotfile_name2}")
+            utils_plot_logger.info("Time/spectral plot saved to %s", plotfile_name2)
             plt.close()
         except Exception as e:
             utils_plot_logger.error(f"Exception {e} when writing {plotfile_name2}")
-            # dataplot_dict['output_file'] = 'None'
 
     return dataplot_dict

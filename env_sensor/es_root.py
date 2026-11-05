@@ -1,36 +1,31 @@
+"""High-level environmental sensor API for conversion, metadata extraction, and plotting."""
+
 import logging
+import sys
+from pathlib import Path
 
-from .es_standards import DataDomain
+try:
+    from env_sensor.es_standards import DataDomain
+    from env_sensor import es_converter as es_conv
+    from env_sensor import es_metadata as es_meta
+    from env_sensor import es_utils_plot as es_plot
+except ImportError:
+    try:
+        from .es_standards import DataDomain
+        from . import es_converter as es_conv
+        from . import es_metadata as es_meta
+        from . import es_utils_plot as es_plot
+    except ImportError:
+        project_root = Path(__file__).resolve().parent.parent
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+        from env_sensor.es_standards import DataDomain
+        from env_sensor import es_converter as es_conv
+        from env_sensor import es_metadata as es_meta
+        from env_sensor import es_utils_plot as es_plot
 
-from . import es_converter as es_conv
-from . import es_metadata as es_meta
-from . import es_utils_plot as es_plot
-
-# Notes on amount of data:
-#  example: 2023-06-17 05:19:00 to 2023-06-18 19:32:24 = 38 hours --> 3.8MB
-#       1.5 hours of data is 145 kB
-#  Estimated size for 10 days is (10*24/38)*3.8MB = 24MB
-#  Estimated # of lines of data for 10 days is 172,800
-
-
-# Create logger with 'es'
-logger = logging.getLogger("es")
-logger.setLevel(logging.DEBUG)
-# create file handler which logs even debug messages
-# reminder: DEBUG, INFO, WARN, ERROR, CRITICAl
-fh = logging.FileHandler("es.log", mode="w")
-fh.setLevel(logging.DEBUG)
-# create console handler with a higher log level
-ch = logging.StreamHandler()
-ch.setLevel(logging.ERROR)
-# create formatter and add it to the handlers
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-# reminder: time format will be YYYY-mm-dd hh:mm:ss,uuu where uuu are microseconds
-fh.setFormatter(formatter)
-ch.setFormatter(formatter)
-# add the handlers to the logger
-logger.addHandler(fh)  # writes to file
-logger.addHandler(ch)  # writes to console (screen)
+logger = logging.getLogger("env_sensor")
+logger.addHandler(logging.NullHandler())
 
 
 class EnvironmentalSensor(DataDomain):
@@ -48,14 +43,11 @@ class EnvironmentalSensor(DataDomain):
         return a dictionary of information
 
     metadata() will
-        expect a self-documenting CSV-like file
-        return a dictionary of metadata
-        # TODO: update description of metadata() after code is final #30
+        expect a self-documenting CSV-like file and return a dictionary of metadata.
 
     dataplot() will
-        expect a dictionary of metadate including at least participantID and output_file
-        expect an output_folder for the created plot
-        return # ToDo: update return value
+        expect a dictionary containing at least participantID and output_file,
+        along with an output folder for the generated plot.
     """
 
     def __init__(self):
@@ -74,13 +66,18 @@ class EnvironmentalSensor(DataDomain):
         visit_file,
         filter_level=2,
         build_file=None,
+        doc_header_file=None,
         extended_conv_dict=False,
+        simple_csv=False,
+        es_log=None,
+        verbose=False,
     ):
         """
-        Read one folder with a sequence of environmental sensor *.csv files and combine them, then
-        add a self-documenting header section.
-        If a *.zip is passed, it will be unzipped to access the folder. # ToDo: may not be implemented
-        Timestamp issues will be noted and repaired if possible.
+        Read one folder with a sequence of environmental sensor *.csv files and combine them,
+        then add a self-documenting header section.
+
+        If a *.zip is passed, it will be extracted to access the folder contents before processing.
+        Timestamp issues are identified and corrected when possible.
 
         Args:
             input_path (string): Full path to a folder of EnvironmentalSensor *.csv files
@@ -91,7 +88,11 @@ class EnvironmentalSensor(DataDomain):
                 1 = + remove short files with less than 2 minutes of data
                 2 = + remove files outside of the observation window visit_date to return_date
             build_file (string): (Optional) Full path to a csv file with esID to SEN55 mapping
+            doc_header_file (string): (Optional) Full path to a self-documenting header template
             extended_conv_dict (boolean): (Optional) Return an extensive conv_dict suitable for debug
+            simple_csv (boolean): (Optional) Accepted for compatibility with newer batch scripts
+            es_log (string): (Optional) Accepted for compatibility with newer batch scripts
+            verbose (boolean): (Optional) Accepted for compatibility with newer batch scripts
 
         Returns: dict including the following keys
             participantID (4 digit string): participant ID e.g. 9998
@@ -106,13 +107,14 @@ class EnvironmentalSensor(DataDomain):
             visit_file=visit_file,
             filter_level=filter_level,
             build_file=build_file,
+            doc_header_file=doc_header_file,
             extended_conv_dict=extended_conv_dict,
         )
 
         logger.info(f'ES conversion is complete; output is {conv_dict["output_file"]}')
         return conv_dict
 
-    def metadata(self, input_csv):
+    def metadata(self, input_csv, outfile=None, es_logfile=None, verbose=False):
         """Read final environmental sensor *.csv file and return a meta_dict.
 
         Args:
@@ -125,7 +127,12 @@ class EnvironmentalSensor(DataDomain):
         """
         # decision impacts whether we can check that the file is formatted correctly
         logger.info(f"ES metadata extraction started for {input_csv}")
-        meta_dict = es_meta.metadata_env_sensor(input_csv)
+        meta_dict = es_meta.metadata_env_sensor(
+            input_csv,
+            outfile=outfile,
+            es_logfile=es_logfile,
+            verbose=verbose,
+        )
         logger.info(f"ES metadata extraction completed for {input_csv}")
         return meta_dict
 
